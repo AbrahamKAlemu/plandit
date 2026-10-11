@@ -1,0 +1,111 @@
+import SwiftUI
+
+/// Ordered stops joined by a rail: black for structure, emerald for the active leg.
+struct PlanTimeline: View {
+    let plan: DayPlan
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(plan.stops.enumerated()), id: \.element.id) { index, stop in
+                let leg = plan.leg(after: stop)
+                NavigationLink(value: stop.id) {
+                    TimelineStopRow(number: index + 1, stop: stop, railColor: leg.map { plan.state(of: $0).color })
+                }
+                .buttonStyle(.plain)
+
+                if let leg {
+                    TravelLegRow(leg: leg, state: plan.state(of: leg))
+                }
+            }
+        }
+    }
+}
+
+private struct TimelineStopRow: View {
+    let number: Int
+    let stop: PlanStop
+    /// Color of the rail below the badge; nil for the last stop.
+    let railColor: Color?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Space.sm) {
+            VStack(spacing: 0) {
+                StopBadge(number: number, status: stop.status)
+                if let railColor {
+                    Rectangle().fill(railColor).frame(width: 2).frame(maxHeight: .infinity)
+                }
+            }
+            .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                HStack(spacing: Space.xs) {
+                    Text(stop.start.shortTime).font(.label).foregroundStyle(.ink)
+                    StopStatusTag(status: stop.status)
+                    Spacer(minLength: 0)
+                    Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
+                }
+                Text(stop.place.name)
+                    .font(.cardHeading)
+                    .foregroundStyle(.ink)
+                    .multilineTextAlignment(.leading)
+                Text("\(stop.place.category.label) · \(stop.place.neighborhood)")
+                    .font(.metadata)
+                    .foregroundStyle(.inkMuted)
+                HStack(spacing: Space.sm) {
+                    MetaLabel(.wallet, stop.estimatedCost.dollarsText)
+                    MetaLabel(.clock, stop.durationMinutes.durationText)
+                }
+                .padding(.top, 2)
+            }
+            .padding(.bottom, Space.md)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Shows stop details")
+    }
+}
+
+private struct TravelLegRow: View {
+    let leg: TravelLeg
+    let state: LegState
+
+    var body: some View {
+        HStack(spacing: Space.sm) {
+            RailSegment(color: state.color, isDotted: leg.mode != .walk)
+                .frame(width: 28)
+            HStack(spacing: Space.xs) {
+                Icon(leg.mode.icon, size: 16)
+                Text(leg.summary).lineLimit(2)
+            }
+            .font(.metadata)
+            .foregroundStyle(state == .active ? Color.ink : Color.inkMuted)
+            .padding(.vertical, Space.sm)
+            Spacer(minLength: 0)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Solid rail for walking, dotted for transit (mirrors the map's route lines).
+private struct RailSegment: View {
+    let color: Color
+    let isDotted: Bool
+
+    var body: some View {
+        VerticalLine()
+            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: isDotted ? [1, 6] : []))
+            .frame(width: 2)
+            .frame(maxHeight: .infinity)
+    }
+}
+
+private nonisolated struct VerticalLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        }
+    }
+}
