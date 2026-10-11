@@ -18,9 +18,12 @@ nearby and on budget, shown on a map.
   verification, lessons).
 
 ## How to run it
-- Install: TBD. No app code yet; we pick the stack at build kickoff (Oct 9).
-- Run locally: TBD
-- Test: TBD
+- App: native iOS (SwiftUI, iOS 17+) in `ios/`. Details in ios/README.md.
+- Install: Xcode 26 or later, plus XcodeGen (`brew install xcodegen`).
+- Run locally: `cd ios && xcodegen generate && open Plandit.xcodeproj`, set your signing team
+  for both targets, then run the Plandit scheme. Rerun `xcodegen generate` after adding or
+  removing files; `ios/project.yml` is the source of truth for the Xcode project.
+- Test: no tests yet.
 - Feature Forge skills are installed in `.claude/skills/` (feature-forge, brief, architecture,
   plan, whetstone). To update them, clone https://github.com/kenxle/feature-forge, move the old
   copies out, and run `python3 scripts/install.py /absolute/path/to/this/repo` from the clone.
