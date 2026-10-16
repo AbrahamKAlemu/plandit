@@ -26,6 +26,9 @@ open Plandit.xcodeproj
 
 Dev launch arguments (Scheme → Run → Arguments): `-startTab saved|profile` and `-startDetent peek|large`.
 
+Appearance follows the device by default. Open **Profile → Settings → Appearance** to choose
+System, Light, or Dark; the preference also applies to the share extension.
+
 ### Testing Share → Plandit
 
 You need a signed build with the App Group capability. On a device, or in a simulator with Safari: open a TikTok or Instagram link, tap Share, then **Plandit**, then **Save to Plandit**. When you switch back to Plandit, it reads the shared inbox and the post appears in Saved as "Mapping".
@@ -74,6 +77,7 @@ Asset sources:
 - **Extraction:** `StubPlaceExtractor` fetches real TikTok oEmbed metadata (caption, author, thumbnail), then assigns a random sample place. Replace it with the backend (caption, transcript and on-screen text → place).
 - **Planner:** "Add to today's plan" appends the stop with an estimated travel leg. It does not re-optimize order, time or budget.
 - **Transit:** MapKit has no transit geometry, so transit legs are drawn as straight dotted lines. Walking legs use real MapKit walking routes.
-- **Dark mode:** The style guide doesn't define dark tokens, so the app is locked to light mode (`UIUserInterfaceStyle`).
+- **Dark mode:** Provisional dark tokens are documented in `docs/features/dark-mode/`. The canonical
+  style guide remains unchanged until the design owners approve those tokens.
 - **Profile:** Settings and recent-plan rows open placeholder screens.
 - **Location:** Permission is requested only when the user taps the locate button. Camera bounds keep the map within Manhattan.
