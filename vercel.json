@@ -1,0 +1,29 @@
+{
+  "framework": null,
+  "outputDirectory": "website",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/make-plans", "destination": "/#how-it-works", "permanent": true },
+    { "source": "/make-plans.html", "destination": "/#how-it-works", "permanent": true },
+    { "source": "/share-plans", "destination": "/#for-friends", "permanent": true },
+    { "source": "/share-plans.html", "destination": "/#for-friends", "permanent": true }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      ]
+    },
+    {
+      "source": "/images/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+      ]
+    }
+  ]
+}

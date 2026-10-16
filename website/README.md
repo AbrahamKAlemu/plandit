@@ -12,11 +12,15 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000`.
 
-## Deploy
+## Deploy (Vercel)
 
-Upload the contents of this folder to a static host. Set `plandit.app` as the custom domain in the host, then copy the DNS records provided by that host into the domain registrar.
+The repo is pre-configured for Vercel with a root-level `vercel.json`: no build step, `website/` is served as the output directory, clean URLs are on, and the legacy `make-plans` / `share-plans` pages 301-redirect to their homepage sections.
 
-The site includes production metadata, `robots.txt`, `sitemap.xml`, responsive navigation, reduced-motion support, and legacy redirects for `make-plans.html` and `share-plans.html`.
+1. In Vercel: **Add New → Project → Import** `AbrahamKAlemu/plandit`. If the repo is not listed, the repo owner must grant the Vercel GitHub App access: GitHub → Settings → Applications → Installed GitHub Apps → Vercel → Configure → add `plandit`.
+2. Leave every setting at its default (Framework Preset: Other, Root Directory: `./`, no build command). `vercel.json` handles the rest. Click **Deploy**.
+3. Project → Settings → Domains → add `plandit.app` and `www.plandit.app`, then copy the DNS records Vercel shows into the domain registrar.
+
+Production deploys from `main`; every other branch and PR gets a preview URL.
 
 ## Connect the waitlist
 
