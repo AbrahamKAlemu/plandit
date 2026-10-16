@@ -54,12 +54,7 @@ enum PlaceCategory: String, Codable, CaseIterable, Identifiable {
 
 extension MKMapItem {
     static func plandit(at coordinate: CLLocationCoordinate2D, name: String? = nil) -> MKMapItem {
-        let item: MKMapItem
-        if #available(iOS 26, *) {
-            item = MKMapItem(location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude), address: nil)
-        } else {
-            item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-        }
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
         item.name = name
         return item
     }

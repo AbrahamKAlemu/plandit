@@ -4,6 +4,7 @@ import Observation
 
 /// App-wide state: today's plan, saved posts, and the profile. Backed by sample data for now.
 @Observable
+@MainActor
 final class PlanditStore {
     var today: DayPlan
     var saved: [SavedPost]

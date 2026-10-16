@@ -21,9 +21,9 @@ struct SavedPin: View {
 
     var body: some View {
         Icon(category.icon, size: isSelected ? 18 : 14)
-            .foregroundStyle(isSelected ? Color.ink : Color.white)
+            .foregroundStyle(isSelected ? Color.onEmerald : Color.white)
             .frame(width: isSelected ? 38 : 28, height: isSelected ? 38 : 28)
-            .background(Circle().fill(isSelected ? Color.emerald : Color.ink))
+            .background(Circle().fill(isSelected ? Color.emerald : Color.mapPinInk))
             .padding(2)
             .background(Circle().fill(.white))
             .animation(.snappy, value: isSelected)
@@ -35,7 +35,7 @@ struct SavedPin: View {
 struct VisitedDot: View {
     var body: some View {
         Circle()
-            .fill(Color.ink)
+            .fill(Color.mapPinInk)
             .frame(width: 10, height: 10)
             .padding(2)
             .background(Circle().fill(.white))

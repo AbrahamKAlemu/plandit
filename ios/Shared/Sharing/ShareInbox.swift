@@ -6,8 +6,9 @@ enum AppGroup {
     static let identifier = "group.com.plandit.app"
 
     /// Falls back to standard defaults when the entitlement is missing (e.g. unsigned simulator builds),
-    /// which keeps the app working but stops shares from reaching it.
-    static var defaults: UserDefaults { UserDefaults(suiteName: identifier) ?? .standard }
+    /// which keeps the app working but stops shares from reaching it. Shared identity is required
+    /// so every `@AppStorage` observer receives the same live change notification.
+    nonisolated(unsafe) static let defaults = UserDefaults(suiteName: identifier) ?? .standard
 }
 
 /// A link someone shared into Plandit from TikTok, Instagram, or any app's share sheet.

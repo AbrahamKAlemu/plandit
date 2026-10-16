@@ -2,13 +2,14 @@ import SwiftUI
 
 struct ProfileSheet: View {
     @Environment(PlanditStore.self) private var store
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let profile = store.profile
         VStack(spacing: 0) {
             SheetHeader(title: "Profile") {
                 NavigationLink {
-                    PlaceholderScreen(title: "Settings")
+                    SettingsScreen()
                 } label: {
                     CircleIconLabel(icon: .settings)
                 }
@@ -21,7 +22,7 @@ struct ProfileSheet: View {
                     HStack(spacing: Space.sm) {
                         Text(profile.initial)
                             .font(.manrope(.extraBold, size: 20))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.onInk)
                             .frame(width: 48, height: 48)
                             .background(Color.ink, in: Circle())
                             .accessibilityHidden(true)
@@ -88,7 +89,7 @@ struct ProfileSheet: View {
                     }
 
                     VStack(spacing: Space.xs) {
-                        BrandArt.lockupLight.image
+                        (colorScheme == .dark ? BrandArt.lockupDark : BrandArt.lockupLight).image
                             .resizable()
                             .scaledToFit()
                             .frame(width: 132)
@@ -164,7 +165,7 @@ private struct StatCell: View {
     }
 }
 
-private struct ListRow: View {
+struct ListRow: View {
     var icon: Lucide?
     let title: String
     let detail: String

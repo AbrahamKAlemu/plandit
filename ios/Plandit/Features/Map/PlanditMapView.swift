@@ -31,9 +31,10 @@ struct PlanditMapView: View {
 
             if tab == .today {
                 ForEach(store.today.legs) { leg in
+                    let state = store.today.state(of: leg)
                     MapPolyline(coordinates: store.path(for: leg))
-                        .stroke(store.today.state(of: leg).color, style: StrokeStyle(
-                            lineWidth: 5,
+                        .stroke(state.color.opacity(state.opacity), style: StrokeStyle(
+                            lineWidth: state.lineWidth,
                             lineCap: .round,
                             lineJoin: .round,
                             dash: leg.mode == .walk ? [] : [1, 9] // dotted = transit
@@ -69,7 +70,7 @@ struct PlanditMapView: View {
                 }
             }
         }
-        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll, showsTraffic: false))
+        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
         .mapControls {} // custom controls above: Lucide icons only
     }
 }

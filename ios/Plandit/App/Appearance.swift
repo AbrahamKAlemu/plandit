@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 /// UIKit chrome that SwiftUI can't style directly: navigation bar titles and buttons in Manrope.
+@MainActor
 enum Appearance {
     static func configure() {
         let ink = UIColor(Color.ink)

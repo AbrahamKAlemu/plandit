@@ -13,6 +13,8 @@
 		0AF480CCE66F864A86FFD82D /* PlanditTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E783C1692BDE47027A91E8 /* PlanditTabBar.swift */; };
 		109FC9DAB21085E572C723FE /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E28CCCF74AAA2AC8972B24A /* Place.swift */; };
 		17A9388798B6B0A1D7CDBD85 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */; };
+		2274E9DBCED5F3E48D64D0A4 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83DB9DA4AF78C40241259AEE /* SettingsScreen.swift */; };
+		283E80DF9A999A7EE15E76FC /* AppearanceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD1E7E04067200EB6C8B550 /* AppearanceMode.swift */; };
 		2929BAE0E20821EEDBCC76DE /* PlanditMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E148AE835FA73CDABE5EF1 /* PlanditMapView.swift */; };
 		29D266F7F036D1FBEC16D21E /* Manrope-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D26D1BE1A789B91CACB62029 /* Manrope-SemiBold.ttf */; };
 		2D417D237FD6C80013CE559B /* Manrope-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D26D1BE1A789B91CACB62029 /* Manrope-SemiBold.ttf */; };
@@ -39,10 +41,13 @@
 		789669A09315E475EF9FC626 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */; };
 		83A8F5B7A5871B6B27043C66 /* LinkParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB333CD79DB125872198E3A4 /* LinkParsing.swift */; };
 		879882A30F7DDD3D077382B5 /* AddLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15AC2801DC9EA6D58175224D /* AddLinkSheet.swift */; };
+		8E61BE6EE8287A0B7DA2611F /* AppearanceModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */; };
 		90210A97112312A6C39ABA44 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F524D5A387C25013DA2CB37 /* Typography.swift */; };
 		90A8EB2E306C22D3E6E1B6FF /* Manrope-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D70C41725CF5E3CC2016BBEB /* Manrope-Regular.ttf */; };
 		AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA42EFDFC3C4B3021E413BFE /* SampleData.swift */; };
 		B0206DFED4B8F5D6820C4522 /* Manrope-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */; };
+		B519DE4BBAC4B86289A988BD /* AppearanceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD1E7E04067200EB6C8B550 /* AppearanceMode.swift */; };
+		BBB0528C0E9F43A14EAC5136 /* AppearanceFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66ADDD9568AE6197BC040C05 /* AppearanceFlowTests.swift */; };
 		BC64924336B1466F03EA36D3 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1C596E2ABCB67CA282FECB5 /* SharedAssets.xcassets */; };
 		C09E519668C9F27F08946702 /* PlanTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F605D0A954D4585097AF91B1 /* PlanTimeline.swift */; };
 		C1CB2BD64AC661A59C03D2B1 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A07FD7895C86BA6F5455CC13 /* ShareViewController.swift */; };
@@ -75,6 +80,20 @@
 			remoteGlobalIDString = EBE2823C569D527E902BC234;
 			remoteInfo = PlanditShare;
 		};
+		72384DD6306E07C39191392D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 14A0203432D654CA544876D7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9E8B32ADFF6AE81BEAE8CF15;
+			remoteInfo = Plandit;
+		};
+		F63225257DF16239B381C63F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 14A0203432D654CA544876D7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9E8B32ADFF6AE81BEAE8CF15;
+			remoteInfo = Plandit;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -99,21 +118,26 @@
 		15AC2801DC9EA6D58175224D /* AddLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddLinkSheet.swift; sourceTree = "<group>"; };
 		1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		2E28CCCF74AAA2AC8972B24A /* Place.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Place.swift; sourceTree = "<group>"; };
+		2FC3F2A4DE1C4FEEC73159BB /* PlanditTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PlanditTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		38E148AE835FA73CDABE5EF1 /* PlanditMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditMapView.swift; sourceTree = "<group>"; };
 		49054A5C535AFD8CFA871269 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		4DD1E7E04067200EB6C8B550 /* AppearanceMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceMode.swift; sourceTree = "<group>"; };
 		4F8B33EE15876B22FF476D62 /* Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigation.swift; sourceTree = "<group>"; };
 		59A277942AF5DD87C0431CAB /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Manrope-Bold.ttf"; sourceTree = "<group>"; };
 		607D379D700BA35A0A7195C5 /* Manrope-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Manrope-Medium.ttf"; sourceTree = "<group>"; };
 		61164B0D62F9EF8F1A480E2C /* Plandit.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Plandit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6474A7DD8812B6D8B03AE5CF /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		66ADDD9568AE6197BC040C05 /* AppearanceFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceFlowTests.swift; sourceTree = "<group>"; };
 		66E71E938405EB27C0E59A78 /* MapPins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapPins.swift; sourceTree = "<group>"; };
 		7A0D8D86876DB353253B402A /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
+		83DB9DA4AF78C40241259AEE /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		8896624B417A22D10DD3E7E5 /* ProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSheet.swift; sourceTree = "<group>"; };
 		894E93D2483E91645C6F60E6 /* SavedPostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPostDetailView.swift; sourceTree = "<group>"; };
 		8F524D5A387C25013DA2CB37 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
 		900873E088C5FBF07FCF5247 /* StopDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopDetailView.swift; sourceTree = "<group>"; };
 		93CF268CEFCAB8945101303E /* LocationPermission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPermission.swift; sourceTree = "<group>"; };
+		99E54A9734C4CE49E9A5B122 /* PlanditUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PlanditUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9D46D306DFB18F35F418164C /* Icon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Icon.swift; sourceTree = "<group>"; };
 		A07FD7895C86BA6F5455CC13 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A1C596E2ABCB67CA282FECB5 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
@@ -141,6 +165,7 @@
 		F6194CE06CC90504B47F20BF /* DayPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayPlan.swift; sourceTree = "<group>"; };
 		FB333CD79DB125872198E3A4 /* LinkParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkParsing.swift; sourceTree = "<group>"; };
 		FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceModeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -159,6 +184,8 @@
 			children = (
 				FC0391C1626F3E5D80EA05C8 /* Plandit */,
 				A20BCD8003BAD61BD3E34F15 /* PlanditShare */,
+				A865386FCB2704AB132A5F2A /* PlanditTests */,
+				4E74361C66102F20385C4843 /* PlanditUITests */,
 				E15DA9D07A7918F96605FA8F /* Shared */,
 				72AEE0CACDF36290772FC1B9 /* Products */,
 			);
@@ -176,6 +203,7 @@
 		30CD05E7B12000B2F8E8E44C /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				4DD1E7E04067200EB6C8B550 /* AppearanceMode.swift */,
 				1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */,
 				D57CF7ECA1069F68EE86C3CF /* Colors.swift */,
 				9D46D306DFB18F35F418164C /* Icon.swift */,
@@ -196,10 +224,19 @@
 			path = Features;
 			sourceTree = "<group>";
 		};
+		4E74361C66102F20385C4843 /* PlanditUITests */ = {
+			isa = PBXGroup;
+			children = (
+				66ADDD9568AE6197BC040C05 /* AppearanceFlowTests.swift */,
+			);
+			path = PlanditUITests;
+			sourceTree = "<group>";
+		};
 		55F869AF37E3488C5BBB3919 /* Profile */ = {
 			isa = PBXGroup;
 			children = (
 				8896624B417A22D10DD3E7E5 /* ProfileSheet.swift */,
+				83DB9DA4AF78C40241259AEE /* SettingsScreen.swift */,
 			);
 			path = Profile;
 			sourceTree = "<group>";
@@ -209,6 +246,8 @@
 			children = (
 				61164B0D62F9EF8F1A480E2C /* Plandit.app */,
 				AE40C070496070B7A32DECE6 /* PlanditShare.appex */,
+				2FC3F2A4DE1C4FEEC73159BB /* PlanditTests.xctest */,
+				99E54A9734C4CE49E9A5B122 /* PlanditUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -279,6 +318,14 @@
 			path = PlanditShare;
 			sourceTree = "<group>";
 		};
+		A865386FCB2704AB132A5F2A /* PlanditTests */ = {
+			isa = PBXGroup;
+			children = (
+				FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */,
+			);
+			path = PlanditTests;
+			sourceTree = "<group>";
+		};
 		B71C0F84A41DE07DFB3CACD7 /* Sharing */ = {
 			isa = PBXGroup;
 			children = (
@@ -338,6 +385,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		50547C1B5C29DB5A3868968F /* PlanditTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8E88A1E14BB6DACEE2BCC570 /* Build configuration list for PBXNativeTarget "PlanditTests" */;
+			buildPhases = (
+				2C203EC2E0C47CAD700A6883 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				420BC081CD6B7B4C2AECBE55 /* PBXTargetDependency */,
+			);
+			name = PlanditTests;
+			packageProductDependencies = (
+			);
+			productName = PlanditTests;
+			productReference = 2FC3F2A4DE1C4FEEC73159BB /* PlanditTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		9E8B32ADFF6AE81BEAE8CF15 /* Plandit */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 02ECE9D46FC696F1AE214138 /* Build configuration list for PBXNativeTarget "Plandit" */;
@@ -376,6 +441,24 @@
 			productReference = AE40C070496070B7A32DECE6 /* PlanditShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		FB4518E0BE62861059D93688 /* PlanditUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1FD734BB0D019F2728D3FCA /* Build configuration list for PBXNativeTarget "PlanditUITests" */;
+			buildPhases = (
+				D1789783FEAC7C1D5E13D09A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2B9BF5216E8534CE97A7C8DE /* PBXTargetDependency */,
+			);
+			name = PlanditUITests;
+			packageProductDependencies = (
+			);
+			productName = PlanditUITests;
+			productReference = 99E54A9734C4CE49E9A5B122 /* PlanditUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -385,6 +468,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					50547C1B5C29DB5A3868968F = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					9E8B32ADFF6AE81BEAE8CF15 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -392,6 +479,11 @@
 					EBE2823C569D527E902BC234 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
+					};
+					FB4518E0BE62861059D93688 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = 9E8B32ADFF6AE81BEAE8CF15;
 					};
 				};
 			};
@@ -411,6 +503,8 @@
 			targets = (
 				9E8B32ADFF6AE81BEAE8CF15 /* Plandit */,
 				EBE2823C569D527E902BC234 /* PlanditShare */,
+				50547C1B5C29DB5A3868968F /* PlanditTests */,
+				FB4518E0BE62861059D93688 /* PlanditUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -454,6 +548,7 @@
 			files = (
 				879882A30F7DDD3D077382B5 /* AddLinkSheet.swift in Sources */,
 				D2A118CC181CB4CBCC01E532 /* Appearance.swift in Sources */,
+				283E80DF9A999A7EE15E76FC /* AppearanceMode.swift in Sources */,
 				789669A09315E475EF9FC626 /* ButtonStyles.swift in Sources */,
 				3025C99E05B3AD848B959100 /* Colors.swift in Sources */,
 				50952145C90904CFAA721AB9 /* Components.swift in Sources */,
@@ -480,6 +575,7 @@
 				D1D84D1534F5C2A2EAD72278 /* SavedPost.swift in Sources */,
 				C4BE7A1321A5AFCC6E30816E /* SavedPostDetailView.swift in Sources */,
 				DA97CF6593862918B2B338DD /* SavedSheet.swift in Sources */,
+				2274E9DBCED5F3E48D64D0A4 /* SettingsScreen.swift in Sources */,
 				4EDA3379C2289938F43CA4FF /* ShareInbox.swift in Sources */,
 				F807C0B4675501541B6AE4EC /* StopDetailView.swift in Sources */,
 				C908066BF19E5B751DF8EE77 /* TodaySheet.swift in Sources */,
@@ -488,10 +584,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C203EC2E0C47CAD700A6883 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8E61BE6EE8287A0B7DA2611F /* AppearanceModeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1789783FEAC7C1D5E13D09A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BBB0528C0E9F43A14EAC5136 /* AppearanceFlowTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DBC2AA9F01D0C19CCA117911 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B519DE4BBAC4B86289A988BD /* AppearanceMode.swift in Sources */,
 				326DFD212CC8E91AFFA148E1 /* ButtonStyles.swift in Sources */,
 				DB9611683E78C7C273CB67AB /* Colors.swift in Sources */,
 				DFC3EA89F8FC980D1106983F /* Icon.swift in Sources */,
@@ -507,6 +620,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		2B9BF5216E8534CE97A7C8DE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9E8B32ADFF6AE81BEAE8CF15 /* Plandit */;
+			targetProxy = F63225257DF16239B381C63F /* PBXContainerItemProxy */;
+		};
+		420BC081CD6B7B4C2AECBE55 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9E8B32ADFF6AE81BEAE8CF15 /* Plandit */;
+			targetProxy = 72384DD6306E07C39191392D /* PBXContainerItemProxy */;
+		};
 		562E5B8198801C946FA80D81 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = EBE2823C569D527E902BC234 /* PlanditShare */;
@@ -532,6 +655,70 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		19F32DA03EEA360BBB52E398 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Plandit.app/Plandit";
+			};
+			name = Debug;
+		};
+		3190390F237BADED6FCD959E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Plandit;
+			};
+			name = Debug;
+		};
+		3D4A5BE6D5DCA9FA8AEE347A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Plandit.app/Plandit";
+			};
+			name = Release;
+		};
+		647D7A52DCD3699B4D07204D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Plandit;
+			};
+			name = Release;
 		};
 		6F55BE28C90D27EDE8919432 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -739,11 +926,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		8E88A1E14BB6DACEE2BCC570 /* Build configuration list for PBXNativeTarget "PlanditTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				19F32DA03EEA360BBB52E398 /* Debug */,
+				3D4A5BE6D5DCA9FA8AEE347A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		968E8203053563E485EF6B1D /* Build configuration list for PBXNativeTarget "PlanditShare" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B8FA3AFF569695FAD5F82A0B /* Debug */,
 				D1CFECD4A784631B171C49A4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F1FD734BB0D019F2728D3FCA /* Build configuration list for PBXNativeTarget "PlanditUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3190390F237BADED6FCD959E /* Debug */,
+				647D7A52DCD3699B4D07204D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

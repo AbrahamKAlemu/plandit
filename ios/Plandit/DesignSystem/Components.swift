@@ -75,7 +75,7 @@ struct Chip: View {
                 if let icon { Icon(icon, size: 16) }
                 Text(title).font(.label)
             }
-            .foregroundStyle(isSelected ? Color.white : Color.ink)
+            .foregroundStyle(isSelected ? Color.onInk : Color.ink)
             .padding(.horizontal, Space.sm)
             .frame(minHeight: 36)
             .background(isSelected ? Color.ink : Color.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
@@ -124,7 +124,7 @@ struct StopBadge: View {
             }
             Text("\(number)")
                 .font(.manrope(.extraBold, size: size * 0.46))
-                .foregroundStyle(.ink)
+                .foregroundStyle(status == .done ? Color.ink : Color.onEmerald)
         }
         .frame(width: size, height: size)
         .accessibilityElement()
@@ -148,7 +148,7 @@ struct StopStatusTag: View {
         case .now:
             Text("Now")
                 .font(.manrope(.bold, size: 13))
-                .foregroundStyle(.ink)
+                .foregroundStyle(.onEmerald)
                 .padding(.horizontal, Space.xs)
                 .padding(.vertical, 2)
                 .background(Color.emerald, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -238,6 +238,22 @@ extension LegState {
         case .completed: .inkMuted
         case .active: .emerald
         case .upcoming: .ink
+        }
+    }
+
+    var lineWidth: CGFloat {
+        switch self {
+        case .completed: 4
+        case .active: 7
+        case .upcoming: 5
+        }
+    }
+
+    var opacity: Double {
+        switch self {
+        case .completed: 0.6
+        case .active: 1
+        case .upcoming: 0.9
         }
     }
 }

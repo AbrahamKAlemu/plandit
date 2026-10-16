@@ -5,6 +5,7 @@ import SwiftUI
 /// The tab bar lives inside the sheet, and the sheet's content and map layers switch with the tab.
 struct RootView: View {
     @Environment(PlanditStore.self) private var store
+    @Environment(AppearanceSettings.self) private var appearance
     @State private var tab = AppTab.launchTab
     @State private var router = SheetRouter()
     @State private var detent = SheetDetent.launchDetent
@@ -24,6 +25,7 @@ struct RootView: View {
                 .environment(store)
                 .environment(router)
                 .environment(\.isSheetCollapsed, detent == SheetDetent.peek)
+                .preferredColorScheme(appearance.mode.colorScheme)
                 .presentationDetents(SheetDetent.all, selection: $detent)
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .presentationBackground(Color.surface)

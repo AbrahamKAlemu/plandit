@@ -21,6 +21,34 @@
                ReferencedContainer = "container:Plandit.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "50547C1B5C29DB5A3868968F"
+               BuildableName = "PlanditTests.xctest"
+               BlueprintName = "PlanditTests"
+               ReferencedContainer = "container:Plandit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FB4518E0BE62861059D93688"
+               BuildableName = "PlanditUITests.xctest"
+               BlueprintName = "PlanditUITests"
+               ReferencedContainer = "container:Plandit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -39,7 +67,31 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "50547C1B5C29DB5A3868968F"
+               BuildableName = "PlanditTests.xctest"
+               BlueprintName = "PlanditTests"
+               ReferencedContainer = "container:Plandit.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FB4518E0BE62861059D93688"
+               BuildableName = "PlanditUITests.xctest"
+               BlueprintName = "PlanditUITests"
+               ReferencedContainer = "container:Plandit.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

@@ -9,11 +9,13 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        let host = UIHostingController(rootView: ShareView(
-            model: model,
-            onSave: { [weak self] in self?.save() },
-            onCancel: { [weak self] in self?.cancel() }
-        ))
+        let root = ShareView(
+                model: model,
+                onSave: { [weak self] in self?.save() },
+                onCancel: { [weak self] in self?.cancel() }
+            )
+            .preferredColorScheme(AppearanceMode.saved.colorScheme)
+        let host = UIHostingController(rootView: root)
         addChild(host)
         host.view.frame = view.bounds
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -37,6 +39,7 @@ final class ShareViewController: UIViewController {
 }
 
 @Observable
+@MainActor
 final class ShareModel {
     enum State {
         case loading
@@ -72,6 +75,7 @@ final class ShareModel {
     }
 }
 
+@MainActor
 private extension NSItemProvider {
     func loadURL() async -> URL? {
         await withCheckedContinuation { continuation in
