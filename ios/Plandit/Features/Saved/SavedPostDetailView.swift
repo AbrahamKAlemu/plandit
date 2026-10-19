@@ -216,14 +216,16 @@ struct SourceCard: View {
                 Text("“\(caption)”").font(.bodyText).foregroundStyle(.ink)
             }
 
-            Link(destination: post.url) {
-                HStack(spacing: Space.xxs) {
-                    Text("View original post").underline()
-                    Icon(.externalLink, size: 14)
+            if ["http", "https"].contains(post.url.scheme?.lowercased() ?? "") {
+                Link(destination: post.url) {
+                    HStack(spacing: Space.xxs) {
+                        Text("View original post").underline()
+                        Icon(.externalLink, size: 14)
+                    }
+                    .font(.label)
+                    .foregroundStyle(.emeraldDeep)
+                    .frame(minHeight: 44)
                 }
-                .font(.label)
-                .foregroundStyle(.emeraldDeep)
-                .frame(minHeight: 44)
             }
         }
         .planditCard()

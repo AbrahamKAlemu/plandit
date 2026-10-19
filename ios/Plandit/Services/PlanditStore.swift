@@ -17,6 +17,7 @@ final class PlanditStore {
 
     @ObservationIgnored private let extractor: any PlaceExtracting
     @ObservationIgnored private let persistence: SavedPostPersistence?
+    @ObservationIgnored private let videoExtractor: VideoEvidenceExtractor
     @ObservationIgnored private let routes = RouteService()
 
     init(
@@ -27,7 +28,8 @@ final class PlanditStore {
         pastPlans: [PastPlan],
         visited: [Place],
         extractor: any PlaceExtracting = FixturePlaceExtractor(),
-        persistence: SavedPostPersistence? = nil
+        persistence: SavedPostPersistence? = nil,
+        videoExtractor: VideoEvidenceExtractor = VideoEvidenceExtractor()
     ) {
         self.today = today
         self.saved = saved
@@ -37,6 +39,7 @@ final class PlanditStore {
         self.visited = visited
         self.extractor = extractor
         self.persistence = persistence
+        self.videoExtractor = videoExtractor
         for post in saved where post.status == .processing {
             startExtraction(post.id)
         }
@@ -56,6 +59,9 @@ final class PlanditStore {
     static func live() -> PlanditStore {
         do {
             let persistence = try SavedPostPersistence()
+            if ProcessInfo.processInfo.arguments.contains("-resetSavedData") {
+                try persistence.deleteAll()
+            }
             return PlanditStore(
                 today: SampleData.dayPlan,
                 saved: try persistence.load(),
@@ -170,6 +176,44 @@ final class PlanditStore {
             $0.failureMessage = nil
         }
         Task { await resolveEvidence(postID: postID, text: text) }
+    }
+
+    @discardableResult
+    func saveVideo(fileURL: URL) async throws -> UUID {
+        let id = UUID()
+        let sourceURL = URL(string: "plandit-video://\(id.uuidString)")!
+        let post = SavedPost(
+            id: id,
+            url: sourceURL,
+            canonicalURL: sourceURL,
+            platform: .video,
+            savedAt: .now,
+            status: .processing
+        )
+        saved.insert(post, at: 0)
+        try persist(post)
+
+        do {
+            let evidence = try await videoExtractor.extract(from: fileURL)
+            updateAndPersist(id) { $0.caption = evidence.text }
+            await resolveEvidence(postID: id, text: evidence.text)
+        } catch {
+            updateAndPersist(id) {
+                $0.status = .needsEvidence
+                $0.failureMessage = error.localizedDescription
+            }
+        }
+        return id
+    }
+
+    func removeExpiredTemporaryMedia() {
+        do {
+            try TemporaryMediaStore().removeExpiredFiles(
+                olderThan: Date().addingTimeInterval(-24 * 60 * 60)
+            )
+        } catch {
+            assertionFailure("Temporary media cleanup failed: \(error)")
+        }
     }
 
     private func startExtraction(_ id: UUID) {

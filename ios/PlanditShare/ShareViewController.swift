@@ -44,6 +44,7 @@ final class ShareModel {
     enum State {
         case loading
         case ready(URL)
+        case unsupported
         case noLink
     }
 
@@ -59,17 +60,28 @@ final class ShareModel {
     func load(from items: [NSExtensionItem]) async {
         let providers = items.flatMap { $0.attachments ?? [] }
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-            if let url = await provider.loadURL(), url.scheme?.hasPrefix("http") == true {
-                state = .ready(url)
-                return
+            if let url = await provider.loadURL() {
+                do {
+                    state = .ready(try SupportedSocialURL(url).canonicalURL)
+                    return
+                } catch {
+                    state = .unsupported
+                }
             }
         }
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
             if let text = await provider.loadText(), let url = LinkParser.firstWebURL(in: text) {
-                sharedText = text
-                state = .ready(url)
-                return
+                do {
+                    sharedText = text
+                    state = .ready(try SupportedSocialURL(url).canonicalURL)
+                    return
+                } catch {
+                    state = .unsupported
+                }
             }
+        }
+        if case .unsupported = state {
+            return
         }
         state = .noLink
     }

@@ -56,4 +56,9 @@ final class SavedPostPersistence {
         }
         try context.save()
     }
+
+    func deleteAll() throws {
+        try context.delete(model: SavedPostRecord.self)
+        try context.save()
+    }
 }

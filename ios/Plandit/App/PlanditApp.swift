@@ -28,7 +28,10 @@ private struct PlanditRoot: View {
             .tint(Color.emeraldDeep)
             .preferredColorScheme(appearance.mode.colorScheme)
             .accessibilityIdentifier("appearance-\(appearance.mode.rawValue)")
-            .task { await store.loadRoutes() }
+            .task {
+                store.removeExpiredTemporaryMedia()
+                await store.loadRoutes()
+            }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 if phase == .active { store.ingestPendingShares() }
             }
