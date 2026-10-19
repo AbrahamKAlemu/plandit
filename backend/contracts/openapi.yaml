@@ -1,0 +1,75 @@
+openapi: 3.1.0
+info:
+  title: Plandit place resolution API
+  version: 0.1.0
+paths:
+  /v1/place-resolutions:
+    post:
+      operationId: createPlaceResolution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolutionRequest"
+      responses:
+        "200":
+          description: Candidate places
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolutionResponse"
+        "400":
+          description: Typed validation or evidence error
+components:
+  schemas:
+    ResolutionRequest:
+      type: object
+      required: [requestId, platform, evidence]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [tiktok, instagram, video]
+        sourceUrl:
+          type: string
+          format: uri
+        evidence:
+          type: object
+          properties:
+            userText:
+              type: string
+              maxLength: 5000
+    ResolutionResponse:
+      type: object
+      required: [requestId, candidates]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        source:
+          type: [object, "null"]
+        candidates:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/PlaceCandidate"
+    PlaceCandidate:
+      type: object
+      required:
+        [id, provider, providerPlaceId, name, category, address, neighborhood, latitude, longitude, confidence, reason]
+      properties:
+        id: { type: string }
+        provider: { type: string }
+        providerPlaceId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        address: { type: string }
+        neighborhood: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        confidence: { type: string, enum: [high, medium, low] }
+        reason: { type: string }
+        estimatedCost: { type: [number, "null"] }
