@@ -98,6 +98,17 @@ struct SavedPostDetailView: View {
                     evidenceText = post.caption ?? ""
                 }
             }
+            .alert(
+                "Saved place unavailable",
+                isPresented: Binding(
+                    get: { store.savedErrorMessage != nil },
+                    set: { if !$0 { store.savedErrorMessage = nil } }
+                )
+            ) {
+                Button("OK") { store.savedErrorMessage = nil }
+            } message: {
+                Text(store.savedErrorMessage ?? "")
+            }
         } else {
             ContentUnavailableView("Removed", image: "Icons/bookmark", description: Text("This post is no longer saved."))
         }

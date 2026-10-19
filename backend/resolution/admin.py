@@ -23,6 +23,7 @@ class ResolutionAttemptAdmin(admin.ModelAdmin):
         "provider",
         "candidate_count",
         "latency_ms",
+        "candidate_payload",
         "idempotency_digest",
         "created_at",
     )

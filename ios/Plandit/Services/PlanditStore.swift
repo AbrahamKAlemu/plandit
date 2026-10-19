@@ -2,6 +2,12 @@ import CoreLocation
 import Foundation
 import Observation
 
+private struct SavedPlacePersistenceError: LocalizedError {
+    var errorDescription: String? {
+        "We couldn't save that change. Try again."
+    }
+}
+
 /// App-wide state: today's plan, saved posts, and the profile. Backed by sample data for now.
 @Observable
 @MainActor
@@ -12,6 +18,7 @@ final class PlanditStore {
     var stats: UserStats
     var pastPlans: [PastPlan]
     var visited: [Place]
+    var savedErrorMessage: String?
     /// Real walking geometry per leg, filled in by `loadRoutes()`.
     private(set) var legPaths: [UUID: [CLLocationCoordinate2D]] = [:]
 
@@ -127,6 +134,7 @@ final class PlanditStore {
     func save(url: URL, sharedText: String? = nil) throws -> UUID {
         let supported = try SupportedSocialURL(url)
         if let existing = saved.first(where: { $0.canonicalURL == supported.canonicalURL }) {
+            try persist(existing)
             return existing.id
         }
         let post = SavedPost(
@@ -137,25 +145,27 @@ final class PlanditStore {
             savedAt: .now,
             status: .processing
         )
-        saved.insert(post, at: 0)
         try persist(post)
+        saved.insert(post, at: 0)
         startExtraction(post.id)
         return post.id
     }
 
     func retryExtraction(_ id: UUID) {
-        updateAndPersist(id) {
+        guard updateAndPersist(id, mutation: {
             $0.status = .processing
             $0.failureMessage = nil
-        }
+        }) else { return }
         startExtraction(id)
     }
 
     func removePost(_ id: UUID) {
-        let canonicalURL = post(id: id)?.canonicalURL
-        saved.removeAll { $0.id == id }
-        if let canonicalURL {
-            try? persistence?.delete(canonicalURL: canonicalURL)
+        guard let canonicalURL = post(id: id)?.canonicalURL else { return }
+        do {
+            try persistence?.delete(canonicalURL: canonicalURL)
+            saved.removeAll { $0.id == id }
+        } catch {
+            savedErrorMessage = "We couldn't remove this save. Try again."
         }
     }
 
@@ -170,11 +180,11 @@ final class PlanditStore {
     }
 
     func submitEvidence(postID: UUID, text: String) {
-        updateAndPersist(postID) {
+        guard updateAndPersist(postID, mutation: {
             $0.caption = text
             $0.status = .processing
             $0.failureMessage = nil
-        }
+        }) else { return }
         Task { await resolveEvidence(postID: postID, text: text) }
     }
 
@@ -190,18 +200,27 @@ final class PlanditStore {
             savedAt: .now,
             status: .processing
         )
-        saved.insert(post, at: 0)
         try persist(post)
+        saved.insert(post, at: 0)
 
+        let evidence: VideoEvidence
         do {
-            let evidence = try await videoExtractor.extract(from: fileURL)
-            updateAndPersist(id) { $0.caption = evidence.text }
-            await resolveEvidence(postID: id, text: evidence.text)
+            evidence = try await videoExtractor.extract(from: fileURL)
         } catch {
-            updateAndPersist(id) {
+            guard updateAndPersist(id, mutation: {
                 $0.status = .needsEvidence
                 $0.failureMessage = error.localizedDescription
+            }) else {
+                throw SavedPlacePersistenceError()
             }
+            return id
+        }
+        guard updateAndPersist(id, mutation: {
+            $0.caption = evidence.text
+            $0.status = .needsEvidence
+            $0.failureMessage = "Review the text we found before matching it to a place."
+        }) else {
+            throw SavedPlacePersistenceError()
         }
         return id
     }
@@ -246,10 +265,24 @@ final class PlanditStore {
         }
     }
 
-    private func updateAndPersist(_ id: UUID, _ change: (inout SavedPost) -> Void) {
-        guard let index = saved.firstIndex(where: { $0.id == id }) else { return }
-        change(&saved[index])
-        try? persist(saved[index])
+    @discardableResult
+    private func updateAndPersist(
+        _ id: UUID,
+        mutation: (inout SavedPost) -> Void
+    ) -> Bool {
+        guard let index = saved.firstIndex(where: { $0.id == id }) else { return false }
+        var updated = saved[index]
+        mutation(&updated)
+        do {
+            try persist(updated)
+            saved[index] = updated
+            return true
+        } catch {
+            savedErrorMessage = "We couldn't save that change. Try again."
+            saved[index].status = .failed
+            saved[index].failureMessage = "This change wasn't saved. Try again."
+            return false
+        }
     }
 
     private func persist(_ post: SavedPost) throws {

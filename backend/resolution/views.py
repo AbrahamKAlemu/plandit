@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -22,6 +23,8 @@ def place_resolutions(request: HttpRequest) -> JsonResponse:
         payload = json.loads(request.body)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return _error(None, "invalid_request", "Request body must be valid JSON.", False)
+    if not isinstance(payload, dict):
+        return _error(None, "invalid_request", "Request body must be a JSON object.", False)
 
     request_id = payload.get("requestId")
     try:
@@ -54,26 +57,83 @@ def place_resolutions(request: HttpRequest) -> JsonResponse:
         )
 
     evidence = payload.get("evidence") or {}
+    if not isinstance(evidence, dict):
+        return _error(request_id, "invalid_request", "evidence must be an object.", False)
     user_text = evidence.get("userText") or ""
     if not isinstance(user_text, str) or len(user_text) > MAX_EVIDENCE_LENGTH:
         return _error(request_id, "invalid_request", "Evidence is invalid or too long.", False)
     if not user_text.strip():
         return _error(request_id, "evidence_required", "Add a place name or neighborhood.", False)
 
+    semantic_request = json.dumps(
+        {
+            "platform": platform,
+            "sourceUrl": source["canonicalUrl"] if source else None,
+            "evidenceHash": hashlib.sha256(user_text.strip().encode()).hexdigest(),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(semantic_request.encode()).hexdigest()
+    existing = ResolutionAttempt.objects.filter(request_id=parsed_request_id).first()
+    if existing:
+        if existing.candidate_payload is None:
+            return _error(
+                request_id,
+                "idempotency_record_expired",
+                "This request predates response replay. Use a new requestId.",
+                False,
+                status=409,
+            )
+        if existing.idempotency_digest != digest:
+            return _error(
+                request_id,
+                "idempotency_conflict",
+                "requestId was already used for a different request.",
+                False,
+                status=409,
+            )
+        return JsonResponse(
+            {
+                "requestId": str(parsed_request_id),
+                "source": source,
+                "candidates": existing.candidate_payload,
+            }
+        )
+
     candidates = resolve_candidates(user_text)
     outcome = "candidates" if candidates else "no_candidates"
-    digest = hashlib.sha256(f"{platform}:{request_id}".encode()).hexdigest()
-    ResolutionAttempt.objects.update_or_create(
-        request_id=parsed_request_id,
-        defaults={
-            "platform": platform,
-            "outcome": outcome,
-            "provider": "fixture",
-            "candidate_count": len(candidates),
-            "latency_ms": int((time.monotonic() - started) * 1000),
-            "idempotency_digest": digest,
-        },
-    )
+    try:
+        with transaction.atomic():
+            ResolutionAttempt.objects.create(
+                request_id=parsed_request_id,
+                platform=platform,
+                outcome=outcome,
+                provider="fixture",
+                candidate_count=len(candidates),
+                latency_ms=int((time.monotonic() - started) * 1000),
+                idempotency_digest=digest,
+                candidate_payload=candidates,
+            )
+    except IntegrityError:
+        existing = ResolutionAttempt.objects.get(request_id=parsed_request_id)
+        if existing.candidate_payload is None:
+            return _error(
+                request_id,
+                "idempotency_record_expired",
+                "This request predates response replay. Use a new requestId.",
+                False,
+                status=409,
+            )
+        if existing.idempotency_digest != digest:
+            return _error(
+                request_id,
+                "idempotency_conflict",
+                "requestId was already used for a different request.",
+                False,
+                status=409,
+            )
+        candidates = existing.candidate_payload
 
     return JsonResponse(
         {

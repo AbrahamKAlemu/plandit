@@ -2,19 +2,21 @@
 
 ## Summary
 
-Planning dossier drafted for a compliant, local-first URL/video-to-confirmed-place flow. The first
-functional milestone is explicit: derive a place name and location from permitted URL metadata or
-temporary on-device video evidence, then require confirmation. No feature code, dependency, service,
-or credential has been added.
+The approved compliant core milestone is implemented on `feature/saved-place-extraction-plan`.
+Plandit accepts supported TikTok/Instagram URLs or a user-selected video, extracts permitted
+evidence, produces deterministic fixture-backed place candidates, requires confirmation, and
+persists confirmed saves locally. A Django/PostgreSQL-ready API contract provides the same
+fixture-backed resolution behavior without retaining source URLs or evidence.
 
 ## Attention needed
 
 - Persona review is deferred at the owner's request while core functionality is finalized.
-- A human must approve the consolidated dossier before implementation.
-- Build kickoff must separately approve the Django package set and Railway commands, place provider,
-  billing, credentials, public-client abuse protection, attribution/retention policy, and evaluation
-  dataset.
-- Dark-mode PR #3 integration order must be decided before touching shared Saved/Map UI.
+- Live place-provider selection, billing, production credentials, public-client abuse protection,
+  attribution/retention policy, Railway deployment commands, and the evaluation dataset remain
+  separate approval gates.
+- The iOS client still uses its local fixture extractor; wiring it to Django is a later slice.
+- Direct video sharing into the share extension is not implemented; video selection is available
+  inside the app.
 
 ## Documents
 
@@ -37,7 +39,9 @@ or credential has been added.
 | Plan and verification | Draft complete | [04-plan.md](04-plan.md) |
 | Persona review | Deferred by owner | Existing findings retained in [history](01-brief_reviews.md) |
 | Consolidated human approval | Approved for core milestone | User approved the fixture-backed URL/video-to-confirmed-place build on 2026-10-19 |
-| Implementation | Not started | Core build authorized; no feature code written yet |
+| Implementation | Complete for approved core | Commits `3f2568e`, `85c161a`, `d64a4b1`, `c7d0d6e`, plus the current corrective commit |
+| Verification | Complete for approved core | iOS unit tests, Saved extraction UI flow, appearance UI flow, Django tests, migration check, deployment check, and diff check pass |
+| Independent code review | Complete | Persistence, evidence-review, request-shape, idempotency replay, and legacy-record findings resolved |
 
 ## Decisions
 
@@ -77,6 +81,11 @@ or credential has been added.
 | Run persona reviews on amended dossier | Deferred | Owner requested focus on core functionality; prior findings and dispositions preserved |
 | Define core video-to-place milestone | Complete | URL-first flow plus temporary on-device video evidence produces confirmed name/location |
 | Obtain consolidated human approval | Complete for core milestone | Fixture-backed core build approved; live provider/API remains a separate gate |
+| Implement durable URL intake and confirmation | Complete | SwiftData persistence, strict canonical URLs, deterministic candidates, explicit confirmation, and relaunch coverage |
+| Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |
+| Implement Django resolution contract | Complete | Strict request validation, redacted operational records, stable idempotent response replay, admin, OpenAPI, and PostgreSQL production configuration |
+| Verify approved user flow | Complete | URL/evidence to candidate to confirmation to relaunch UI test passes on iPhone 16 Pro / iOS 18.6 |
+| Resolve independent review findings | Complete | Persistence is transactional before in-memory success; failures become retryable; video evidence requires review; malformed JSON is rejected; request IDs replay stable candidate snapshots |
 
 ## Approval record
 
@@ -88,3 +97,18 @@ persistence.
 The approval does not authorize a paid place API, cloud media upload, social-media downloading,
 production credentials, or public rollout. Persona review remains deferred at the owner's request
 and does not block the approved core milestone.
+
+## Implementation evidence
+
+| Commit | Outcome |
+|---|---|
+| `5092915` | Planning dossier and approved architecture |
+| `3f2568e` | Durable saved-place confirmation flow |
+| `85c161a` | Temporary on-device video evidence intake |
+| `d64a4b1` | Django place-resolution contract |
+| `c7d0d6e` | Generated backend state excluded |
+| Current corrective commit | Transactional persistence, evidence review gate, request validation, and stable idempotency |
+
+The approved fixture/local milestone has no paid API usage. Production operating cost remains
+dependent on the later Railway/PostgreSQL deployment and approved place provider; Apify is not part
+of the implementation.
