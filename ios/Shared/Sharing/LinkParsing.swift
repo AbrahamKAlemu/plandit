@@ -13,8 +13,8 @@ enum LinkParser {
 }
 
 /// Where a saved post came from. Brand names appear as text only; never use platform logos as icons.
-enum SourcePlatform: String, Codable, CaseIterable {
-    case tiktok, instagram, web
+enum SourcePlatform: String, Codable, CaseIterable, Sendable {
+    case tiktok, instagram, video, web
 
     init(url: URL) {
         let host = url.host()?.lowercased() ?? ""
@@ -31,6 +31,7 @@ enum SourcePlatform: String, Codable, CaseIterable {
         switch self {
         case .tiktok: "TikTok"
         case .instagram: "Instagram"
+        case .video: "Video"
         case .web: "Web link"
         }
     }
@@ -40,6 +41,7 @@ enum SourcePlatform: String, Codable, CaseIterable {
         switch self {
         case .tiktok: "this TikTok"
         case .instagram: "this Reel"
+        case .video: "this video"
         case .web: "this page"
         }
     }

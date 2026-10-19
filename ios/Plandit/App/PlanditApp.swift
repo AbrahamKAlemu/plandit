@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct PlanditApp: App {
-    @State private var store = PlanditStore.sample()
+    @State private var store = PlanditStore.live()
     @State private var appearance = AppearanceSettings()
 
     init() {

@@ -4,6 +4,7 @@ import Foundation
 struct SavedPost: Identifiable, Hashable, Codable {
     var id = UUID()
     var url: URL
+    var canonicalURL: URL
     var platform: SourcePlatform
     var creatorHandle: String?
     var caption: String?
@@ -13,11 +14,49 @@ struct SavedPost: Identifiable, Hashable, Codable {
     var place: Place?
     var estimatedCost: Double?
     var tags: [String] = []
+    var candidates: [PlaceCandidate] = []
+    var failureMessage: String?
+
+    init(
+        id: UUID = UUID(),
+        url: URL,
+        canonicalURL: URL? = nil,
+        platform: SourcePlatform,
+        creatorHandle: String? = nil,
+        caption: String? = nil,
+        thumbnailURL: URL? = nil,
+        savedAt: Date,
+        status: ExtractionStatus,
+        place: Place? = nil,
+        estimatedCost: Double? = nil,
+        tags: [String] = [],
+        candidates: [PlaceCandidate] = [],
+        failureMessage: String? = nil
+    ) {
+        self.id = id
+        self.url = url
+        self.canonicalURL = canonicalURL ?? url
+        self.platform = platform
+        self.creatorHandle = creatorHandle
+        self.caption = caption
+        self.thumbnailURL = thumbnailURL
+        self.savedAt = savedAt
+        self.status = status
+        self.place = place
+        self.estimatedCost = estimatedCost
+        self.tags = tags
+        self.candidates = candidates
+        self.failureMessage = failureMessage
+    }
 }
 
 enum ExtractionStatus: String, Codable {
     /// Waiting on metadata + place matching.
     case processing
+    /// More caption, screenshot, video, or typed evidence is needed.
+    case needsEvidence
+    /// Candidate places are ready for explicit confirmation.
+    case needsConfirmation
     /// Place found and confirmed.
     case ready
     /// Place found, but something (hours, price, exact location) needs a human check.
@@ -29,7 +68,13 @@ enum ExtractionStatus: String, Codable {
 extension SavedPost {
     var title: String {
         if let place { return place.name }
-        return status == .failed ? "No place found" : "Finding the place…"
+        return switch status {
+        case .failed: "No place found"
+        case .needsEvidence: "More details needed"
+        case .needsConfirmation: candidates.first?.place.name ?? "Confirm the place"
+        case .processing: "Finding the place…"
+        case .ready, .needsReview: "Saved place"
+        }
     }
 
     var sourceLine: String {
@@ -44,9 +89,8 @@ extension SavedPost {
         creatorHandle = result.creatorHandle ?? creatorHandle
         caption = result.caption ?? caption
         thumbnailURL = result.thumbnailURL ?? thumbnailURL
-        place = result.place
-        estimatedCost = result.estimatedCost
-        tags = result.tags
-        status = result.place == nil ? .failed : (result.needsReview ? .needsReview : .ready)
+        candidates = result.candidates
+        failureMessage = nil
+        status = result.candidates.isEmpty ? .needsEvidence : .needsConfirmation
     }
 }

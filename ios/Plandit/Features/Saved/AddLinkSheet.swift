@@ -5,7 +5,7 @@ struct AddLinkSheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
-    @State private var showError = false
+    @State private var errorMessage: String?
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -35,14 +35,14 @@ struct AddLinkSheet: View {
                             RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                                 .strokeBorder(isFocused ? Color.ink : Color.border, lineWidth: isFocused ? 2 : 1)
                         )
-                    if showError {
-                        Text("Enter a valid link. In TikTok or Instagram, tap Share, then Copy link.")
+                    if let errorMessage {
+                        Text(errorMessage)
                             .font(.metadata)
                             .foregroundStyle(.error)
                     }
                     PasteButton(payloadType: String.self) { strings in
                         text = strings.first ?? ""
-                        showError = false
+                        errorMessage = nil
                     }
                     .labelStyle(.titleOnly)
                     .tint(Color.ink)
@@ -68,10 +68,15 @@ struct AddLinkSheet: View {
 
     private func save() {
         guard let url = LinkParser.firstWebURL(in: text) else {
-            showError = true
+            errorMessage = "Paste a TikTok video or Instagram Reel link."
             return
         }
-        store.save(url: url)
-        dismiss()
+        do {
+            try store.save(url: url, sharedText: text)
+            dismiss()
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? "We couldn't save that link. Try again."
+        }
     }
 }

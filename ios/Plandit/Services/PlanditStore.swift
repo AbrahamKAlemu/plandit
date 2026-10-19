@@ -16,6 +16,7 @@ final class PlanditStore {
     private(set) var legPaths: [UUID: [CLLocationCoordinate2D]] = [:]
 
     @ObservationIgnored private let extractor: any PlaceExtracting
+    @ObservationIgnored private let persistence: SavedPostPersistence?
     @ObservationIgnored private let routes = RouteService()
 
     init(
@@ -25,7 +26,8 @@ final class PlanditStore {
         stats: UserStats,
         pastPlans: [PastPlan],
         visited: [Place],
-        extractor: any PlaceExtracting = StubPlaceExtractor()
+        extractor: any PlaceExtracting = FixturePlaceExtractor(),
+        persistence: SavedPostPersistence? = nil
     ) {
         self.today = today
         self.saved = saved
@@ -34,6 +36,7 @@ final class PlanditStore {
         self.pastPlans = pastPlans
         self.visited = visited
         self.extractor = extractor
+        self.persistence = persistence
         for post in saved where post.status == .processing {
             startExtraction(post.id)
         }
@@ -48,6 +51,23 @@ final class PlanditStore {
             pastPlans: SampleData.pastPlans,
             visited: SampleData.visitedPlaces
         )
+    }
+
+    static func live() -> PlanditStore {
+        do {
+            let persistence = try SavedPostPersistence()
+            return PlanditStore(
+                today: SampleData.dayPlan,
+                saved: try persistence.load(),
+                profile: SampleData.profile,
+                stats: SampleData.stats,
+                pastPlans: SampleData.pastPlans,
+                visited: SampleData.visitedPlaces,
+                persistence: persistence
+            )
+        } catch {
+            fatalError("Unable to initialize saved-place persistence: \(error)")
+        }
     }
 
     // MARK: - Lookup
@@ -87,27 +107,69 @@ final class PlanditStore {
 
     /// Pulls in anything the share extension queued while the app was in the background.
     func ingestPendingShares() {
-        for share in ShareInbox.drain() {
-            save(url: share.url, sharedText: share.sharedText)
+        for share in ShareInbox.pending() {
+            do {
+                _ = try save(url: share.url, sharedText: share.sharedText)
+                ShareInbox.acknowledge(share.id)
+            } catch {
+                break
+            }
         }
     }
 
     @discardableResult
-    func save(url: URL, sharedText: String? = nil) -> UUID {
-        if let existing = saved.first(where: { $0.url == url }) { return existing.id }
-        let post = SavedPost(url: url, platform: SourcePlatform(url: url), caption: sharedText, savedAt: .now, status: .processing)
+    func save(url: URL, sharedText: String? = nil) throws -> UUID {
+        let supported = try SupportedSocialURL(url)
+        if let existing = saved.first(where: { $0.canonicalURL == supported.canonicalURL }) {
+            return existing.id
+        }
+        let post = SavedPost(
+            url: url,
+            canonicalURL: supported.canonicalURL,
+            platform: supported.platform,
+            caption: sharedText,
+            savedAt: .now,
+            status: .processing
+        )
         saved.insert(post, at: 0)
+        try persist(post)
         startExtraction(post.id)
         return post.id
     }
 
     func retryExtraction(_ id: UUID) {
-        update(id) { $0.status = .processing }
+        updateAndPersist(id) {
+            $0.status = .processing
+            $0.failureMessage = nil
+        }
         startExtraction(id)
     }
 
     func removePost(_ id: UUID) {
+        let canonicalURL = post(id: id)?.canonicalURL
         saved.removeAll { $0.id == id }
+        if let canonicalURL {
+            try? persistence?.delete(canonicalURL: canonicalURL)
+        }
+    }
+
+    func confirm(postID: UUID, candidateID: String) {
+        updateAndPersist(postID) { post in
+            guard let candidate = post.candidates.first(where: { $0.id == candidateID }) else { return }
+            post.place = candidate.place
+            post.estimatedCost = candidate.estimatedCost
+            post.status = candidate.place.hours == nil ? .needsReview : .ready
+            post.candidates = []
+        }
+    }
+
+    func submitEvidence(postID: UUID, text: String) {
+        updateAndPersist(postID) {
+            $0.caption = text
+            $0.status = .processing
+            $0.failureMessage = nil
+        }
+        Task { await resolveEvidence(postID: postID, text: text) }
     }
 
     private func startExtraction(_ id: UUID) {
@@ -118,15 +180,36 @@ final class PlanditStore {
         guard let post = post(id: id) else { return }
         do {
             let result = try await extractor.extract(from: post.url, sharedText: post.caption)
-            update(id) { $0.apply(result) }
+            updateAndPersist(id) { $0.apply(result) }
         } catch {
-            update(id) { $0.status = .failed }
+            updateAndPersist(id) {
+                $0.status = .failed
+                $0.failureMessage = "We couldn't read this source. Add details or try again."
+            }
         }
     }
 
-    private func update(_ id: UUID, _ change: (inout SavedPost) -> Void) {
+    private func resolveEvidence(postID: UUID, text: String) async {
+        guard let post = post(id: postID) else { return }
+        do {
+            let result = try await extractor.resolve(evidence: text, platform: post.platform)
+            updateAndPersist(postID) { $0.apply(result) }
+        } catch {
+            updateAndPersist(postID) {
+                $0.status = .failed
+                $0.failureMessage = "We couldn't match those details. Try another name or neighborhood."
+            }
+        }
+    }
+
+    private func updateAndPersist(_ id: UUID, _ change: (inout SavedPost) -> Void) {
         guard let index = saved.firstIndex(where: { $0.id == id }) else { return }
         change(&saved[index])
+        try? persist(saved[index])
+    }
+
+    private func persist(_ post: SavedPost) throws {
+        try persistence?.upsert(post)
     }
 
     // MARK: - Today's plan

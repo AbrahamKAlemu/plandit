@@ -61,8 +61,10 @@ struct SavedSheet: View {
 
     private var subtitle: String {
         let mapped = store.saved.filter(\.isMappable).count
-        let pending = store.saved.filter { $0.status == .processing }.count
-        return pending > 0 ? "\(mapped) places · \(pending) in progress" : "\(mapped) places"
+        let pending = store.saved.filter {
+            [.processing, .needsEvidence, .needsConfirmation].contains($0.status)
+        }.count
+        return pending > 0 ? "\(mapped) places · \(pending) to finish" : "\(mapped) places"
     }
 
     /// Only categories that actually have saved places.
@@ -189,6 +191,18 @@ private struct SavedStatus: View {
                     Text("Mapping")
                 }
                 .foregroundStyle(.inkMuted)
+            case .needsEvidence:
+                HStack(spacing: Space.xxs) {
+                    Icon(.circleAlert, size: 16)
+                    Text("Add details")
+                }
+                .foregroundStyle(.ink)
+            case .needsConfirmation:
+                HStack(spacing: Space.xxs) {
+                    Icon(.mapPin, size: 16)
+                    Text("Confirm")
+                }
+                .foregroundStyle(.emeraldDeep)
             case .needsReview:
                 HStack(spacing: Space.xxs) {
                     Icon(.circleAlert, size: 16)

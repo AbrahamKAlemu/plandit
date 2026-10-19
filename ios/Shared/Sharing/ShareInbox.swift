@@ -19,7 +19,7 @@ struct IncomingShare: Codable, Identifiable, Hashable {
     var receivedAt = Date()
 }
 
-/// Hand-off queue: the share extension enqueues, the app drains it whenever it becomes active.
+/// Hand-off queue: the share extension enqueues, and the app acknowledges only after durable import.
 enum ShareInbox {
     private static let key = "plandit.pendingShares"
 
@@ -35,9 +35,12 @@ enum ShareInbox {
         return (try? JSONDecoder().decode([IncomingShare].self, from: data)) ?? []
     }
 
-    static func drain() -> [IncomingShare] {
-        let queue = pending()
-        AppGroup.defaults.removeObject(forKey: key)
-        return queue
+    static func acknowledge(_ id: UUID) {
+        let queue = pending().filter { $0.id != id }
+        if queue.isEmpty {
+            AppGroup.defaults.removeObject(forKey: key)
+        } else {
+            AppGroup.defaults.set(try? JSONEncoder().encode(queue), forKey: key)
+        }
     }
 }

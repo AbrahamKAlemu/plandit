@@ -1,7 +1,7 @@
 import CoreLocation
 import MapKit
 
-struct Place: Identifiable, Hashable, Codable {
+struct Place: Identifiable, Hashable, Codable, Sendable {
     var id = UUID()
     var name: String
     var category: PlaceCategory
@@ -22,7 +22,7 @@ struct Place: Identifiable, Hashable, Codable {
     }
 }
 
-enum PlaceCategory: String, Codable, CaseIterable, Identifiable {
+enum PlaceCategory: String, Codable, CaseIterable, Identifiable, Sendable {
     case food, coffee, activity, outdoors, culture, nightlife, shopping
 
     var id: String { rawValue }
