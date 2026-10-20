@@ -4,3 +4,7 @@
 node_modules/
 __pycache__/
 .vercel
+.venv/
+.pytest_cache/
+.ruff_cache/
+backend/staticfiles/
