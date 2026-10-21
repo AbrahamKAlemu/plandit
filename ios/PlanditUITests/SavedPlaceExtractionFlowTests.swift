@@ -35,6 +35,8 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         XCTAssertTrue(savedRow.waitForExistence(timeout: 5))
         savedRow.tap()
 
+        XCTAssertTrue(app.staticTexts["best-place-match"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["review-extracted-details"].exists)
         let confirm = app.buttons["Confirm Levain Bakery"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()

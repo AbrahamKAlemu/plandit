@@ -5,6 +5,7 @@ struct SavedPostDetailView: View {
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var evidenceText = ""
+    @State private var isReviewingExtractedDetails = false
 
     var body: some View {
         if let post = store.post(id: postID) {
@@ -29,8 +30,24 @@ struct SavedPostDetailView: View {
                             store.submitEvidence(postID: post.id, text: evidenceText)
                         }
                     case .needsConfirmation:
-                        CandidateList(post: post) { candidateID in
-                            store.confirm(postID: post.id, candidateID: candidateID)
+                        CandidateList(
+                            post: post,
+                            onConfirm: { candidateID in
+                                store.confirm(postID: post.id, candidateID: candidateID)
+                            },
+                            onReviewDetails: {
+                                isReviewingExtractedDetails = true
+                            }
+                        )
+                        if isReviewingExtractedDetails {
+                            EvidenceEditor(
+                                platform: post.platform,
+                                text: $evidenceText,
+                                message: "Correct the place name, neighborhood, address, or other clues, then search again."
+                            ) {
+                                isReviewingExtractedDetails = false
+                                store.submitEvidence(postID: post.id, text: evidenceText)
+                            }
                         }
                     case .failed:
                         VStack(alignment: .leading, spacing: Space.sm) {
@@ -119,6 +136,7 @@ struct SavedPostDetailView: View {
 private struct CandidateList: View {
     let post: SavedPost
     let onConfirm: (String) -> Void
+    let onReviewDetails: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
@@ -129,23 +147,72 @@ private struct CandidateList: View {
                     .foregroundStyle(.inkMuted)
             }
 
-            ForEach(post.candidates) { candidate in
-                VStack(alignment: .leading, spacing: Space.sm) {
-                    VStack(alignment: .leading, spacing: Space.xxs) {
-                        Text(candidate.place.name).font(.cardHeading).foregroundStyle(.ink)
-                        Text("\(candidate.place.neighborhood) · \(candidate.place.address)")
-                            .font(.bodyText)
-                            .foregroundStyle(.inkMuted)
-                        Text("\(candidate.confidence.label) · \(candidate.reason)")
-                            .font(.metadata)
-                            .foregroundStyle(.inkMuted)
-                    }
-                    Button("Confirm \(candidate.place.name)") {
-                        onConfirm(candidate.id)
-                    }
-                    .buttonStyle(.primary)
+            ForEach(Array(post.candidates.enumerated()), id: \.element.id) { index, candidate in
+                CandidateCard(
+                    candidate: candidate,
+                    isBestMatch: index == 0,
+                    onConfirm: onConfirm
+                )
+            }
+
+            Button("None of these") {
+                onReviewDetails()
+            }
+            .buttonStyle(.secondary)
+
+            Button("Review extracted details") {
+                onReviewDetails()
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("review-extracted-details")
+        }
+    }
+}
+
+private struct CandidateCard: View {
+    let candidate: PlaceCandidate
+    let isBestMatch: Bool
+    let onConfirm: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                if isBestMatch {
+                    Text("Best match")
+                        .font(.metadata)
+                        .foregroundStyle(.surface)
+                        .padding(.horizontal, Space.xs)
+                        .padding(.vertical, Space.xxs)
+                        .background(Color.emeraldDeep, in: Capsule())
+                        .accessibilityIdentifier("best-place-match")
                 }
-                .planditCard()
+                Text(candidate.place.name)
+                    .font(.cardHeading)
+                    .foregroundStyle(.ink)
+                Text("\(candidate.place.neighborhood) · \(candidate.place.address)")
+                    .font(.bodyText)
+                    .foregroundStyle(.inkMuted)
+                Text("\(candidate.confidence.label) · \(candidate.reason)")
+                    .font(.metadata)
+                    .foregroundStyle(.inkMuted)
+            }
+            if isBestMatch {
+                Button("Confirm \(candidate.place.name)") {
+                    onConfirm(candidate.id)
+                }
+                .buttonStyle(.primary)
+            } else {
+                Button("Confirm \(candidate.place.name)") {
+                    onConfirm(candidate.id)
+                }
+                .buttonStyle(.secondary)
+            }
+        }
+        .planditCard()
+        .overlay {
+            if isBestMatch {
+                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                    .strokeBorder(Color.emeraldDeep, lineWidth: 2)
             }
         }
     }
@@ -224,7 +291,7 @@ struct SourceCard: View {
             }
             .foregroundStyle(.ink)
 
-            if let caption = post.caption {
+            if let caption = post.caption, post.platform != .video {
                 Text("“\(caption)”").font(.bodyText).foregroundStyle(.ink)
             }
 

@@ -222,16 +222,17 @@ final class PlanditStore {
         }
         guard updateAndPersist(id, mutation: {
             $0.caption = evidence.text
-            $0.status = .needsEvidence
-            $0.failureMessage = [
-                "Review the text we found before matching it to a place.",
-                evidence.transcriptionNotice,
-            ]
-            .compactMap { $0 }
-            .joined(separator: " ")
+            $0.status = .processing
+            $0.failureMessage = evidence.transcriptionNotice
         }) else {
             throw SavedPlacePersistenceError()
         }
+        await resolveEvidence(
+            postID: id,
+            text: evidence.text,
+            noCandidatesMessage: evidence.transcriptionNotice
+                ?? "We couldn't confidently match this video. Review the extracted details and try again."
+        )
         return id
     }
 
@@ -262,11 +263,20 @@ final class PlanditStore {
         }
     }
 
-    private func resolveEvidence(postID: UUID, text: String) async {
+    private func resolveEvidence(
+        postID: UUID,
+        text: String,
+        noCandidatesMessage: String? = nil
+    ) async {
         guard let post = post(id: postID) else { return }
         do {
             let result = try await extractor.resolve(evidence: text, platform: post.platform)
-            updateAndPersist(postID) { $0.apply(result) }
+            updateAndPersist(postID) {
+                $0.apply(result)
+                if result.candidates.isEmpty {
+                    $0.failureMessage = noCandidatesMessage
+                }
+            }
         } catch {
             updateAndPersist(postID) {
                 $0.status = .failed

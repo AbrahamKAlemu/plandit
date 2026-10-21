@@ -57,6 +57,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Video is temporary, never uploaded, and deleted after evidence extraction | Selected |
 | Build compliant core with an unused scraper-provider seam; no Apify dependency or calls | Selected |
 | Mandatory candidate confirmation | Selected |
+| Video results are candidate-first; raw OCR/transcript stays hidden unless the user reviews or corrects extracted details | Selected |
 | Local-first SwiftData | Selected |
 | Discrete emerald cells/circles; no gradient | Selected |
 | Django modular monolith + PostgreSQL on Railway | Selected |
@@ -86,6 +87,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |
 | Add direct Photos video selection | Complete | Native Photos picker plus Files fallback, pre-copy type/size validation, managed temporary storage, visible extraction errors, and picker UI coverage |
 | Make simulator transcription testable | Complete | On-device Speech remains first; Debug simulator builds may use the owner-approved Apple network fallback, OCR strings provide recognition context, and unavailable transcription is visible |
+| Simplify video result review | Complete | Video evidence resolves directly to suggested places, the first result is marked Best match, confirmation remains mandatory, and None of these / Review extracted details preserve correction |
 | Implement Django resolution contract | Complete | Strict request validation, redacted operational records, stable idempotent response replay, admin, OpenAPI, and PostgreSQL production configuration |
 | Add arbitrary-place prototype fallback | Complete | TikTok oEmbed captions and user-approved evidence fall back to on-device MapKit search when fixture aliases do not match; Instagram URL-only still requires an approved metadata source |
 | Verify approved user flow | Complete | URL/evidence to candidate to confirmation to relaunch UI test passes on iPhone 16 Pro / iOS 18.6 |
