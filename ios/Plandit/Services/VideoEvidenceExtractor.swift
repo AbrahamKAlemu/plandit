@@ -26,6 +26,7 @@ enum VideoEvidenceError: LocalizedError, Equatable {
 
 struct VideoEvidence: Sendable {
     let text: String
+    let transcriptionNotice: String?
 
     static func combine(frameText: [String], transcript: String?) -> String {
         var seen = Set<String>()
@@ -125,12 +126,30 @@ struct VideoEvidenceExtractor {
 
         let frameText = try await recognizeFrameText(asset: asset, duration: duration)
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        let transcript = Self.shouldAttemptTranscription(audioTrackCount: audioTracks.count)
-            ? (try? await transcribeOnDevice(url: staged))
-            : nil
+        var transcriptionNotice: String?
+        let transcript: String?
+        if Self.shouldAttemptTranscription(audioTrackCount: audioTracks.count) {
+            do {
+                transcript = try await transcribe(
+                    url: staged,
+                    contextualStrings: frameText
+                )
+                if transcript?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+                    transcriptionNotice = "Audio transcription was unavailable. Review the visible text or add the spoken place details."
+                }
+            } catch {
+                transcript = nil
+                transcriptionNotice = "Audio transcription was unavailable. Review the visible text or add the spoken place details."
+            }
+        } else {
+            transcript = nil
+        }
         let combined = VideoEvidence.combine(frameText: frameText, transcript: transcript)
         guard !combined.isEmpty else { throw VideoEvidenceError.noEvidence }
-        return VideoEvidence(text: combined)
+        return VideoEvidence(
+            text: combined,
+            transcriptionNotice: transcriptionNotice
+        )
     }
 
     static func shouldAttemptTranscription(audioTrackCount: Int) -> Bool {
@@ -161,26 +180,71 @@ struct VideoEvidenceExtractor {
         return results
     }
 
-    private func transcribeOnDevice(url: URL) async throws -> String? {
+    private func transcribe(
+        url: URL,
+        contextualStrings: [String]
+    ) async throws -> String? {
         let authorization = await speechAuthorization()
         guard authorization == .authorized,
               let recognizer = SFSpeechRecognizer(),
-              recognizer.isAvailable,
-              recognizer.supportsOnDeviceRecognition else {
+              recognizer.isAvailable else {
             return nil
         }
 
+        if recognizer.supportsOnDeviceRecognition,
+           let transcript = try? await recognize(
+               url: url,
+               recognizer: recognizer,
+               contextualStrings: contextualStrings,
+               requiresOnDeviceRecognition: true
+           ),
+           !transcript.isEmpty {
+            return transcript
+        }
+
+#if DEBUG && targetEnvironment(simulator)
+        return try await recognize(
+            url: url,
+            recognizer: recognizer,
+            contextualStrings: contextualStrings,
+            requiresOnDeviceRecognition: false
+        )
+#else
+        return nil
+#endif
+    }
+
+    private func recognize(
+        url: URL,
+        recognizer: SFSpeechRecognizer,
+        contextualStrings: [String],
+        requiresOnDeviceRecognition: Bool
+    ) async throws -> String {
         return try await withCheckedThrowingContinuation { continuation in
             let request = SFSpeechURLRecognitionRequest(url: url)
-            request.requiresOnDeviceRecognition = true
+            request.requiresOnDeviceRecognition = requiresOnDeviceRecognition
+            request.contextualStrings = contextualStrings
+                .flatMap { $0.components(separatedBy: .newlines) }
+                .filter { !$0.isEmpty }
+                .prefix(100)
+                .map { $0 }
+            request.taskHint = .dictation
             var resumed = false
+            var latestTranscript = ""
             recognizer.recognitionTask(with: request) { result, error in
+                if let result {
+                    latestTranscript = result.bestTranscription.formattedString
+                }
                 if let error, !resumed {
                     resumed = true
-                    continuation.resume(throwing: error)
+                    if latestTranscript.isEmpty {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: latestTranscript)
+                    }
                 } else if let result, result.isFinal, !resumed {
                     resumed = true
-                    continuation.resume(returning: result.bestTranscription.formattedString)
+                    continuation.resume(returning: latestTranscript)
                 }
             }
         }

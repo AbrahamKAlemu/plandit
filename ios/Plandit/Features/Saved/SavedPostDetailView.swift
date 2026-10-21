@@ -23,7 +23,8 @@ struct SavedPostDetailView: View {
                         EvidenceEditor(
                             platform: post.platform,
                             text: $evidenceText,
-                            message: "Add the restaurant or place name, neighborhood, address, or clues from the video."
+                            message: post.failureMessage
+                                ?? "Add the restaurant or place name, neighborhood, address, or clues from the video."
                         ) {
                             store.submitEvidence(postID: post.id, text: evidenceText)
                         }

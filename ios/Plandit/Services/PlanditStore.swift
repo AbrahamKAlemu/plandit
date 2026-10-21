@@ -223,7 +223,12 @@ final class PlanditStore {
         guard updateAndPersist(id, mutation: {
             $0.caption = evidence.text
             $0.status = .needsEvidence
-            $0.failureMessage = "Review the text we found before matching it to a place."
+            $0.failureMessage = [
+                "Review the text we found before matching it to a place.",
+                evidence.transcriptionNotice,
+            ]
+            .compactMap { $0 }
+            .joined(separator: " ")
         }) else {
             throw SavedPlacePersistenceError()
         }
