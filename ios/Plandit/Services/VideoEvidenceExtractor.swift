@@ -4,7 +4,7 @@ import Speech
 import UniformTypeIdentifiers
 import Vision
 
-enum VideoEvidenceError: LocalizedError {
+enum VideoEvidenceError: LocalizedError, Equatable {
     case unsupportedType
     case tooLarge
     case tooLong
@@ -61,6 +61,16 @@ struct TemporaryMediaStore {
             if accessed { source.stopAccessingSecurityScopedResource() }
         }
 
+        try validate(source)
+
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let extensionName = source.pathExtension.isEmpty ? "mov" : source.pathExtension
+        let destination = root.appending(path: "\(UUID().uuidString).\(extensionName)")
+        try FileManager.default.copyItem(at: source, to: destination)
+        return destination
+    }
+
+    func validate(_ source: URL) throws {
         let values = try source.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
         guard let contentType = values.contentType, contentType.conforms(to: .movie) else {
             throw VideoEvidenceError.unsupportedType
@@ -68,12 +78,6 @@ struct TemporaryMediaStore {
         if let fileSize = values.fileSize, Int64(fileSize) > Self.maximumBytes {
             throw VideoEvidenceError.tooLarge
         }
-
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let extensionName = source.pathExtension.isEmpty ? "mov" : source.pathExtension
-        let destination = root.appending(path: "\(UUID().uuidString).\(extensionName)")
-        try FileManager.default.copyItem(at: source, to: destination)
-        return destination
     }
 
     func remove(_ url: URL) throws {

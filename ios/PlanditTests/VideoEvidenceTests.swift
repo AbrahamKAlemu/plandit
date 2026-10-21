@@ -28,4 +28,23 @@ final class VideoEvidenceTests: XCTestCase {
         try store.remove(staged)
         XCTAssertFalse(FileManager.default.fileExists(atPath: staged.path))
     }
+
+    func testOversizedVideoIsRejectedBeforeStaging() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "OversizedVideoTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let source = root.appending(path: "large.mov")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: source.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: source)
+        try handle.truncate(atOffset: UInt64(250 * 1024 * 1024 + 1))
+        try handle.close()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = TemporaryMediaStore(root: root.appending(path: "staged", directoryHint: .isDirectory))
+
+        XCTAssertThrowsError(try store.validate(source)) { error in
+            XCTAssertEqual(error as? VideoEvidenceError, .tooLarge)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.root.path))
+    }
 }

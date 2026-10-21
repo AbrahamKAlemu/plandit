@@ -2,6 +2,19 @@ import XCTest
 
 @MainActor
 final class SavedPlaceExtractionFlowTests: XCTestCase {
+    func testVideoCanBeChosenFromPhotos() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-startTab", "saved",
+            "-startDetent", "large",
+        ]
+        app.launch()
+
+        app.buttons["Add a link"].tap()
+
+        XCTAssertTrue(app.buttons["choose-video-photos"].waitForExistence(timeout: 5))
+    }
+
     func testPasteConfirmAndRelaunchPersistsPlace() {
         let app = XCUIApplication()
         app.launchArguments = [

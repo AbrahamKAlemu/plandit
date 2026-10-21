@@ -1,5 +1,31 @@
+import CoreTransferable
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
+
+private struct PickedVideo: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { video in
+            SentTransferredFile(video.url)
+        } importing: { received in
+            let mediaStore = TemporaryMediaStore()
+            try mediaStore.validate(received.file)
+            try FileManager.default.createDirectory(
+                at: mediaStore.root,
+                withIntermediateDirectories: true
+            )
+            let fileExtension = received.file.pathExtension.isEmpty
+                ? "mov"
+                : received.file.pathExtension
+            let destination = mediaStore.root
+                .appending(path: "Picker-\(UUID().uuidString).\(fileExtension)")
+            try FileManager.default.copyItem(at: received.file, to: destination)
+            return PickedVideo(url: destination)
+        }
+    }
+}
 
 /// Manual fallback for the share extension: paste a TikTok or Reel link.
 struct AddLinkSheet: View {
@@ -9,6 +35,7 @@ struct AddLinkSheet: View {
     @State private var errorMessage: String?
     @State private var isChoosingVideo = false
     @State private var isProcessingVideo = false
+    @State private var selectedVideo: PhotosPickerItem?
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -63,19 +90,32 @@ struct AddLinkSheet: View {
                     Text("If the link does not include enough detail, choose a video you are allowed to share. Plandit reads it on this device and deletes the temporary copy.")
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
+                    PhotosPicker(
+                        selection: $selectedVideo,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        Label("Choose from Photos", systemImage: "video")
+                    }
+                    .buttonStyle(.secondary)
+                    .disabled(isProcessingVideo)
+                    .accessibilityIdentifier("choose-video-photos")
+
+                    if isProcessingVideo {
+                        HStack(spacing: Space.xs) {
+                            ProgressView().controlSize(.small)
+                            Text("Reading video…")
+                        }
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                    }
+
                     Button {
                         isChoosingVideo = true
                     } label: {
-                        HStack(spacing: Space.xs) {
-                            if isProcessingVideo {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Icon(.video, size: 18)
-                            }
-                            Text(isProcessingVideo ? "Reading video…" : "Choose a video")
-                        }
+                        Text("Choose from Files")
                     }
-                    .buttonStyle(.secondary)
+                    .buttonStyle(.plain)
                     .disabled(isProcessingVideo)
                 }
 
@@ -96,6 +136,25 @@ struct AddLinkSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationBackground(Color.surface)
+        .onChange(of: selectedVideo) { _, item in
+            guard let item else { return }
+            isProcessingVideo = true
+            errorMessage = nil
+            Task {
+                do {
+                    guard let video = try await item.loadTransferable(type: PickedVideo.self) else {
+                        throw VideoEvidenceError.unsupportedType
+                    }
+                    defer { try? FileManager.default.removeItem(at: video.url) }
+                    try await store.saveVideo(fileURL: video.url)
+                    dismiss()
+                } catch {
+                    errorMessage = error.localizedDescription
+                    selectedVideo = nil
+                }
+                isProcessingVideo = false
+            }
+        }
         .fileImporter(
             isPresented: $isChoosingVideo,
             allowedContentTypes: [.movie],
@@ -107,16 +166,7 @@ struct AddLinkSheet: View {
                 }
                 return
             }
-            isProcessingVideo = true
-            Task {
-                do {
-                    try await store.saveVideo(fileURL: url)
-                    dismiss()
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
-                isProcessingVideo = false
-            }
+            processVideo(at: url)
         }
     }
 
@@ -131,6 +181,20 @@ struct AddLinkSheet: View {
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription
                 ?? "We couldn't save that link. Try again."
+        }
+    }
+
+    private func processVideo(at url: URL) {
+        isProcessingVideo = true
+        errorMessage = nil
+        Task {
+            do {
+                try await store.saveVideo(fileURL: url)
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isProcessingVideo = false
         }
     }
 }

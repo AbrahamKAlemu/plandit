@@ -206,14 +206,19 @@ final class PlanditStore {
         let evidence: VideoEvidence
         do {
             evidence = try await videoExtractor.extract(from: fileURL)
-        } catch {
-            guard updateAndPersist(id, mutation: {
-                $0.status = .needsEvidence
-                $0.failureMessage = error.localizedDescription
-            }) else {
+        } catch let extractionError {
+            do {
+                try persistence?.delete(canonicalURL: sourceURL)
+                saved.removeAll { $0.id == id }
+            } catch {
+                savedErrorMessage = "We couldn't clean up the failed video save. Try again."
+                if let index = saved.firstIndex(where: { $0.id == id }) {
+                    saved[index].status = .failed
+                    saved[index].failureMessage = extractionError.localizedDescription
+                }
                 throw SavedPlacePersistenceError()
             }
-            return id
+            throw extractionError
         }
         guard updateAndPersist(id, mutation: {
             $0.caption = evidence.text
