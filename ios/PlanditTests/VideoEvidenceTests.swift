@@ -47,4 +47,9 @@ final class VideoEvidenceTests: XCTestCase {
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.root.path))
     }
+
+    func testSilentVideoSkipsSpeechRecognition() {
+        XCTAssertFalse(VideoEvidenceExtractor.shouldAttemptTranscription(audioTrackCount: 0))
+        XCTAssertTrue(VideoEvidenceExtractor.shouldAttemptTranscription(audioTrackCount: 1))
+    }
 }

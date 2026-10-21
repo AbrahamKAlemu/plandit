@@ -124,10 +124,17 @@ struct VideoEvidenceExtractor {
         }
 
         let frameText = try await recognizeFrameText(asset: asset, duration: duration)
-        let transcript = try? await transcribeOnDevice(url: staged)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        let transcript = Self.shouldAttemptTranscription(audioTrackCount: audioTracks.count)
+            ? (try? await transcribeOnDevice(url: staged))
+            : nil
         let combined = VideoEvidence.combine(frameText: frameText, transcript: transcript)
         guard !combined.isEmpty else { throw VideoEvidenceError.noEvidence }
         return VideoEvidence(text: combined)
+    }
+
+    static func shouldAttemptTranscription(audioTrackCount: Int) -> Bool {
+        audioTrackCount > 0
     }
 
     private func recognizeFrameText(asset: AVAsset, duration: TimeInterval) async throws -> [String] {
