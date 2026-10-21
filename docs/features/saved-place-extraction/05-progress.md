@@ -84,6 +84,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Implement durable URL intake and confirmation | Complete | SwiftData persistence, strict canonical URLs, deterministic candidates, explicit confirmation, and relaunch coverage |
 | Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |
 | Implement Django resolution contract | Complete | Strict request validation, redacted operational records, stable idempotent response replay, admin, OpenAPI, and PostgreSQL production configuration |
+| Add arbitrary-place prototype fallback | Complete | TikTok oEmbed captions and user-approved evidence fall back to on-device MapKit search when fixture aliases do not match; Instagram URL-only still requires an approved metadata source |
 | Verify approved user flow | Complete | URL/evidence to candidate to confirmation to relaunch UI test passes on iPhone 16 Pro / iOS 18.6 |
 | Resolve independent review findings | Complete | Persistence is transactional before in-memory success; failures become retryable; video evidence requires review; malformed JSON is rejected; request IDs replay stable candidate snapshots |
 
