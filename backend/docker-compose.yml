@@ -1,0 +1,20 @@
+# Local development database only. Deployed environments use Supabase Postgres.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: plandit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: plandit
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - plandit-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plandit"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  plandit-pgdata:

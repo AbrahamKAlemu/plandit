@@ -1,6 +1,6 @@
 import Foundation
 
-struct UserProfile {
+struct UserProfile: Codable {
     var name: String
     var school: String
     var homeBase: String
@@ -8,9 +8,12 @@ struct UserProfile {
     var travelModes: String
 
     var initial: String { String(name.prefix(1)) }
+
+    /// How the planner is allowed to move you between stops.
+    static let travelOptions = ["Walk only", "Walk + subway", "Walk + subway + bus"]
 }
 
-struct UserStats {
+struct UserStats: Codable {
     var plansCompleted: Int
     var neighborhoodsVisited: Int
     var milesWalked: Double
@@ -19,7 +22,7 @@ struct UserStats {
     var streakWeeks: Int
 }
 
-struct PastPlan: Identifiable {
+struct PastPlan: Identifiable, Codable {
     var id = UUID()
     var title: String
     var date: Date

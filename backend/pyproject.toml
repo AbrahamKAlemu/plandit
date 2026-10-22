@@ -1,11 +1,14 @@
-[project]
-name = "plandit-backend"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = [
-  "Django>=5.2,<5.3",
-  "psycopg[binary]>=3.2,<4",
-]
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings_test"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+addopts = "-q --reuse-db"
+filterwarnings = ["ignore:No directory at:UserWarning"]
 
-[tool.uv]
-package = false
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

@@ -1,0 +1,332 @@
+[
+  {
+    "model": "places.place",
+    "pk": "5ff13d01-d6f0-5012-b516-683a2f94b72a",
+    "fields": {
+      "name": "The Hungarian Pastry Shop",
+      "category": "coffee",
+      "neighborhood": "Morningside Heights",
+      "address": "1030 Amsterdam Ave",
+      "latitude": 40.8036,
+      "longitude": -73.9636,
+      "hours": "Open until 9 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "74521e67-a9f1-5c21-af9a-99f86bfb985b",
+    "fields": {
+      "name": "The Met",
+      "category": "culture",
+      "neighborhood": "Upper East Side",
+      "address": "1000 Fifth Ave",
+      "latitude": 40.7794,
+      "longitude": -73.9632,
+      "hours": "Open until 5 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "bd4f8ea3-0d9d-5a68-89d9-39eb742e914a",
+    "fields": {
+      "name": "The High Line",
+      "category": "outdoors",
+      "neighborhood": "Hudson Yards",
+      "address": "Enter at W 30th St & 10th Ave",
+      "latitude": 40.7527,
+      "longitude": -74.0016,
+      "hours": "Open until 10 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "aed1d90e-c5b0-580c-9af5-92e01b61f1ce",
+    "fields": {
+      "name": "Los Tacos No. 1",
+      "category": "food",
+      "neighborhood": "Chelsea",
+      "address": "75 Ninth Ave, Chelsea Market",
+      "latitude": 40.7424,
+      "longitude": -74.0061,
+      "hours": "Open until 9 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "91157afb-1ef8-51df-ae49-551f2ed0fc24",
+    "fields": {
+      "name": "Washington Square Park",
+      "category": "outdoors",
+      "neighborhood": "Greenwich Village",
+      "address": "Washington Square",
+      "latitude": 40.7308,
+      "longitude": -73.9973,
+      "hours": "Open until midnight",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "e0695380-a117-59a2-832c-278208a3dbde",
+    "fields": {
+      "name": "Joe's Pizza",
+      "category": "food",
+      "neighborhood": "West Village",
+      "address": "7 Carmine St",
+      "latitude": 40.7305,
+      "longitude": -74.0021,
+      "hours": "Open late",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "c1503319-f2ca-5d7a-88db-40f64349ad48",
+    "fields": {
+      "name": "Levain Bakery",
+      "category": "food",
+      "neighborhood": "Upper West Side",
+      "address": "167 W 74th St",
+      "latitude": 40.7799,
+      "longitude": -73.9805,
+      "hours": "Open until 8 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "c87d47a8-99b8-5102-a142-85a299a3c000",
+    "fields": {
+      "name": "Little Island",
+      "category": "outdoors",
+      "neighborhood": "Hudson River Park",
+      "address": "Pier 55 at W 13th St",
+      "latitude": 40.742,
+      "longitude": -74.0103,
+      "hours": "Open until 9 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "1222ab64-e22e-5ac5-a435-56156d3a1b50",
+    "fields": {
+      "name": "The Met Cloisters",
+      "category": "culture",
+      "neighborhood": "Fort Tryon Park",
+      "address": "99 Margaret Corbin Dr",
+      "latitude": 40.8649,
+      "longitude": -73.9319,
+      "hours": "Open until 5 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "3d2fd2a2-8495-5f18-9dbc-53bf1b01d192",
+    "fields": {
+      "name": "Smalls Jazz Club",
+      "category": "nightlife",
+      "neighborhood": "West Village",
+      "address": "183 W 10th St",
+      "latitude": 40.7344,
+      "longitude": -74.0027,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "45531335-2e35-585a-98b3-4615994b420b",
+    "fields": {
+      "name": "Russ & Daughters",
+      "category": "food",
+      "neighborhood": "Lower East Side",
+      "address": "179 E Houston St",
+      "latitude": 40.7226,
+      "longitude": -73.9883,
+      "hours": "Open until 6 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "45fb8d54-18e1-5003-9bd2-30a4c2422a98",
+    "fields": {
+      "name": "Roosevelt Island Tram",
+      "category": "activity",
+      "neighborhood": "Lenox Hill",
+      "address": "E 59th St & 2nd Ave",
+      "latitude": 40.7612,
+      "longitude": -73.9643,
+      "hours": "Runs until 2 AM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "3e679f87-1f37-57d0-b743-a53963c625ba",
+    "fields": {
+      "name": "Absolute Bagels",
+      "category": "food",
+      "neighborhood": "Morningside Heights",
+      "address": "2788 Broadway",
+      "latitude": 40.8024,
+      "longitude": -73.9676,
+      "hours": "Open until 4 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "1c9f0180-3d98-5893-9d54-e60f6b26fe5a",
+    "fields": {
+      "name": "Apollo Theater",
+      "category": "culture",
+      "neighborhood": "Harlem",
+      "address": "253 W 125th St",
+      "latitude": 40.81,
+      "longitude": -73.9501,
+      "hours": "Shows at 7:30 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "5b5571f7-ce57-5780-aa31-379d96f81c2a",
+    "fields": {
+      "name": "Sylvia's",
+      "category": "food",
+      "neighborhood": "Harlem",
+      "address": "328 Malcolm X Blvd",
+      "latitude": 40.8089,
+      "longitude": -73.9445,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "d2baede5-895d-5a20-a203-23bc23d75e93",
+    "fields": {
+      "name": "Bethesda Terrace",
+      "category": "outdoors",
+      "neighborhood": "Central Park",
+      "address": "Central Park",
+      "latitude": 40.774,
+      "longitude": -73.9708,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "13023852-1852-5106-a509-9ec2471ecde1",
+    "fields": {
+      "name": "The Morgan Library",
+      "category": "culture",
+      "neighborhood": "Murray Hill",
+      "address": "225 Madison Ave",
+      "latitude": 40.7492,
+      "longitude": -73.9814,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "4e83097d-5ba0-5e6b-aaa8-fc326796f8d8",
+    "fields": {
+      "name": "Strand Book Store",
+      "category": "shopping",
+      "neighborhood": "Union Square",
+      "address": "828 Broadway",
+      "latitude": 40.7332,
+      "longitude": -73.9907,
+      "hours": "Open until 8 PM",
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "83ab2284-beae-5953-84bb-ee1d5dd157f0",
+    "fields": {
+      "name": "Katz's Delicatessen",
+      "category": "food",
+      "neighborhood": "Lower East Side",
+      "address": "205 E Houston St",
+      "latitude": 40.7223,
+      "longitude": -73.9874,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "759ef164-3487-5af4-a0aa-3dc3e18ad477",
+    "fields": {
+      "name": "Battery Park",
+      "category": "outdoors",
+      "neighborhood": "Financial District",
+      "address": "Battery Park",
+      "latitude": 40.7033,
+      "longitude": -74.017,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "a66083a5-c4d6-51a5-9b96-2f16b50b7358",
+    "fields": {
+      "name": "Fort Tryon Park",
+      "category": "outdoors",
+      "neighborhood": "Hudson Heights",
+      "address": "Fort Tryon Park",
+      "latitude": 40.8612,
+      "longitude": -73.9325,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  },
+  {
+    "model": "places.place",
+    "pk": "eb6a8ce8-9c8b-5097-bf8c-0d9508cb334f",
+    "fields": {
+      "name": "Grand Central Terminal",
+      "category": "culture",
+      "neighborhood": "Midtown East",
+      "address": "89 E 42nd St",
+      "latitude": 40.7527,
+      "longitude": -73.9772,
+      "hours": null,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  }
+]

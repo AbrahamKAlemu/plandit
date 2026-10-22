@@ -1,9 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
+"""Django's command-line utility for administrative tasks."""
+
 import os
 import sys
 
 
-def main() -> None:
+def main():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     from django.core.management import execute_from_command_line
 

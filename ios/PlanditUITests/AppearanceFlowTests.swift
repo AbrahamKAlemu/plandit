@@ -1,8 +1,7 @@
 import XCTest
 
-@MainActor
 final class AppearanceFlowTests: XCTestCase {
-    func testSelectingDarkPersistsAcrossRelaunch() {
+    @MainActor func testSelectingDarkPersistsAcrossRelaunch() {
         let app = XCUIApplication()
         app.launchArguments = ["-startTab", "profile", "-startDetent", "large"]
         continueAfterFailure = false
@@ -28,7 +27,7 @@ final class AppearanceFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Dark"].isSelected)
     }
 
-    private func assertAppearance(_ expected: String, in app: XCUIApplication) {
+    @MainActor private func assertAppearance(_ expected: String, in app: XCUIApplication) {
         let screen = app.descendants(matching: .any)["appearance-screen"]
         XCTAssertTrue(screen.waitForExistence(timeout: 3))
 
@@ -37,7 +36,7 @@ final class AppearanceFlowTests: XCTestCase {
         waitForExpectations(timeout: 3)
     }
 
-    private func openAppearance(in app: XCUIApplication) {
+    @MainActor private func openAppearance(in app: XCUIApplication) {
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 3))
         settings.tap()

@@ -11,6 +11,7 @@ struct StopPin: View {
             .padding(2)
             .background(Circle().fill(.white))
             .animation(.snappy, value: isSelected)
+            .animation(.snappy, value: status)
     }
 }
 

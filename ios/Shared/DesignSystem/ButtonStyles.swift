@@ -12,6 +12,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, Space.md)
             .background(fill(isPressed: configuration.isPressed), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .pressScale(configuration.isPressed)
     }
 
     private func fill(isPressed: Bool) -> Color {
@@ -31,6 +32,7 @@ struct SecondaryButtonStyle: ButtonStyle {
             .background(configuration.isPressed ? Color.canvas : Color.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(Color.ink, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .pressScale(configuration.isPressed)
     }
 }
 
@@ -40,4 +42,12 @@ extension ButtonStyle where Self == PrimaryButtonStyle {
 
 extension ButtonStyle where Self == SecondaryButtonStyle {
     static var secondary: SecondaryButtonStyle { SecondaryButtonStyle() }
+}
+
+private extension View {
+    /// A slight settle on press, so buttons feel physical without any color trickery.
+    func pressScale(_ isPressed: Bool) -> some View {
+        scaleEffect(isPressed ? 0.97 : 1)
+            .animation(.snappy(duration: 0.2), value: isPressed)
+    }
 }

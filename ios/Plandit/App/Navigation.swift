@@ -28,17 +28,57 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Navigation inside the persistent sheet. Each tab keeps its own stack, like Find My.
+/// Navigation inside the persistent sheet: the selected tab plus one stack per tab, like Find My.
+/// Shared through the environment so any screen can move the user somewhere else.
 @Observable
 final class SheetRouter {
+    var tab: AppTab = .launchTab
     var todayPath: [UUID] = []
     var savedPath: [UUID] = []
+    /// The "Plan a day" sheet behind the + in the tab bar. Launch with `-openPlanner YES` to start there.
+    var isPlanning = UserDefaults.standard.bool(forKey: "openPlanner")
 
     func selection(in tab: AppTab) -> UUID? {
         switch tab {
         case .today: todayPath.last
         case .saved: savedPath.last
         case .profile: nil
+        }
+    }
+
+    /// Switches tabs, landing on that tab's root.
+    func show(_ tab: AppTab) {
+        withAnimation(.snappy(duration: 0.3)) {
+            self.tab = tab
+            switch tab {
+            case .today: todayPath = []
+            case .saved: savedPath = []
+            case .profile: break
+            }
+        }
+    }
+
+    func showStop(_ id: UUID) {
+        withAnimation(.snappy(duration: 0.3)) {
+            tab = .today
+            todayPath = [id]
+        }
+    }
+
+    func startPlanning() {
+        isPlanning = true
+    }
+
+    /// After a plan is built: land on Today so the new route shows on the map.
+    func finishPlanning() {
+        isPlanning = false
+        show(.today)
+    }
+
+    func showPost(_ id: UUID) {
+        withAnimation(.snappy(duration: 0.3)) {
+            tab = .saved
+            savedPath = [id]
         }
     }
 }

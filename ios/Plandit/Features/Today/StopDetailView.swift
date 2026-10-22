@@ -13,6 +13,7 @@ struct StopDetailView: View {
                         HStack(spacing: Space.xs) {
                             StopBadge(number: number, status: stop.status, size: 32)
                             StopStatusTag(status: stop.status)
+                                .transition(.scale.combined(with: .opacity))
                         }
                         Text(stop.place.name).font(.pageHeading).foregroundStyle(.ink)
                         Text("\(stop.place.category.label) · \(stop.place.neighborhood)")
@@ -55,9 +56,11 @@ struct StopDetailView: View {
                         }
                         .buttonStyle(.primary)
 
+                        ProgressButtons(stop: stop)
+
                         Button(role: .destructive) {
-                            store.removeStop(stop.id)
                             dismiss()
+                            withAnimation(.snappy) { store.removeStop(stop.id) }
                         } label: {
                             Text("Remove from plan")
                                 .font(.label)
@@ -67,11 +70,48 @@ struct StopDetailView: View {
                     }
                 }
                 .padding(Space.lg)
+                .animation(.snappy(duration: 0.3), value: stop.status)
             }
             .background(Color.surface)
             .navigationBarTitleDisplayMode(.inline)
+            .sensoryFeedback(.impact(weight: .light), trigger: stop.status)
         } else {
             ContentUnavailableView("Stop removed", image: "Icons/route", description: Text("This stop is no longer in today's plan."))
+        }
+    }
+}
+
+/// "I'm here" and "Done here" move the day forward; the map and timeline follow.
+private struct ProgressButtons: View {
+    let stop: PlanStop
+    @Environment(PlanditStore.self) private var store
+
+    var body: some View {
+        HStack(spacing: Space.sm) {
+            if stop.status != .now {
+                Button {
+                    withAnimation(.snappy) { store.arrive(at: stop.id) }
+                } label: {
+                    HStack(spacing: Space.xs) {
+                        Icon(.mapPin, size: 18)
+                        Text("I'm here")
+                    }
+                }
+                .buttonStyle(.secondary)
+                .transition(.opacity)
+            }
+            if stop.status != .done {
+                Button {
+                    withAnimation(.snappy) { store.complete(stop.id) }
+                } label: {
+                    HStack(spacing: Space.xs) {
+                        Icon(.circleCheck, size: 18)
+                        Text("Done here")
+                    }
+                }
+                .buttonStyle(.secondary)
+                .transition(.opacity)
+            }
         }
     }
 }

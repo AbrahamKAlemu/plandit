@@ -75,17 +75,18 @@ struct ProfileSheet: View {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         SectionTitle("Preferences")
                         VStack(spacing: 0) {
-                            preferenceRow(.wallet, "Default budget", profile.defaultBudget.wholeDollarsText)
+                            preferenceRow(.wallet, "Default budget", profile.defaultBudget.wholeDollarsText) { BudgetScreen() }
                             Hairline().padding(.leading, 52)
-                            preferenceRow(.house, "Home base", profile.homeBase)
+                            preferenceRow(.house, "Home base", profile.homeBase.isEmpty ? "Not set" : profile.homeBase) { HomeBaseScreen() }
                             Hairline().padding(.leading, 52)
-                            preferenceRow(.trainFront, "Getting around", profile.travelModes)
+                            preferenceRow(.trainFront, "Getting around", profile.travelModes) { TravelModesScreen() }
                             Hairline().padding(.leading, 52)
-                            preferenceRow(.bell, "Notifications", "Plan reminders")
+                            preferenceRow(.bell, "Notifications", "Plan reminders") { PlaceholderScreen(title: "Notifications") }
                             Hairline().padding(.leading, 52)
-                            preferenceRow(.share, "Saving from TikTok and Instagram", "How it works")
+                            preferenceRow(.share, "Saving from TikTok and Instagram", "How it works") { HowToSaveScreen() }
                         }
                         .planditCard(padding: 0)
+                        .animation(.snappy(duration: 0.3), value: profile.defaultBudget)
                     }
 
                     VStack(spacing: Space.xs) {
@@ -112,10 +113,10 @@ struct ProfileSheet: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    private func preferenceRow(_ icon: Lucide, _ title: String, _ value: String) -> some View {
-        NavigationLink {
-            PlaceholderScreen(title: title)
-        } label: {
+    private func preferenceRow<Destination: View>(
+        _ icon: Lucide, _ title: String, _ value: String, @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        NavigationLink(destination: destination) {
             ListRow(icon: icon, title: title, detail: value)
         }
         .buttonStyle(.plain)

@@ -94,6 +94,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.plandit.app.tests
         GENERATE_INFOPLIST_FILE: YES
+        # XCTestCase subclasses can't be main-actor isolated; test methods opt in with @MainActor.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
   PlanditUITests:
     type: bundle.ui-testing
@@ -107,6 +109,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.plandit.app.uitests
         TEST_TARGET_NAME: Plandit
         GENERATE_INFOPLIST_FILE: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
 schemes:
   Plandit:

@@ -3,6 +3,7 @@ import SwiftUI
 /// TikToks, Reels and links shared into Plandit, each turned into a place on the map.
 struct SavedSheet: View {
     @Environment(PlanditStore.self) private var store
+    @Environment(SheetRouter.self) private var router
     @State private var filter: PlaceCategory?
     @State private var isAddingLink = false
     @AppStorage("plandit.saved.showShareTip") private var showShareTip = true
@@ -15,39 +16,69 @@ struct SavedSheet: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Space.sm) {
-                    if showShareTip {
-                        ShareTipCard(onPaste: { isAddingLink = true }, onDismiss: { showShareTip = false })
-                    }
-
-                    ScrollView(.horizontal) {
-                        HStack(spacing: Space.xs) {
-                            Chip(title: "All", isSelected: filter == nil) { filter = nil }
-                            ForEach(categories) { category in
-                                Chip(title: category.label, icon: category.icon, isSelected: filter == category) {
-                                    filter = filter == category ? nil : category
+                    if store.saved.isEmpty {
+                        EmptyState(
+                            icon: .bookmark,
+                            title: "Nothing saved yet",
+                            message: "Share a TikTok or Reel to Plandit, or paste a link."
+                        ) {
+                            Button {
+                                isAddingLink = true
+                            } label: {
+                                HStack(spacing: Space.xs) {
+                                    Icon(.clipboardPaste, size: 18)
+                                    Text("Paste a link")
                                 }
                             }
+                            .buttonStyle(.secondary)
                         }
-                    }
-                    .scrollIndicators(.hidden)
-
-                    ForEach(posts) { post in
-                        NavigationLink(value: post.id) {
-                            SavedPostRow(post: post, isInToday: store.isInToday(post))
+                        .padding(.top, Space.md)
+                        .transition(.opacity)
+                    } else {
+                        if showShareTip {
+                            ShareTipCard(onPaste: { isAddingLink = true }, onDismiss: { withAnimation(.snappy) { showShareTip = false } })
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                        .buttonStyle(.plain)
-                        Hairline()
-                    }
 
-                    if posts.isEmpty {
-                        Text("No saved places in this category yet.")
-                            .font(.bodyText)
-                            .foregroundStyle(.inkMuted)
-                            .padding(.vertical, Space.lg)
+                        if categories.count > 1 {
+                            ScrollView(.horizontal) {
+                                HStack(spacing: Space.xs) {
+                                    Chip(title: "All", isSelected: filter == nil) { select(nil) }
+                                    ForEach(categories) { category in
+                                        Chip(title: category.label, icon: category.icon, isSelected: filter == category) {
+                                            select(filter == category ? nil : category)
+                                        }
+                                    }
+                                }
+                            }
+                            .scrollIndicators(.hidden)
+                        }
+
+                        ForEach(posts) { post in
+                            NavigationLink(value: post.id) {
+                                SavedPostRow(post: post, isInToday: store.isInToday(post))
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                SavedPostActions(post: post)
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .leading)))
+                            Hairline()
+                        }
+
+                        if posts.isEmpty {
+                            Text("No saved places in this category yet.")
+                                .font(.bodyText)
+                                .foregroundStyle(.inkMuted)
+                                .padding(.vertical, Space.lg)
+                                .transition(.opacity)
+                        }
                     }
                 }
                 .padding(.horizontal, Space.lg)
                 .padding(.bottom, Space.lg)
+                .animation(.snappy(duration: 0.35), value: posts.map(\.id))
+                .animation(.snappy(duration: 0.35), value: store.saved.map(\.status))
             }
             .scrollIndicators(.hidden)
             .hiddenWhenSheetCollapsed()
@@ -55,8 +86,15 @@ struct SavedSheet: View {
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isAddingLink) {
-            AddLinkSheet()
+            AddLinkSheet { id in
+                // Land on the new post so the user watches it get mapped.
+                router.savedPath = [id]
+            }
         }
+    }
+
+    private func select(_ category: PlaceCategory?) {
+        withAnimation(.snappy(duration: 0.3)) { filter = category }
     }
 
     private var subtitle: String {
@@ -64,7 +102,8 @@ struct SavedSheet: View {
         let pending = store.saved.filter {
             [.processing, .needsEvidence, .needsConfirmation].contains($0.status)
         }.count
-        return pending > 0 ? "\(mapped) places · \(pending) to finish" : "\(mapped) places"
+        let places = mapped == 1 ? "1 place" : "\(mapped) places"
+        return pending > 0 ? "\(places) · \(pending) to finish" : places
     }
 
     /// Only categories that actually have saved places.
@@ -76,6 +115,34 @@ struct SavedSheet: View {
     private var posts: [SavedPost] {
         guard let filter else { return store.saved }
         return store.saved.filter { $0.place?.category == filter }
+    }
+}
+
+/// Context-menu actions for a saved post.
+struct SavedPostActions: View {
+    let post: SavedPost
+    @Environment(PlanditStore.self) private var store
+
+    var body: some View {
+        if post.isMappable, !store.isInToday(post) {
+            Button {
+                withAnimation(.snappy) { _ = store.addToToday(post.id) }
+            } label: {
+                Label("Add to today's plan", image: "Icons/plus")
+            }
+        }
+        if post.status == .failed {
+            Button {
+                withAnimation(.snappy) { store.retryExtraction(post.id) }
+            } label: {
+                Label("Try again", image: "Icons/loader-circle")
+            }
+        }
+        Button(role: .destructive) {
+            withAnimation(.snappy) { store.removePost(post.id) }
+        } label: {
+            Label("Remove from saved", image: "Icons/trash-2")
+        }
     }
 }
 
@@ -142,9 +209,12 @@ struct SavedPostRow: View {
 
             Spacer(minLength: Space.xs)
             SavedStatus(post: post, isInToday: isInToday)
+                .transition(.scale.combined(with: .opacity))
         }
         .padding(.vertical, Space.xs)
         .contentShape(Rectangle())
+        .animation(.snappy(duration: 0.3), value: post.status)
+        .animation(.snappy(duration: 0.3), value: isInToday)
         .accessibilityElement(children: .combine)
     }
 }

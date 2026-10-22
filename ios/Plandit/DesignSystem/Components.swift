@@ -127,6 +127,7 @@ struct StopBadge: View {
                 .foregroundStyle(status == .done ? Color.ink : Color.onEmerald)
         }
         .frame(width: size, height: size)
+        .animation(.snappy(duration: 0.3), value: status)
         .accessibilityElement()
         .accessibilityLabel("Stop \(number), \(status.label)")
     }
@@ -255,5 +256,36 @@ extension LegState {
         case .active: 1
         case .upcoming: 0.9
         }
+    }
+}
+
+/// What a sheet shows when a section has nothing in it yet: icon, title, one line, and the next step.
+struct EmptyState<Action: View>: View {
+    let icon: Lucide
+    let title: String
+    let message: String
+    @ViewBuilder var action: () -> Action
+
+    var body: some View {
+        VStack(spacing: Space.sm) {
+            Icon(icon, size: 26)
+                .foregroundStyle(.ink)
+                .frame(width: 56, height: 56)
+                .background(Color.canvas, in: Circle())
+                .overlay(Circle().strokeBorder(Color.border))
+            Text(title)
+                .font(.cardHeading)
+                .foregroundStyle(.ink)
+                .accessibilityAddTraits(.isHeader)
+            Text(message)
+                .font(.bodyText)
+                .foregroundStyle(.inkMuted)
+                .multilineTextAlignment(.center)
+            action()
+                .padding(.top, Space.xs)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Space.lg)
+        .padding(.horizontal, Space.md)
     }
 }

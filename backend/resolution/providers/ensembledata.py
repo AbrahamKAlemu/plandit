@@ -1,13 +1,13 @@
 import html
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 from urllib.error import HTTPError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
-from resolution.url_policy import SourceUrlError, parse_supported_source_url
+from resolution.url_policy import parse_supported_source_url
 
 ENSEMBLEDATA_POST_INFO_URL = "https://ensembledata.com/apis/tt/post/info"
 ALLOWED_SUBTITLE_HOSTS = {"v16m-default.akamaized.net"}

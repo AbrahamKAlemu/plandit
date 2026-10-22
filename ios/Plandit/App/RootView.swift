@@ -6,8 +6,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(PlanditStore.self) private var store
     @Environment(AppearanceSettings.self) private var appearance
-    @State private var tab = AppTab.launchTab
-    @State private var router = SheetRouter()
+    @Environment(SheetRouter.self) private var router
     @State private var detent = SheetDetent.launchDetent
     @State private var camera: MapCameraPosition = .camera(Manhattan.overviewCamera)
     @State private var mapSelection: UUID?
@@ -21,7 +20,7 @@ struct RootView: View {
                 .onChange(of: proxy.size) { updateViewport(proxy) }
         }
         .sheet(isPresented: .constant(true)) {
-            SheetContainer(tab: $tab)
+            SheetContainer()
                 .environment(store)
                 .environment(router)
                 .environment(\.isSheetCollapsed, detent == SheetDetent.peek)
@@ -33,15 +32,20 @@ struct RootView: View {
                 .presentationDragIndicator(.visible)
                 .interactiveDismissDisabled()
         }
-        .onChange(of: tab) {
+        .onChange(of: router.tab) {
             mapSelection = router.selection(in: tab)
             frameMap()
         }
         .onChange(of: detent) { frameMap() }
+        .onChange(of: store.today.stops.count) {
+            if tab == .today { frameMap() }
+        }
         .onChange(of: router.todayPath) { syncSelectionFromSheet() }
         .onChange(of: router.savedPath) { syncSelectionFromSheet() }
         .onChange(of: mapSelection) { _, id in openDetail(for: id) }
     }
+
+    private var tab: AppTab { router.tab }
 
     private func showUserLocation() {
         location.requestIfNeeded()
@@ -122,31 +126,37 @@ struct RootView: View {
 
 /// The sheet's content: one navigation stack per tab, with the tab bar pinned to the bottom.
 private struct SheetContainer: View {
-    @Binding var tab: AppTab
     @Environment(SheetRouter.self) private var router
 
     var body: some View {
         @Bindable var router = router
-        Group {
-            switch tab {
+        ZStack {
+            switch router.tab {
             case .today:
                 NavigationStack(path: $router.todayPath) {
                     TodaySheet()
                         .navigationDestination(for: UUID.self) { StopDetailView(stopID: $0) }
                 }
+                .transition(.opacity)
             case .saved:
                 NavigationStack(path: $router.savedPath) {
                     SavedSheet()
                         .navigationDestination(for: UUID.self) { SavedPostDetailView(postID: $0) }
                 }
+                .transition(.opacity)
             case .profile:
                 NavigationStack {
                     ProfileSheet()
                 }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: router.tab)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            PlanditTabBar(selection: $tab)
+            PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+        }
+        .sheet(isPresented: $router.isPlanning) {
+            PlanBuilderSheet()
         }
     }
 }

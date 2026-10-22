@@ -29,6 +29,8 @@ private struct PickedVideo: Transferable {
 
 /// Manual fallback for the share extension: paste a TikTok or Reel link.
 struct AddLinkSheet: View {
+    /// Called with the saved post's id after the sheet closes.
+    var onSaved: (UUID) -> Void = { _ in }
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
@@ -146,8 +148,9 @@ struct AddLinkSheet: View {
                         throw VideoEvidenceError.unsupportedType
                     }
                     defer { try? FileManager.default.removeItem(at: video.url) }
-                    try await store.saveVideo(fileURL: video.url)
+                    let id = try await store.saveVideo(fileURL: video.url)
                     dismiss()
+                    onSaved(id)
                 } catch {
                     errorMessage = error.localizedDescription
                     selectedVideo = nil
@@ -168,6 +171,7 @@ struct AddLinkSheet: View {
             }
             processVideo(at: url)
         }
+        .onAppear { isFocused = true }
     }
 
     private func save() {
@@ -176,8 +180,9 @@ struct AddLinkSheet: View {
             return
         }
         do {
-            try store.save(url: url, sharedText: text)
+            let id = try store.save(url: url, sharedText: text)
             dismiss()
+            onSaved(id)
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription
                 ?? "We couldn't save that link. Try again."
@@ -189,8 +194,9 @@ struct AddLinkSheet: View {
         errorMessage = nil
         Task {
             do {
-                try await store.saveVideo(fileURL: url)
+                let id = try await store.saveVideo(fileURL: url)
                 dismiss()
+                onSaved(id)
             } catch {
                 errorMessage = error.localizedDescription
             }
