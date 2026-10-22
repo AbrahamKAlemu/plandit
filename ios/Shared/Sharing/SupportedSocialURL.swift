@@ -74,6 +74,9 @@ struct SupportedSocialURL: Hashable, Codable {
             return
         }
         let parts = path.split(separator: "/")
+        if parts.count == 2, parts[0] == "t", !parts[1].isEmpty {
+            return
+        }
         guard parts.count >= 3,
               parts[0].hasPrefix("@"),
               parts[1] == "video",

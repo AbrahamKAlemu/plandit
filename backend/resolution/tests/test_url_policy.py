@@ -24,3 +24,12 @@ class SourceUrlPolicyTests(SimpleTestCase):
             with self.subTest(value=value):
                 with self.assertRaises(SourceUrlError):
                     parse_supported_source_url(value)
+
+    def test_accepts_current_tiktok_share_path(self):
+        source = parse_supported_source_url("https://www.tiktok.com/t/ZTfDj7vmC/")
+
+        self.assertEqual(source.platform, "tiktok")
+        self.assertEqual(
+            source.canonical_url,
+            "https://www.tiktok.com/t/ZTfDj7vmC",
+        )

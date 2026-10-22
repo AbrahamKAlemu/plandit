@@ -14,6 +14,8 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 - Live place-provider selection, billing, production credentials, public-client abuse protection,
   attribution/retention policy, Railway deployment commands, and the evaluation dataset remain
   separate approval gates.
+- The EnsembleData TikTok adapter is development-only and has mocked coverage; a live call is
+  pending a locally configured trial token.
 - The iOS client still uses its local fixture extractor; wiring it to Django is a later slice.
 - Direct video sharing into the share extension is not implemented; video selection is available
   inside the app.
@@ -84,6 +86,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Run persona reviews on amended dossier | Deferred | Owner requested focus on core functionality; prior findings and dispositions preserved |
 | Define core video-to-place milestone | Complete | URL-first flow plus temporary on-device video evidence produces confirmed name/location |
 | Evaluate URL acquisition providers | Complete | [Provider evaluation](06-provider-evaluation.md) ranks development and production options and defines a twenty-URL benchmark |
+| Build EnsembleData evaluation adapter | Complete (mocked) | Direct post-info call with video download disabled, short-link resolution, TikTok CDN subtitle allowlist, JSON/WebVTT parsing, management command, and tests; live token trial pending |
 | Obtain consolidated human approval | Complete for core milestone | Fixture-backed core build approved; live provider/API remains a separate gate |
 | Implement durable URL intake and confirmation | Complete | SwiftData persistence, strict canonical URLs, deterministic candidates, explicit confirmation, and relaunch coverage |
 | Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |

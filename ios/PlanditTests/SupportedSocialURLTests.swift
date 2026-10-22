@@ -20,6 +20,18 @@ final class SupportedSocialURLTests: XCTestCase {
         XCTAssertEqual(supported.canonicalURL.absoluteString, "https://instagram.com/reel/ABC_123")
     }
 
+    func testAcceptsCurrentTikTokSharePath() throws {
+        let input = URL(string: "https://www.tiktok.com/t/ZTfDj7vmC/")!
+
+        let supported = try SupportedSocialURL(input)
+
+        XCTAssertEqual(supported.platform, .tiktok)
+        XCTAssertEqual(
+            supported.canonicalURL.absoluteString,
+            "https://www.tiktok.com/t/ZTfDj7vmC"
+        )
+    }
+
     func testRejectsUnsupportedAndDeceptiveHosts() {
         XCTAssertThrowsError(try SupportedSocialURL(URL(string: "https://tiktok.com.example.com/@a/video/123")!))
         XCTAssertThrowsError(try SupportedSocialURL(URL(string: "https://example.com/reel/ABC")!))

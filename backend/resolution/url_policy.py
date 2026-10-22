@@ -32,7 +32,7 @@ def parse_supported_source_url(value: str) -> SupportedSourceUrl:
     path = parsed.path.rstrip("/") or "/"
     if _host_under(host, "tiktok.com"):
         if host not in {"vm.tiktok.com", "vt.tiktok.com"} and not re.fullmatch(
-            r"/@[^/]+/video/[^/]+", path
+            r"/(?:@[^/]+/video/[^/]+|t/[^/]+)", path
         ):
             raise SourceUrlError("Unsupported TikTok path")
         platform = "tiktok"
