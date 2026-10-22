@@ -153,7 +153,10 @@ private struct SheetContainer: View {
         }
         .animation(.easeInOut(duration: 0.2), value: router.tab)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            PlanditTabBar(selection: $router.tab)
+            PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+        }
+        .sheet(isPresented: $router.isPlanning) {
+            PlanBuilderSheet()
         }
     }
 }

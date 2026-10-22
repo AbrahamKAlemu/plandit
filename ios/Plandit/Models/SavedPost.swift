@@ -37,6 +37,20 @@ extension SavedPost {
         return parts.compactMap { $0 }.joined(separator: " · ")
     }
 
+    /// "Saved today", "Saved yesterday", "Saved 3 days ago", "Saved 2 weeks ago", "Saved 4 months ago".
+    /// Shown when picking places so an old save (maybe a pop-up that's over) stands out.
+    func savedAgoText(now: Date = .now, calendar: Calendar = .current) -> String {
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: savedAt), to: calendar.startOfDay(for: now)).day ?? 0
+        switch days {
+        case ..<1: return "Saved today"
+        case 1: return "Saved yesterday"
+        case 2..<14: return "Saved \(days) days ago"
+        case 14..<60: return "Saved \(days / 7) weeks ago"
+        case 60..<365: return "Saved \(days / 30) months ago"
+        default: return days < 730 ? "Saved over a year ago" : "Saved \(days / 365) years ago"
+        }
+    }
+
     /// Has a place we can pin and add to a plan.
     var isMappable: Bool { place != nil && (status == .ready || status == .needsReview) }
 

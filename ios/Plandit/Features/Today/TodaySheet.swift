@@ -25,14 +25,14 @@ struct TodaySheet: View {
                         EmptyState(
                             icon: .route,
                             title: "Nothing planned yet",
-                            message: "Add places from Saved to build today's plan."
+                            message: "Tap + to turn your saved places into today's plan."
                         ) {
                             Button {
-                                router.show(.saved)
+                                router.startPlanning()
                             } label: {
                                 HStack(spacing: Space.xs) {
-                                    Icon(.bookmark, size: 18)
-                                    Text("Go to Saved")
+                                    Icon(.plus, size: 18)
+                                    Text("Plan a day")
                                 }
                             }
                             .buttonStyle(.secondary)

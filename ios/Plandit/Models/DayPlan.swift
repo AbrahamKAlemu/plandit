@@ -60,14 +60,19 @@ struct TravelLeg: Identifiable, Hashable, Codable {
     }
 
     /// Rough leg until the real planner fills it in: walk under ~1.2 mi, otherwise subway.
-    static func estimate(from a: PlanStop, to b: PlanStop) -> TravelLeg {
-        let meters = CLLocation(latitude: a.place.latitude, longitude: a.place.longitude)
-            .distance(from: CLLocation(latitude: b.place.latitude, longitude: b.place.longitude))
+    static func estimate(from a: PlanStop, to b: PlanStop, travel: TravelPreference = .walkAndTransit) -> TravelLeg {
+        estimate(from: a.place, to: b.place, fromStopID: a.id, toStopID: b.id, travel: travel)
+    }
+
+    /// Walk-only always walks, however far.
+    static func estimate(from a: Place, to b: Place, fromStopID: UUID, toStopID: UUID, travel: TravelPreference) -> TravelLeg {
+        let meters = CLLocation(latitude: a.latitude, longitude: a.longitude)
+            .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
         let miles = meters / 1609.34 * 1.25 // street-grid detour factor
-        if miles <= 1.2 {
-            return TravelLeg(fromStopID: a.id, toStopID: b.id, mode: .walk, minutes: max(3, Int((miles * 20).rounded())), miles: miles)
+        if miles <= 1.2 || travel == .walkOnly {
+            return TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .walk, minutes: max(3, Int((miles * 20).rounded())), miles: miles)
         }
-        return TravelLeg(fromStopID: a.id, toStopID: b.id, mode: .subway, minutes: 10 + Int((miles * 4).rounded()), miles: miles, cost: 2.90, detail: "Subway")
+        return TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .subway, minutes: 10 + Int((miles * 4).rounded()), miles: miles, cost: 2.90, detail: "Subway")
     }
 }
 
@@ -128,8 +133,27 @@ extension DayPlan {
         return .upcoming
     }
 
+    /// Plain text for a group chat: where and when to meet, each stop with its time and price,
+    /// and what it costs each person including fares. Readable anywhere, no app needed.
     var shareText: String {
-        let lines = stops.map { "\($0.start.shortTime) · \($0.place.name)" }
-        return (["My Plandit day: \(title)"] + lines + ["About \(totalCost.wholeDollarsText) total"]).joined(separator: "\n")
+        guard let first = stops.first else { return "My Plandit day: nothing planned yet" }
+        let meet = [first.place.name, first.place.address].filter { !$0.isEmpty }.joined(separator: ", ")
+        let lines = stops.map { stop in
+            "\(stop.start.shortTime)  \(stop.place.name) (\(stop.estimatedCost.dollarsText))"
+        }
+        let fares = legs.reduce(0) { $0 + $1.cost }
+        let cost = fares > 0
+            ? "About \(totalCost.wholeDollarsText) per person, including \(fares.dollarsText) in subway fares."
+            : "About \(totalCost.wholeDollarsText) per person."
+        let ends = stops.last.map { " Done by \($0.end.shortTime)." } ?? ""
+        return ([
+            "\(title) · \(date.shortDay)",
+            "Meet \(first.start.shortTime) at \(meet)",
+            "",
+        ] + lines + [
+            "",
+            cost + ends,
+            "Planned with Plandit",
+        ]).joined(separator: "\n")
     }
 }

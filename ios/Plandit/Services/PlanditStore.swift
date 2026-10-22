@@ -229,8 +229,110 @@ final class PlanditStore {
     private func rebuildLegs() {
         let existing = today.legs
         today.legs = zip(today.stops, today.stops.dropFirst()).map { from, to in
-            existing.first { $0.fromStopID == from.id && $0.toStopID == to.id } ?? .estimate(from: from, to: to)
+            existing.first { $0.fromStopID == from.id && $0.toStopID == to.id } ?? .estimate(from: from, to: to, travel: travelPreference)
         }
+    }
+
+    // MARK: - Planning (the + button)
+
+    enum PlanMode: String, CaseIterable, Identifiable {
+        /// Keep what's done or underway; re-order the rest of the day together with the new picks.
+        case add
+        /// Throw out today's plan and plan only the picks.
+        case replace
+
+        var id: String { rawValue }
+    }
+
+    var travelPreference: TravelPreference { TravelPreference(setting: profile.travelModes) }
+
+    /// Saved posts with a place, ready to plan.
+    var plannablePosts: [SavedPost] { saved.filter(\.isMappable) }
+
+    /// Stops already done or underway. Re-planning never moves these.
+    var lockedStops: [PlanStop] {
+        guard let last = today.stops.lastIndex(where: { $0.status != .upcoming }) else { return [] }
+        return Array(today.stops[...last])
+    }
+
+    /// Money already spent on locked stops and the travel between them.
+    var lockedCost: Double {
+        let locked = lockedStops
+        let ids = Set(locked.map(\.id))
+        return locked.reduce(0) { $0 + $1.estimatedCost }
+            + today.legs.filter { ids.contains($0.fromStopID) && ids.contains($0.toStopID) }.reduce(0) { $0 + $1.cost }
+    }
+
+    /// What `buildPlan` would do, without changing anything. Cheap enough to run on every change.
+    /// `end` is when the user is free until; at or before the start means the early hours of the next day.
+    func previewPlan(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode, end: Date? = nil) -> DayPlanner.Outcome {
+        DayPlanner(travel: travelPreference).plan(planRequest(postIDs: postIDs, start: start, budget: budget, mode: mode, end: end))
+    }
+
+    /// Plans the picked saved posts into today and switches the map to the new route.
+    @discardableResult
+    func buildPlan(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode, end: Date? = nil) -> DayPlanner.Outcome {
+        let outcome = previewPlan(postIDs: postIDs, start: start, budget: budget, mode: mode, end: end)
+        switch mode {
+        case .replace:
+            today.stops = outcome.stops
+            today.legs = outcome.legs
+            legPaths = [:]
+        case .add:
+            let locked = lockedStops
+            let lockedIDs = Set(locked.map(\.id))
+            today.stops = locked + outcome.stops
+            today.legs = today.legs.filter { lockedIDs.contains($0.fromStopID) && lockedIDs.contains($0.toStopID) } + outcome.legs
+        }
+        today.budget = budget
+        if mode == .replace || lockedStops.isEmpty {
+            today.title = Self.title(for: today.stops)
+        }
+        persist()
+        Task { await loadRoutes() }
+        return outcome
+    }
+
+    private func planRequest(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode, end: Date?) -> DayPlanner.Request {
+        let request = basePlanRequest(postIDs: postIDs, start: start, budget: budget, mode: mode)
+        guard let end else { return request }
+        var bounded = request
+        let dayStart = request.anchor?.end ?? request.start
+        // "Until 1 AM" after a 10 PM start means tomorrow; "until 2 PM" after 3 PM just means nothing fits.
+        let rollsOver = end <= dayStart && Calendar.current.component(.hour, from: end) < 6
+        bounded.dayEnd = rollsOver ? Calendar.current.date(byAdding: .day, value: 1, to: end) : end
+        return bounded
+    }
+
+    private func basePlanRequest(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode) -> DayPlanner.Request {
+        var seen = Set<UUID>()
+        let picked = postIDs.filter { seen.insert($0).inserted }.compactMap { post(id: $0) }.compactMap(PlanCandidate.init(post:))
+        switch mode {
+        case .replace:
+            return DayPlanner.Request(candidates: picked, start: start, budget: budget)
+        case .add:
+            let locked = lockedStops
+            let lockedIDs = Set(locked.map(\.id))
+            let upcoming = today.stops.filter { !lockedIDs.contains($0.id) }
+            let alreadyIn = Set(today.stops.compactMap(\.sourcePostID))
+            let fresh = picked.filter { candidate in candidate.sourcePostID.map { !alreadyIn.contains($0) } ?? true }
+            let lockedLegCost = today.legs.filter { lockedIDs.contains($0.fromStopID) && lockedIDs.contains($0.toStopID) }
+                .reduce(0) { $0 + $1.cost }
+            return DayPlanner.Request(
+                candidates: upcoming.map(PlanCandidate.init(stop:)) + fresh,
+                start: locked.last?.end ?? start,
+                budget: budget,
+                anchor: locked.last,
+                alreadySpent: locked.reduce(0) { $0 + $1.estimatedCost } + lockedLegCost
+            )
+        }
+    }
+
+    /// "Morningside Heights to West Village", or "A day in Chelsea" when it never leaves one neighborhood.
+    static func title(for stops: [PlanStop]) -> String {
+        guard let first = stops.first?.place.neighborhood, let last = stops.last?.place.neighborhood,
+              !first.isEmpty, !last.isEmpty else { return "Today" }
+        return first == last ? "A day in \(first)" : "\(first) to \(last)"
     }
 
     // MARK: - Profile
