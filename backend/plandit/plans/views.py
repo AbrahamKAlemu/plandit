@@ -1,3 +1,6 @@
+from datetime import datetime, time
+
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
@@ -11,6 +14,7 @@ from . import services
 from .models import DayPlan, PlanStop
 from .serializers import (
     AddStopSerializer,
+    BuildPlanSerializer,
     DayPlanSerializer,
     DayPlanSummarySerializer,
     DayPlanWriteSerializer,
@@ -30,6 +34,9 @@ class DayPlanViewSet(viewsets.ModelViewSet):
     POST   /api/plans/<id>/stops/              {"saved_post_id"} or {"place_id"}
                                                (+ start, duration_minutes, estimated_cost, note)
     POST   /api/plans/<id>/stops/reorder/      {"stop_ids": [...]}
+    POST   /api/plans/<id>/build/              {"saved_post_ids", "start", "end", "budget", "mode": "add"|"replace",
+                                               "dry_run"}: the planner orders, times and budgets the day.
+                                               Adds "skipped": [{name, place_id, saved_post_id, stop_id, reason}].
     PATCH  /api/plans/<id>/stops/<stop_id>/    status, start, duration_minutes, estimated_cost, note
     DELETE /api/plans/<id>/stops/<stop_id>/
     Every mutation returns the full plan.
@@ -137,3 +144,53 @@ class DayPlanViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return self._full(plan)
+
+    @action(detail=True, methods=["post"])
+    def build(self, request, pk=None):
+        plan = self.get_object()
+        serializer = BuildPlanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        ids = list(dict.fromkeys(data["saved_post_ids"]))
+        posts = {p.id: p for p in SavedPost.objects.filter(owner=request.user, id__in=ids).select_related("place")}
+        if missing := [str(i) for i in ids if i not in posts]:
+            raise serializers.ValidationError({"saved_post_ids": f"Unknown saved posts: {', '.join(missing)}."})
+        if unmapped := [str(i) for i in ids if not posts[i].is_mappable]:
+            raise serializers.ValidationError(
+                {"saved_post_ids": f"These posts have no place yet: {', '.join(unmapped)}."}
+            )
+
+        start = data.get("start")
+        if start is None:
+            today = timezone.localdate()
+            start = (
+                timezone.now()
+                if plan.date == today
+                else timezone.make_aware(datetime.combine(plan.date, time(10)))  # a future day starts at 10 AM
+            )
+
+        with transaction.atomic():
+            result = services.build_plan(
+                plan,
+                saved_posts=[posts[i] for i in ids],
+                start=start,
+                budget=data.get("budget", plan.budget),
+                mode=data["mode"],
+                end=data.get("end"),
+            )
+            body = DayPlanSerializer(self.get_queryset().get(pk=plan.pk)).data
+            if data["dry_run"]:
+                transaction.set_rollback(True)
+
+        body["skipped"] = [
+            {
+                "name": skip.candidate.place.name,
+                "place_id": str(skip.candidate.place.id),
+                "saved_post_id": str(skip.candidate.key.id) if isinstance(skip.candidate.key, SavedPost) else None,
+                "stop_id": str(skip.candidate.key.id) if isinstance(skip.candidate.key, PlanStop) else None,
+                "reason": skip.reason,
+            }
+            for skip in result.outcome.skipped
+        ]
+        return Response(body)
