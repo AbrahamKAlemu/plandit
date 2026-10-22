@@ -142,6 +142,57 @@ final class FixturePlaceExtractorTests: XCTestCase {
 
         XCTAssertEqual(queries.first, "Chubby Bowls in Union Square")
     }
+
+    func testQueryBuilderAssociatesBusinessMentionWithDistantAddress() {
+        let queries = PlaceQueryBuilder.queries(
+            from: """
+            Must Try Dominican Street Food in Brooklyn!  @Antojitos BK is a Dominican restaurant in Brooklyn serving fire dishes.  SR Rating: A.  📍224 4th Avenue Brooklyn, NY 11215
+            I stumbled on this Dominican street food restaurant
+            called antojitos, and I just had to put y'all on.
+            """
+        )
+
+        XCTAssertEqual(
+            queries.first,
+            "Antojitos BK 224 4th Avenue Brooklyn, NY 11215"
+        )
+    }
+
+    func testQueryBuilderDoesNotTreatCreatorHandleAsVenue() {
+        let queries = PlaceQueryBuilder.queries(
+            from: """
+            @Antojitos BK is a Dominican restaurant in Brooklyn.  @foodwithsam is the creator reviewing this restaurant.  224 4th Avenue Brooklyn, NY 11215
+            """
+        )
+
+        XCTAssertEqual(
+            queries.first,
+            "Antojitos BK 224 4th Avenue Brooklyn, NY 11215"
+        )
+    }
+
+    func testQueryBuilderPairsEachVenueWithNearestAddress() {
+        let queries = PlaceQueryBuilder.queries(
+            from: """
+            @Cafe One is a neighborhood cafe.  1 First St New York, NY 10001
+            @Cafe Two is a neighborhood cafe.  2 Second St Brooklyn, NY 11201
+            """
+        )
+
+        XCTAssertEqual(queries.first, "Cafe One 1 First St New York, NY 10001")
+        XCTAssertEqual(queries.dropFirst().first, "Cafe Two 2 Second St Brooklyn, NY 11201")
+    }
+
+    func testQueryBuilderPreservesRepeatedVenuePositionForPairing() {
+        let queries = PlaceQueryBuilder.queries(
+            from: """
+            @Cafe One is a neighborhood cafe. @Cafe Two is a neighborhood cafe.
+            This next place is called Cafe One. 1 First St New York, NY 10001
+            """
+        )
+
+        XCTAssertEqual(queries.first, "Cafe One 1 First St New York, NY 10001")
+    }
 }
 
 private struct StubMetadataProvider: SocialMetadataProviding {
