@@ -167,8 +167,9 @@ struct MapKitPlaceSearcher: PlaceSearching {
                 let key = candidate.id
                 guard seen.insert(key).inserted else { continue }
                 candidates.append(candidate)
-                if candidates.count == 3 { return candidates }
+                break
             }
+            if candidates.count == 3 { return candidates }
         }
         if !completedSearch, let lastError {
             throw lastError
@@ -271,7 +272,7 @@ enum PlaceQueryBuilder {
     }
 
     private static func positionedAddressQueries(from evidence: String) -> [String] {
-        let addressPattern = #"\b\d{1,6}\s+[\p{L}0-9.'-]+(?:\s+[\p{L}0-9.'-]+){0,3}\s+(?:st(?:reet)?|ave(?:nue)?|rd|road|blvd|boulevard|dr(?:ive)?|ln|lane|way|pl(?:ace)?|pkwy|parkway)(?:\s+[\p{L}.'-]+){0,3},?\s+[A-Z]{2}(?:\s+\d{5})?\b"#
+        let addressPattern = #"\b\d{1,6}\s+[\p{L}0-9.'-]+(?:\s+[\p{L}0-9.'-]+){0,3}\s+(?:st(?:reet)?|ave(?:nue)?|rd|road|blvd|boulevard|dr(?:ive)?|ln|lane|way|pl(?:ace)?|pkwy|parkway|sq(?:uare)?),?(?:\s+[\p{L}.'-]+){0,3},?\s+[A-Z]{2}(?:\s+\d{5})?\b"#
         guard let addressExpression = try? NSRegularExpression(
             pattern: addressPattern,
             options: .caseInsensitive
@@ -280,23 +281,29 @@ enum PlaceQueryBuilder {
         }
         let range = NSRange(evidence.startIndex..<evidence.endIndex, in: evidence)
         let placeNames = positionedPlaceNames(from: evidence)
+        var addresses: [String] = []
+        var combinedQueries: [String] = []
 
-        return addressExpression.matches(in: evidence, range: range).compactMap { match in
+        for match in addressExpression.matches(in: evidence, range: range) {
             let precedingPlaceName = placeNames
                 .filter { $0.offset <= match.range.location }
                 .max { $0.offset < $1.offset }
-            guard let addressRange = Range(match.range, in: evidence),
-                  let placeName = precedingPlaceName ?? placeNames.min(by: {
-                      $0.offset < $1.offset
-                  }) else {
-                return nil
+            guard let addressRange = Range(match.range, in: evidence) else {
+                continue
             }
-            return "\(placeName.name) \(clean(String(evidence[addressRange])))"
+            let address = clean(String(evidence[addressRange]))
+            addresses.append(address)
+            if let placeName = precedingPlaceName ?? placeNames.min(by: {
+                $0.offset < $1.offset
+            }) {
+                combinedQueries.append("\(placeName.name) \(address)")
+            }
         }
+        return addresses + combinedQueries
     }
 
     private static func adjacentAddressQueries(from lines: [String]) -> [String] {
-        let pattern = #"\b\d{1,6}\s+[\p{L}0-9.'-]+(?:\s+[\p{L}0-9.'-]+){0,3}\s+(?:st(?:reet)?|ave(?:nue)?|rd|road|blvd|boulevard|dr(?:ive)?|ln|lane|way|pl(?:ace)?|pkwy|parkway)\b"#
+        let pattern = #"\b\d{1,6}\s+[\p{L}0-9.'-]+(?:\s+[\p{L}0-9.'-]+){0,3}\s+(?:st(?:reet)?|ave(?:nue)?|rd|road|blvd|boulevard|dr(?:ive)?|ln|lane|way|pl(?:ace)?|pkwy|parkway|sq(?:uare)?)\b"#
         guard let expression = try? NSRegularExpression(
             pattern: pattern,
             options: .caseInsensitive
@@ -327,6 +334,7 @@ enum PlaceQueryBuilder {
         let patterns = [
             #"@([^@\n.!?]{2,60}?)\s+is\s+(?:an?|the)\s+[^.\n!?]{0,80}?\b(?:restaurant|cafe|bakery|bar|shop|spot|market|store|venue)\b"#,
             #"\bcalled\s+([^,\n.!?]{2,60})"#,
+            #"\bstopped\s+by\s+([^,\n.!?]{2,60})"#,
         ]
         var names: [PositionedPlaceName] = []
 
@@ -392,7 +400,7 @@ enum PlaceQueryBuilder {
     }
 
     private static func queryAfterCue(in text: String) -> String? {
-        let pattern = #"\b(?:check\s+out|at|visit|try|called)\s+(.+)"#
+        let pattern = #"\b(?:check\s+out|stopped\s+by|at|visit|try|called)\s+(.+)"#
         guard let expression = try? NSRegularExpression(
             pattern: pattern,
             options: .caseInsensitive

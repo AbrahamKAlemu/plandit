@@ -137,7 +137,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(queries.first, "Chubby Bowls in Union Square")
     }
 
-    func testQueryBuilderPrioritizesCaptionPlaceAndAddressBlock() {
+    func testQueryBuilderPrioritizesCompleteCaptionAddress() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             NYC is too expensive is back! $7 chicken bowl at this Korean spot is so fire you need to try it NOW  Lululala  139 Hester st  New York, NY
@@ -145,7 +145,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
             """
         )
 
-        XCTAssertEqual(queries.first, "Lululala 139 Hester st New York, NY")
+        XCTAssertEqual(queries.first, "139 Hester st New York, NY")
     }
 
     func testQueryBuilderPreservesCueAcrossCaptionFieldSeparator() {
@@ -167,7 +167,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
 
         XCTAssertEqual(
             queries.first,
-            "Antojitos BK 224 4th Avenue Brooklyn, NY 11215"
+            "224 4th Avenue Brooklyn, NY 11215"
         )
     }
 
@@ -180,7 +180,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
 
         XCTAssertEqual(
             queries.first,
-            "Antojitos BK 224 4th Avenue Brooklyn, NY 11215"
+            "224 4th Avenue Brooklyn, NY 11215"
         )
     }
 
@@ -192,8 +192,12 @@ final class FixturePlaceExtractorTests: XCTestCase {
             """
         )
 
-        XCTAssertEqual(queries.first, "Cafe One 1 First St New York, NY 10001")
-        XCTAssertEqual(queries.dropFirst().first, "Cafe Two 2 Second St Brooklyn, NY 11201")
+        XCTAssertEqual(queries.first, "1 First St New York, NY 10001")
+        XCTAssertEqual(queries.dropFirst().first, "2 Second St Brooklyn, NY 11201")
+        XCTAssertEqual(
+            queries.dropFirst(2).first,
+            "Cafe One 1 First St New York, NY 10001"
+        )
     }
 
     func testQueryBuilderPreservesRepeatedVenuePositionForPairing() {
@@ -204,7 +208,33 @@ final class FixturePlaceExtractorTests: XCTestCase {
             """
         )
 
-        XCTAssertEqual(queries.first, "Cafe One 1 First St New York, NY 10001")
+        XCTAssertEqual(queries.first, "1 First St New York, NY 10001")
+    }
+
+    func testQueryBuilderUsesSquareAddressIndependently() {
+        let queries = PlaceQueryBuilder.queries(
+            from: """
+            Brooklyn, NY — we had to see what the hype was about. We stopped by Fat Fowl, a Caribbean spot inside DeKalb Market Hall.
+            📍 Fat Fowl — DeKalb Market Hall, Brooklyn 445 Albee square, Brooklyn Ny 11201
+            """
+        )
+
+        XCTAssertEqual(
+            queries.first,
+            "445 Albee square, Brooklyn Ny 11201"
+        )
+        XCTAssertEqual(
+            queries.dropFirst().first,
+            "Fat Fowl 445 Albee square, Brooklyn Ny 11201"
+        )
+    }
+
+    func testQueryBuilderSearchesCompleteAddressWithoutPlaceName() {
+        let queries = PlaceQueryBuilder.queries(
+            from: "The location is 445 Albee Square Brooklyn, NY 11201."
+        )
+
+        XCTAssertEqual(queries.first, "445 Albee Square Brooklyn, NY 11201")
     }
 }
 
