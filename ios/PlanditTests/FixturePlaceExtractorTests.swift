@@ -236,6 +236,64 @@ final class FixturePlaceExtractorTests: XCTestCase {
 
         XCTAssertEqual(queries.first, "445 Albee Square Brooklyn, NY 11201")
     }
+
+    func testQueryBuilderRecognizesPinnedPlaceAndExactAddress() {
+        let queries = PlaceQueryBuilder.queries(
+            from: """
+            Original deal — $68 Sunday through Thursday. Kings of Kobe 📍650 W 42nd St, New York, NY 10036
+            """
+        )
+
+        XCTAssertEqual(
+            queries.first,
+            "650 W 42nd St, New York, NY 10036"
+        )
+        XCTAssertEqual(
+            queries.dropFirst().first,
+            "Kings of Kobe 650 W 42nd St, New York, NY 10036"
+        )
+    }
+
+    func testAddressCandidateMustMatchExtractedHouseNumber() {
+        let number = PlaceQueryBuilder.streetNumber(
+            from: "Kings of Kobe 650 W 42nd St, New York, NY 10036"
+        )
+
+        XCTAssertEqual(number, "650")
+        XCTAssertTrue(PlaceQueryBuilder.address(
+            "650 W 42nd St, New York, NY 10036",
+            matchesStreetNumber: "650"
+        ))
+        XCTAssertFalse(PlaceQueryBuilder.address(
+            "600 W 42nd St, New York, NY 10036",
+            matchesStreetNumber: "650"
+        ))
+        XCTAssertFalse(PlaceQueryBuilder.address(
+            "600 W 42nd St, Unit 650, New York, NY 10036",
+            matchesStreetNumber: "650"
+        ))
+    }
+
+    func testStreetNumberIgnoresPricesAndSupportsRanges() {
+        XCTAssertNil(PlaceQueryBuilder.streetNumber(
+            from: "Only $68 dinner on West 42nd St"
+        ))
+        XCTAssertNil(PlaceQueryBuilder.streetNumber(
+            from: "$25 prix fixe near Grove Street"
+        ))
+        XCTAssertEqual(
+            PlaceQueryBuilder.streetNumber(from: "650-652 W 42nd St"),
+            "650-652"
+        )
+        XCTAssertTrue(PlaceQueryBuilder.address(
+            "650 W 42nd St, New York, NY",
+            matchesStreetNumber: "650-652"
+        ))
+        XCTAssertTrue(PlaceQueryBuilder.address(
+            "650-652 W 42nd St, New York, NY",
+            matchesStreetNumber: "652"
+        ))
+    }
 }
 
 private struct StubMetadataProvider: SocialMetadataProviding {

@@ -94,6 +94,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Associate separated venue and address signals | Complete | Venue handles explicitly described as businesses and spoken `called` names are positionally paired with the nearest following address; creator handles, repeated names, and multi-venue captions have regression coverage |
 | Prevent cross-URL evidence reuse | Complete | The iOS POST request bypasses URLCache and the development endpoint returns `Cache-Control: no-store`, while the intentional source-URL-keyed five-minute server cache remains enabled |
 | Resolve complete addresses independently | Complete | Full postal addresses, including Square/Sq suffixes, receive reserved MapKit searches before optional name combinations; `stopped by` venue cues and one-candidate-per-query behavior preserve corroborating searches |
+| Validate returned house numbers | Complete | Address-based MapKit candidates must match the extracted street-number or overlapping range; prices and unit numbers cannot satisfy the guard, and `Place Name 📍 Address` blocks provide corroborating name queries |
 
 ## EnsembleData live trial
 

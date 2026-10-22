@@ -150,6 +150,7 @@ struct MapKitPlaceSearcher: PlaceSearching {
         var lastError: Error?
 
         for query in PlaceQueryBuilder.queries(from: evidence) {
+            let requestedStreetNumber = PlaceQueryBuilder.streetNumber(from: query)
             let request = MKLocalSearch.Request()
             request.naturalLanguageQuery = query
             request.resultTypes = .pointOfInterest
@@ -164,6 +165,13 @@ struct MapKitPlaceSearcher: PlaceSearching {
 
             for item in response.mapItems {
                 guard let candidate = Self.candidate(from: item) else { continue }
+                if let requestedStreetNumber,
+                   !PlaceQueryBuilder.address(
+                       candidate.place.address,
+                       matchesStreetNumber: requestedStreetNumber
+                   ) {
+                    continue
+                }
                 let key = candidate.id
                 guard seen.insert(key).inserted else { continue }
                 candidates.append(candidate)
@@ -335,6 +343,7 @@ enum PlaceQueryBuilder {
             #"@([^@\n.!?]{2,60}?)\s+is\s+(?:an?|the)\s+[^.\n!?]{0,80}?\b(?:restaurant|cafe|bakery|bar|shop|spot|market|store|venue)\b"#,
             #"\bcalled\s+([^,\n.!?]{2,60})"#,
             #"\bstopped\s+by\s+([^,\n.!?]{2,60})"#,
+            #"(?:^|[.!?]\s+)([^.!?\n]{2,60}?)\s*📍(?=\s*\d)"#,
         ]
         var names: [PositionedPlaceName] = []
 
@@ -377,6 +386,40 @@ enum PlaceQueryBuilder {
             of: #"(?:,\s*[A-Z]{2}\b|\b[A-Z]{2}\s+\d{5}\b)"#,
             options: .regularExpression
         ) != nil
+    }
+
+    static func streetNumber(from query: String) -> String? {
+        let pattern = #"(?<![$\d-])\b(\d{1,6}(?:-\d{1,6})?)\s+(?:[\p{L}0-9.'-]+\s+){1,4}(?:st(?:reet)?|ave(?:nue)?|rd|road|blvd|boulevard|dr(?:ive)?|ln|lane|way|pl(?:ace)?|pkwy|parkway|sq(?:uare)?)\b"#
+        guard let expression = try? NSRegularExpression(
+            pattern: pattern,
+            options: .caseInsensitive
+        ) else {
+            return nil
+        }
+        let range = NSRange(query.startIndex..<query.endIndex, in: query)
+        guard let match = expression.firstMatch(in: query, range: range),
+              let numberRange = Range(match.range(at: 1), in: query) else {
+            return nil
+        }
+        return String(query[numberRange])
+    }
+
+    static func address(_ address: String, matchesStreetNumber number: String) -> Bool {
+        guard let candidateNumber = streetNumber(from: address),
+              let requestedRange = numberRange(number),
+              let candidateRange = numberRange(candidateNumber) else {
+            return false
+        }
+        return requestedRange.overlaps(candidateRange)
+    }
+
+    private static func numberRange(_ value: String) -> ClosedRange<Int>? {
+        let parts = value.split(separator: "-", maxSplits: 1)
+        guard let lower = Int(parts[0]),
+              let upper = Int(parts.last ?? parts[0]) else {
+            return nil
+        }
+        return min(lower, upper)...max(lower, upper)
     }
 
     private static func clean(_ text: String) -> String {
