@@ -123,6 +123,25 @@ final class FixturePlaceExtractorTests: XCTestCase {
 
         XCTAssertEqual(queries.first, "Chubby Bowls in Union Square")
     }
+
+    func testQueryBuilderPrioritizesCaptionPlaceAndAddressBlock() {
+        let queries = PlaceQueryBuilder.queries(
+            from: """
+            NYC is too expensive is back! $7 chicken bowl at this Korean spot is so fire you need to try it NOW  Lululala  139 Hester st  New York, NY
+            Today we're at lululala, a fast casual Korean spot.
+            """
+        )
+
+        XCTAssertEqual(queries.first, "Lululala 139 Hester st New York, NY")
+    }
+
+    func testQueryBuilderPreservesCueAcrossCaptionFieldSeparator() {
+        let queries = PlaceQueryBuilder.queries(
+            from: "Come with me to check out  Chubby Bowls in Union Square"
+        )
+
+        XCTAssertEqual(queries.first, "Chubby Bowls in Union Square")
+    }
 }
 
 private struct StubMetadataProvider: SocialMetadataProviding {

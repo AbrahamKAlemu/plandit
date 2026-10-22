@@ -230,16 +230,27 @@ struct MapKitPlaceSearcher: PlaceSearching {
 
 enum PlaceQueryBuilder {
     static func queries(from evidence: String) -> [String] {
-        let cleanedLines = evidence
+        let segmentedEvidence = evidence.replacingOccurrences(
+            of: #"[ \t]{2,}"#,
+            with: "\n",
+            options: .regularExpression
+        )
+        let cleanedLines = segmentedEvidence
             .components(separatedBy: .newlines)
             .map(clean)
             .filter { $0.count >= 3 }
-        var queries: [String] = []
+        let cueLines = evidence
+            .components(separatedBy: .newlines)
+            .map(clean)
+            .filter { $0.count >= 3 }
+        var queries = addressQueries(from: cleanedLines)
 
-        for line in cleanedLines {
+        for line in cueLines {
             if let cueQuery = queryAfterCue(in: line) {
                 queries.append(cueQuery)
             }
+        }
+        for line in cleanedLines {
             queries.append(String(line.prefix(140)))
         }
 
@@ -251,6 +262,29 @@ enum PlaceQueryBuilder {
             )
             return seen.insert(key).inserted
         }.prefix(3).map { $0 }
+    }
+
+    private static func addressQueries(from lines: [String]) -> [String] {
+        let pattern = #"\b\d{1,6}\s+[\p{L}0-9.'-]+(?:\s+[\p{L}0-9.'-]+){0,3}\s+(?:st(?:reet)?|ave(?:nue)?|rd|road|blvd|boulevard|dr(?:ive)?|ln|lane|way|pl(?:ace)?|pkwy|parkway)\b"#
+        guard let expression = try? NSRegularExpression(
+            pattern: pattern,
+            options: .caseInsensitive
+        ) else {
+            return []
+        }
+
+        return lines.indices.compactMap { index in
+            let line = lines[index]
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard expression.firstMatch(in: line, range: range) != nil else {
+                return nil
+            }
+            let start = index > lines.startIndex ? lines.index(before: index) : index
+            let end = index < lines.index(before: lines.endIndex)
+                ? lines.index(after: index)
+                : index
+            return lines[start...end].joined(separator: " ")
+        }
     }
 
     private static func clean(_ text: String) -> String {
