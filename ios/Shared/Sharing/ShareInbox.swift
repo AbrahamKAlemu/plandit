@@ -2,13 +2,19 @@ import Foundation
 
 /// The App Group shared by the app and the share extension.
 /// Change it here and in project.yml (both entitlements blocks) together.
-enum AppGroup {
+/// Nonisolated so both the app and the extension can read it from any context (UserDefaults is thread-safe).
+nonisolated enum AppGroup {
     static let identifier = "group.com.plandit.app"
 
     /// Falls back to standard defaults when the entitlement is missing (e.g. unsigned simulator builds),
     /// which keeps the app working but stops shares from reaching it. Shared identity is required
     /// so every `@AppStorage` observer receives the same live change notification.
     nonisolated(unsafe) static let defaults = UserDefaults(suiteName: identifier) ?? .standard
+
+    /// Shared container for files both targets can read; nil when the entitlement is missing.
+    static var containerURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
+    }
 }
 
 /// A link someone shared into Plandit from TikTok, Instagram, or any app's share sheet.
