@@ -22,7 +22,7 @@ struct ShareView: View {
                 case .ready(let url):
                     let platform = SourcePlatform(url: url)
                     Text("Save to Plandit").font(.sectionHeading).foregroundStyle(.ink)
-                    Text("We'll find the place, price, and hours in \(platform.postPhrase) and pin it on your map.")
+                    Text("We'll use the details shared with \(platform.postPhrase) to find possible places. You confirm the match before it reaches your map.")
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
                     HStack(spacing: Space.xs) {
@@ -37,9 +37,17 @@ struct ShareView: View {
                     Spacer(minLength: 0)
                     Button("Save to Plandit", action: onSave)
                         .buttonStyle(.primary)
+                case .unsupported:
+                    Text("That link isn't supported").font(.sectionHeading).foregroundStyle(.ink)
+                    Text("Share a TikTok video or Instagram Reel. Plandit does not crawl profiles, feeds, or other pages.")
+                        .font(.bodyText)
+                        .foregroundStyle(.inkMuted)
+                    Spacer(minLength: 0)
+                    Button("Close", action: onCancel)
+                        .buttonStyle(.secondary)
                 case .noLink:
                     Text("No link found").font(.sectionHeading).foregroundStyle(.ink)
-                    Text("Plandit saves links from TikTok, Instagram Reels, and the web. Copy the link and paste it in Plandit instead.")
+                    Text("Copy a TikTok video or Instagram Reel link and paste it in Plandit instead.")
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
                     Spacer(minLength: 0)

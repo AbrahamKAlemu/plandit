@@ -25,13 +25,17 @@ backend/
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env                  # DJANGO_DEBUG=1 and the local DATABASE_URL already match
+cp .env.example .env
+# Generate a local password, then put it in POSTGRES_PASSWORD in .env:
+python -c "import secrets; print(secrets.token_urlsafe(24))"
 docker compose up -d                  # Postgres 16 on localhost:5433
 python manage.py migrate
 python manage.py loaddata manhattan_places
 python manage.py runserver 8001       # the website's dev server uses 8000
 ```
 
+- `POSTGRES_PASSWORD` is required for local development. Django constructs the loopback-only
+  database URL from it; deployed environments must provide `DATABASE_URL` instead.
 - Tests: `pytest` (needs the compose Postgres; it creates its own `test_plandit` database).
 - Lint: `ruff check . && ruff format --check .`
 - Admin: `python manage.py createsuperuser`, then http://localhost:8001/admin/.

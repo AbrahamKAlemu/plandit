@@ -8,4 +8,5 @@ urlpatterns = [
     path("api/saved/", include("plandit.saved.urls")),
     path("api/plans/", include("plandit.plans.urls")),
     path("api/waitlist/", include("plandit.waitlist.urls")),
+    path("v1/", include("resolution.urls")),
 ]

@@ -4,7 +4,8 @@ import XCTest
 /// The + flow end to end through the store: picking saved posts, building, and continuing a day.
 final class PlanBuildingTests: XCTestCase {
     @MainActor private struct NoExtractor: PlaceExtracting {
-        func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult { ExtractionResult() }
+        func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult { ExtractionResult(candidates: []) }
+        func resolve(evidence: String, platform: SourcePlatform) async throws -> ExtractionResult { ExtractionResult(candidates: []) }
     }
 
     @MainActor private func makeStore(stops: [PlanStop] = [], travel: String = "Walk + subway", storage: SnapshotStore? = nil) -> PlanditStore {

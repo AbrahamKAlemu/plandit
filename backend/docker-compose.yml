@@ -4,10 +4,10 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: plandit
-      POSTGRES_PASSWORD: plandit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: plandit
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - plandit-pgdata:/var/lib/postgresql/data
     healthcheck:

@@ -3,7 +3,8 @@ import XCTest
 
 final class PlanditStoreTests: XCTestCase {
     @MainActor private struct NoExtractor: PlaceExtracting {
-        func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult { ExtractionResult() }
+        func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult { ExtractionResult(candidates: []) }
+        func resolve(evidence: String, platform: SourcePlatform) async throws -> ExtractionResult { ExtractionResult(candidates: []) }
     }
 
     @MainActor private func stop(_ place: Place, hour: Int, status: StopStatus = .upcoming) -> PlanStop {
@@ -98,6 +99,56 @@ final class PlanditStoreTests: XCTestCase {
         XCTAssertEqual(loaded.profile.homeBase, "Harlem")
     }
 
+    func testSavedPostDecodesSnapshotsFromBeforeExtractionFieldsWereAdded() throws {
+        let original = SampleData.levainPost
+        let encoded = try JSONEncoder().encode(original)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "canonicalURL")
+        object.removeValue(forKey: "candidates")
+        object.removeValue(forKey: "failureMessage")
+        object.removeValue(forKey: "tags")
+
+        let decoded = try JSONDecoder().decode(
+            SavedPost.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertEqual(decoded.canonicalURL, original.url)
+        XCTAssertEqual(decoded.tags, [])
+        XCTAssertEqual(decoded.candidates, [])
+        XCTAssertNil(decoded.failureMessage)
+        XCTAssertEqual(decoded.place, original.place)
+    }
+
+    @MainActor func testCandidateMustBeConfirmedBeforeItCanEnterAPlan() {
+        let candidate = PlaceCandidate(
+            id: "mapkit:levain",
+            place: SampleData.levain,
+            confidence: .high,
+            reason: "Matched the caption address"
+        )
+        let post = SavedPost(
+            url: URL(string: "https://www.tiktok.com/@someone/video/7400000000000000100")!,
+            canonicalURL: URL(string: "https://www.tiktok.com/@someone/video/7400000000000000100")!,
+            platform: .tiktok,
+            savedAt: .now,
+            status: .needsConfirmation,
+            candidates: [candidate]
+        )
+        let store = makeStore(saved: [post])
+
+        XCTAssertTrue(store.plannablePosts.isEmpty)
+        XCTAssertTrue(store.buildPlan(postIDs: [post.id], start: SampleData.at(10), budget: 30, mode: PlanditStore.PlanMode.replace).stops.isEmpty)
+
+        store.confirm(postID: post.id, candidateID: candidate.id)
+
+        XCTAssertEqual(store.plannablePosts.map { $0.id }, [post.id])
+        XCTAssertEqual(
+            store.buildPlan(postIDs: [post.id], start: SampleData.at(10), budget: 30, mode: PlanditStore.PlanMode.replace).stops.first?.place,
+            candidate.place
+        )
+    }
+
     @MainActor func testIngestPendingSharesSavesEachLinkOnce() {
         let store = makeStore()
         let url = URL(string: "https://www.tiktok.com/@someone/video/7400000000000000099")!
@@ -108,6 +159,23 @@ final class PlanditStoreTests: XCTestCase {
         XCTAssertEqual(ids.count, 1)
         XCTAssertEqual(store.saved.count, 1)
         XCTAssertEqual(store.saved.first?.caption, "caption")
+        XCTAssertTrue(ShareInbox.pending().isEmpty)
+    }
+
+    @MainActor func testPendingSnapshotCannotOverwriteAnAcknowledgedShare() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditShareRace-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        let store = makeStore(storage: storage)
+        let sharedURL = URL(string: "https://www.tiktok.com/@someone/video/7400000000000000101")!
+
+        store.updateProfile { $0.homeBase = "Brooklyn" }
+        ShareInbox.enqueue(IncomingShare(url: sharedURL))
+        XCTAssertEqual(store.ingestPendingShares().count, 1)
+        try await Task.sleep(for: .milliseconds(350))
+
+        let loaded = try XCTUnwrap(storage.load())
+        XCTAssertEqual(loaded.saved.map(\.url), [sharedURL])
         XCTAssertTrue(ShareInbox.pending().isEmpty)
     }
 }

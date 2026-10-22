@@ -2,9 +2,16 @@ import CoreLocation
 import Foundation
 import Observation
 
+private struct SavedPlacePersistenceError: LocalizedError {
+    var errorDescription: String? {
+        "We couldn't save that change. Try again."
+    }
+}
+
 /// App-wide state: today's plan, saved posts, and the profile.
 /// Persisted locally after every change; backed by sample data on first launch.
 @Observable
+@MainActor
 final class PlanditStore {
     var today: DayPlan
     var saved: [SavedPost]
@@ -12,10 +19,12 @@ final class PlanditStore {
     var stats: UserStats
     var pastPlans: [PastPlan]
     var visited: [Place]
+    var savedErrorMessage: String?
     /// Real walking geometry per leg, filled in by `loadRoutes()`.
     private(set) var legPaths: [UUID: [CLLocationCoordinate2D]] = [:]
 
     @ObservationIgnored private let extractor: any PlaceExtracting
+    @ObservationIgnored private let videoExtractor: VideoEvidenceExtractor
     @ObservationIgnored private let routes = RouteService()
     @ObservationIgnored private let storage: SnapshotStore?
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
@@ -27,8 +36,9 @@ final class PlanditStore {
         stats: UserStats,
         pastPlans: [PastPlan],
         visited: [Place],
-        extractor: any PlaceExtracting = StubPlaceExtractor(),
-        storage: SnapshotStore? = nil
+        extractor: any PlaceExtracting = FixturePlaceExtractor(),
+        storage: SnapshotStore? = nil,
+        videoExtractor: VideoEvidenceExtractor = VideoEvidenceExtractor()
     ) {
         self.today = today
         self.saved = saved
@@ -38,6 +48,7 @@ final class PlanditStore {
         self.visited = visited
         self.extractor = extractor
         self.storage = storage
+        self.videoExtractor = videoExtractor
         for post in saved where post.status == .processing {
             startExtraction(post.id)
         }
@@ -45,7 +56,7 @@ final class PlanditStore {
 
     /// What the user left last time, rolled over to today; the sample data on first launch
     /// or when launched with `-resetData`.
-    static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = StubPlaceExtractor()) -> PlanditStore {
+    static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = FixturePlaceExtractor()) -> PlanditStore {
         if CommandLine.arguments.contains("-resetData") { storage.reset() }
         guard let snapshot = storage.load() else { return sample(storage: storage, extractor: extractor) }
         let store = PlanditStore(
@@ -62,7 +73,7 @@ final class PlanditStore {
         return store
     }
 
-    static func sample(storage: SnapshotStore? = nil, extractor: any PlaceExtracting = StubPlaceExtractor()) -> PlanditStore {
+    static func sample(storage: SnapshotStore? = nil, extractor: any PlaceExtracting = FixturePlaceExtractor()) -> PlanditStore {
         PlanditStore(
             today: SampleData.dayPlan,
             saved: SampleData.savedPosts,
@@ -134,27 +145,125 @@ final class PlanditStore {
     /// Returns the ids of the posts those shares map to, newest last.
     @discardableResult
     func ingestPendingShares() -> [UUID] {
-        ShareInbox.drain().map { save(url: $0.url, sharedText: $0.sharedText) }
+        var ids: [UUID] = []
+        for share in ShareInbox.pending() {
+            do {
+                ids.append(try save(url: share.url, sharedText: share.sharedText))
+                ShareInbox.acknowledge(share.id)
+            } catch {
+                savedErrorMessage = error.localizedDescription
+            }
+        }
+        return ids
     }
 
     @discardableResult
-    func save(url: URL, sharedText: String? = nil) -> UUID {
-        if let existing = saved.first(where: { $0.url == url }) { return existing.id }
-        let post = SavedPost(url: url, platform: SourcePlatform(url: url), caption: sharedText, savedAt: .now, status: .processing)
-        saved.insert(post, at: 0)
-        persist()
+    func save(url: URL, sharedText: String? = nil) throws -> UUID {
+        let supported = try SupportedSocialURL(url)
+        if let existing = saved.first(where: { $0.canonicalURL == supported.canonicalURL }) {
+            return existing.id
+        }
+        let post = SavedPost(
+            url: url,
+            canonicalURL: supported.canonicalURL,
+            platform: supported.platform,
+            caption: sharedText,
+            savedAt: .now,
+            status: .processing
+        )
+        var updated = saved
+        updated.insert(post, at: 0)
+        try persistSaved(updated)
+        saved = updated
         startExtraction(post.id)
         return post.id
     }
 
     func retryExtraction(_ id: UUID) {
-        update(id) { $0.status = .processing }
+        guard updateAndPersist(id, mutation: {
+            $0.status = .processing
+            $0.failureMessage = nil
+        }) else { return }
         startExtraction(id)
     }
 
     func removePost(_ id: UUID) {
-        saved.removeAll { $0.id == id }
-        persist()
+        let updated = saved.filter { $0.id != id }
+        do {
+            try persistSaved(updated)
+            saved = updated
+        } catch {
+            savedErrorMessage = "We couldn't remove this save. Try again."
+        }
+    }
+
+    func confirm(postID: UUID, candidateID: String) {
+        updateAndPersist(postID) { post in
+            guard let candidate = post.candidates.first(where: { $0.id == candidateID }) else { return }
+            post.place = candidate.place
+            post.estimatedCost = candidate.estimatedCost
+            post.status = candidate.place.hours == nil ? .needsReview : .ready
+            post.candidates = []
+        }
+    }
+
+    func submitEvidence(postID: UUID, text: String) {
+        guard updateAndPersist(postID, mutation: {
+            $0.caption = text
+            $0.status = .processing
+            $0.failureMessage = nil
+        }) else { return }
+        Task { await resolveEvidence(postID: postID, text: text) }
+    }
+
+    @discardableResult
+    func saveVideo(fileURL: URL) async throws -> UUID {
+        let id = UUID()
+        let sourceURL = URL(string: "plandit-video://\(id.uuidString)")!
+        let post = SavedPost(
+            id: id,
+            url: sourceURL,
+            canonicalURL: sourceURL,
+            platform: .video,
+            savedAt: .now,
+            status: .processing
+        )
+        var updated = saved
+        updated.insert(post, at: 0)
+        try persistSaved(updated)
+        saved = updated
+
+        let evidence: VideoEvidence
+        do {
+            evidence = try await videoExtractor.extract(from: fileURL)
+        } catch {
+            removePost(id)
+            throw error
+        }
+        guard updateAndPersist(id, mutation: {
+            $0.caption = evidence.text
+            $0.status = .processing
+            $0.failureMessage = evidence.transcriptionNotice
+        }) else {
+            throw SavedPlacePersistenceError()
+        }
+        await resolveEvidence(
+            postID: id,
+            text: evidence.text,
+            noCandidatesMessage: evidence.transcriptionNotice
+                ?? "We couldn't confidently match this video. Review the extracted details and try again."
+        )
+        return id
+    }
+
+    func removeExpiredTemporaryMedia() {
+        do {
+            try TemporaryMediaStore().removeExpiredFiles(
+                olderThan: Date().addingTimeInterval(-24 * 60 * 60)
+            )
+        } catch {
+            assertionFailure("Temporary media cleanup failed: \(error)")
+        }
     }
 
     private func startExtraction(_ id: UUID) {
@@ -165,16 +274,70 @@ final class PlanditStore {
         guard let post = post(id: id) else { return }
         do {
             let result = try await extractor.extract(from: post.url, sharedText: post.caption)
-            update(id) { $0.apply(result) }
+            updateAndPersist(id) { $0.apply(result) }
         } catch {
-            update(id) { $0.status = .failed }
+            updateAndPersist(id) {
+                $0.status = .failed
+                $0.failureMessage = "We couldn't read this source. Add details or try again."
+            }
         }
     }
 
-    private func update(_ id: UUID, _ change: (inout SavedPost) -> Void) {
-        guard let index = saved.firstIndex(where: { $0.id == id }) else { return }
-        change(&saved[index])
-        persist()
+    private func resolveEvidence(
+        postID: UUID,
+        text: String,
+        noCandidatesMessage: String? = nil
+    ) async {
+        guard let post = post(id: postID) else { return }
+        do {
+            let result = try await extractor.resolve(evidence: text, platform: post.platform)
+            updateAndPersist(postID) {
+                $0.apply(result)
+                if result.candidates.isEmpty {
+                    $0.failureMessage = noCandidatesMessage
+                }
+            }
+        } catch {
+            updateAndPersist(postID) {
+                $0.status = .failed
+                $0.failureMessage = "We couldn't match those details. Try another name or neighborhood."
+            }
+        }
+    }
+
+    @discardableResult
+    private func updateAndPersist(
+        _ id: UUID,
+        mutation: (inout SavedPost) -> Void
+    ) -> Bool {
+        guard let index = saved.firstIndex(where: { $0.id == id }) else { return false }
+        var updated = saved
+        mutation(&updated[index])
+        do {
+            try persistSaved(updated)
+            saved = updated
+            return true
+        } catch {
+            savedErrorMessage = "We couldn't save that change. Try again."
+            saved[index].status = .failed
+            saved[index].failureMessage = "This change wasn't saved. Try again."
+            return false
+        }
+    }
+
+    private func persistSaved(_ updatedSaved: [SavedPost]) throws {
+        pendingSave?.cancel()
+        pendingSave = nil
+        guard let storage else { return }
+        try storage.save(
+            StoreSnapshot(
+                saved: updatedSaved,
+                today: today,
+                profile: profile,
+                pastPlans: pastPlans,
+                visited: visited
+            )
+        )
     }
 
     // MARK: - Today's plan

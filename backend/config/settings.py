@@ -7,6 +7,7 @@ Every secret and environment-specific value comes from environment variables
 
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -57,6 +58,7 @@ INSTALLED_APPS = [
     "plandit.saved",
     "plandit.plans",
     "plandit.waitlist",
+    "resolution",
 ]
 
 MIDDLEWARE = [
@@ -91,10 +93,20 @@ TEMPLATES = [
 
 # --- Database: Supabase Postgres when deployed, local Postgres in development ---
 
+database_url = env("DATABASE_URL")
+if not database_url and DEBUG:
+    local_database_password = env("POSTGRES_PASSWORD")
+    if not local_database_password:
+        raise RuntimeError("POSTGRES_PASSWORD must be set for local development.")
+    database_url = (
+        f"postgresql://plandit:{quote(local_database_password, safe='')}@127.0.0.1:5433/plandit"
+    )
+if not database_url:
+    raise RuntimeError("DATABASE_URL must be set when DJANGO_DEBUG is off.")
+
 DATABASES = {
     "default": dj_database_url.config(
-        env="DATABASE_URL",
-        default="postgresql://plandit:plandit@localhost:5433/plandit",
+        default=database_url,
         conn_max_age=int(env("DATABASE_CONN_MAX_AGE", "600")),
         conn_health_checks=True,
     )
@@ -155,6 +167,15 @@ if not DEBUG:
 # Dotted path to the class that turns post text into a Place. Swap for an LLM + places API later.
 PLANDIT_PLACE_MATCHER = env("PLANDIT_PLACE_MATCHER", "plandit.saved.extraction.NameMatcher")
 PLANDIT_OEMBED_TIMEOUT_SECONDS = float(env("PLANDIT_OEMBED_TIMEOUT_SECONDS", "5"))
+ENSEMBLEDATA_ENABLED = DEBUG and env_bool("ENSEMBLEDATA_ENABLED")
+ENSEMBLEDATA_API_TOKEN = env("ENSEMBLEDATA_API_TOKEN")
+SOCIAL_EVIDENCE_CACHE_SECONDS = 300
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "plandit-development-social-evidence",
+    }
+}
 
 # --- I18N / static ------------------------------------------------------------
 
