@@ -9,3 +9,10 @@ xcuserdata/
 DerivedData/
 build/
 *.xcuserstate
+
+# Vercel / Python
+.vercel
+.venv/
+.pytest_cache/
+.ruff_cache/
+backend/staticfiles/

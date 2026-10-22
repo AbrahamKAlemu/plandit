@@ -1,0 +1,6 @@
+# Only website/ is deployed to Vercel (see vercel.json outputDirectory).
+ios
+docs
+.claude
+AGENTS.md
+CLAUDE.md

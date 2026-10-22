@@ -18,12 +18,18 @@ nearby and on budget, shown on a map.
   verification, lessons).
 
 ## How to run it
-- App: native iOS (SwiftUI, iOS 17+) in `ios/`. Details in ios/README.md.
-- Install: Xcode 26 or later, plus XcodeGen (`brew install xcodegen`).
-- Run locally: `cd ios && xcodegen generate && open Plandit.xcodeproj`, set your signing team
-  for both targets, then run the Plandit scheme. Rerun `xcodegen generate` after adding or
-  removing files; `ios/project.yml` is the source of truth for the Xcode project.
-- Test: no tests yet.
+- Stack: native iOS app (SwiftUI, iOS 17+) in `ios/`, Django + Django REST Framework API on
+  Supabase Postgres with Supabase Auth in `backend/`, static landing site on Vercel in `website/`.
+- iOS install: Xcode 26 or later, plus XcodeGen (`brew install xcodegen`). Run locally:
+  `cd ios && xcodegen generate && open Plandit.xcodeproj`, set your signing team for both
+  targets, then run the Plandit scheme. Rerun `xcodegen generate` after adding or removing
+  files; `ios/project.yml` is the source of truth for the Xcode project. Details in ios/README.md.
+- Backend install: `cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt`.
+  Run locally: `docker compose up -d && python manage.py migrate && python manage.py runserver 8001`.
+  Details in `backend/README.md`.
+- Website: `cd website && python3 -m http.server 8000`.
+- Test: `cd backend && pytest` (needs the compose Postgres). Lint: `ruff check . && ruff format --check .`
+  iOS: no tests yet.
 - Feature Forge skills are installed in `.claude/skills/` (feature-forge, brief, architecture,
   plan, whetstone). To update them, clone https://github.com/kenxle/feature-forge, move the old
   copies out, and run `python3 scripts/install.py /absolute/path/to/this/repo` from the clone.
