@@ -63,7 +63,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Build compliant core with an unused scraper-provider seam; no Apify dependency or calls | Selected |
 | Mandatory candidate confirmation | Selected |
 | Video results are candidate-first; raw OCR/transcript stays hidden unless the user reviews or corrects extracted details | Selected |
-| Local-first SwiftData | Selected |
+| Local-first atomic JSON snapshot shared with the planner | Selected; supersedes the extraction-only SwiftData runtime |
 | Discrete emerald cells/circles; no gradient | Selected |
 | Django modular monolith + PostgreSQL on Railway | Selected |
 | Supabase excluded from this feature | Selected |
@@ -112,7 +112,7 @@ On October 22, 2026, the development adapter processed
 - No LLM was required to obtain or understand the decisive location evidence.
 
 | Obtain consolidated human approval | Complete for core milestone | Fixture-backed core build approved; live provider/API remains a separate gate |
-| Implement durable URL intake and confirmation | Complete | SwiftData persistence, strict canonical URLs, deterministic candidates, explicit confirmation, and relaunch coverage |
+| Implement durable URL intake and confirmation | Complete | Shared atomic snapshot persistence, strict canonical URLs, deterministic candidates, explicit confirmation, backward-compatible decoding, and relaunch coverage |
 | Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |
 | Add direct Photos video selection | Complete | Native Photos picker plus Files fallback, pre-copy type/size validation, managed temporary storage, visible extraction errors, and picker UI coverage |
 | Make simulator transcription testable | Complete | On-device Speech remains first; Debug simulator builds may use the owner-approved Apple network fallback, OCR strings provide recognition context, and unavailable transcription is visible |
@@ -145,7 +145,44 @@ and does not block the approved core milestone.
 | `21f1b04` | Transactional persistence, evidence review gate, request validation, and stable idempotency |
 | `9461558` | Development-only EnsembleData adapter and URL support |
 | `1b15bf8` | Live subtitle extraction verification and provider documentation |
-| Current debug wiring commit | Local Django endpoint, Debug simulator client, fallback behavior, ephemeral evidence, and duplicate-request cache |
+| `241da4a` | Local Django endpoint, Debug simulator client, fallback behavior, ephemeral evidence, and duplicate-request cache |
+| `52948bd` | Structured caption address prioritization |
+| `7f11d26` | Venue and address association without creator-handle false positives |
+| `79165af` | Cross-URL cache isolation |
+| `7c1e7c9` | Address-first MapKit resolution |
+| `29ba56f` | Extracted street-number validation |
+
+## Planner integration
+
+On October 22, 2026, the extraction branch was integrated with the mapping and day-planning work
+merged by `275ab652d62cb877349c3bc1a379acb70cd2128b`.
+
+- Confirmed saved places and planner state now use one atomic `SnapshotStore` file.
+- Existing snapshots from before extraction fields were added decode with safe defaults.
+- `.needsConfirmation` candidates are never offered to the planner; confirming a candidate changes
+  the post to `.ready`, after which it becomes `isMappable` and selectable in the `+` plan flow.
+- Pending share-extension items are acknowledged only after the saved post is durably written.
+- Synchronous saved-place writes cancel older debounced snapshots so stale planner/profile writes
+  cannot erase an acknowledged share.
+- The polished saved-place navigation, Photos/Files video intake, candidate correction UI, Today
+  timeline, route loading, and plan builder coexist in the merged iOS application.
+- Django retains the Supabase/DRF `/api/` application and adds the development-only extraction
+  contract under `/v1/`.
+- Production `/api/saved/` still uses its separate oEmbed/database matcher; promoting
+  EnsembleData-backed evidence into that authenticated production path remains a later gate.
+
+Integration verification:
+
+- iOS application build passes.
+- All `PlanditTests` unit tests pass, including old-snapshot decoding, confirmation-to-planner
+  eligibility, and stale-snapshot/share-acknowledgement regression coverage.
+- `SavedPostExtractionUITests` and `PlanFlowTests` pass on iPhone 16 Pro / iOS 18.6.
+- All 18 extraction backend tests pass.
+- All 40 pure-Python planner tests pass.
+- Ruff, Django system checks, migration drift checks, and `git diff --check` pass.
+- The database-backed DRF tests require the repository's PostgreSQL 15 test service because the
+  migrations intentionally execute PostgreSQL row-level-security SQL; no local server was
+  available on port 5433 during this integration.
 
 The approved fixture/local milestone has no paid API usage. Production operating cost remains
 dependent on the later Railway/PostgreSQL deployment and approved place provider; Apify is not part
