@@ -2,16 +2,18 @@ import SwiftUI
 
 /// Bottom page selector, pinned inside the persistent sheet (like Find My on iOS 26).
 /// Solid surface rather than glass: the style guide rules out glassmorphism.
+/// The selected pill slides between tabs instead of jumping.
 struct PlanditTabBar: View {
     @Binding var selection: AppTab
     @Environment(\.isSheetCollapsed) private var isCollapsed
+    @Namespace private var pill
 
     var body: some View {
         HStack(spacing: Space.xxs) {
             ForEach(AppTab.allCases) { tab in
                 let isSelected = tab == selection
                 Button {
-                    selection = tab
+                    withAnimation(.snappy(duration: 0.3)) { selection = tab }
                 } label: {
                     VStack(spacing: Space.xxs) {
                         Icon(tab.icon, size: 22)
@@ -19,7 +21,13 @@ struct PlanditTabBar: View {
                     }
                     .foregroundStyle(isSelected ? Color.emeraldDeep : Color.ink)
                     .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(isSelected ? Color.emeraldTint : .clear, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+                    .background {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                                .fill(Color.emeraldTint)
+                                .matchedGeometryEffect(id: "selected-tab", in: pill)
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -38,5 +46,6 @@ struct PlanditTabBar: View {
         .overlay(alignment: .top) {
             if !isCollapsed { Hairline() }
         }
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 /// Ordered stops joined by a rail: black for structure, emerald for the active leg.
 struct PlanTimeline: View {
     let plan: DayPlan
+    @Environment(PlanditStore.self) private var store
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -12,11 +13,46 @@ struct PlanTimeline: View {
                     TimelineStopRow(number: index + 1, stop: stop, railColor: leg.map { plan.state(of: $0).color })
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    StopActions(stop: stop)
+                }
+                .transition(.opacity.combined(with: .move(edge: .leading)))
 
                 if let leg {
                     TravelLegRow(leg: leg, state: plan.state(of: leg))
+                        .transition(.opacity)
                 }
             }
+        }
+    }
+}
+
+/// Progress and removal actions for a stop, shared by the timeline's context menu and the detail screen.
+struct StopActions: View {
+    let stop: PlanStop
+    var onRemove: (() -> Void)?
+    @Environment(PlanditStore.self) private var store
+
+    var body: some View {
+        if stop.status != .now {
+            Button {
+                withAnimation(.snappy) { store.arrive(at: stop.id) }
+            } label: {
+                Label("I'm here", image: "Icons/map-pin")
+            }
+        }
+        if stop.status != .done {
+            Button {
+                withAnimation(.snappy) { store.complete(stop.id) }
+            } label: {
+                Label("Done here", image: "Icons/circle-check")
+            }
+        }
+        Button(role: .destructive) {
+            onRemove?()
+            withAnimation(.snappy) { store.removeStop(stop.id) }
+        } label: {
+            Label("Remove from plan", image: "Icons/trash-2")
         }
     }
 }
@@ -41,12 +77,13 @@ private struct TimelineStopRow: View {
                 HStack(spacing: Space.xs) {
                     Text(stop.start.shortTime).font(.label).foregroundStyle(.ink)
                     StopStatusTag(status: stop.status)
+                        .transition(.scale.combined(with: .opacity))
                     Spacer(minLength: 0)
                     Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
                 }
                 Text(stop.place.name)
                     .font(.cardHeading)
-                    .foregroundStyle(.ink)
+                    .foregroundStyle(stop.status == .done ? Color.inkMuted : Color.ink)
                     .multilineTextAlignment(.leading)
                 Text("\(stop.place.category.label) · \(stop.place.neighborhood)")
                     .font(.metadata)
@@ -61,6 +98,7 @@ private struct TimelineStopRow: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
+        .animation(.snappy(duration: 0.3), value: stop.status)
         .accessibilityElement(children: .combine)
         .accessibilityHint("Shows stop details")
     }
@@ -84,6 +122,7 @@ private struct TravelLegRow: View {
             Spacer(minLength: 0)
         }
         .fixedSize(horizontal: false, vertical: true)
+        .animation(.snappy(duration: 0.3), value: state)
         .accessibilityElement(children: .combine)
     }
 }

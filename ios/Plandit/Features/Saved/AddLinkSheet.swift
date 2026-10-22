@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Manual fallback for the share extension: paste a TikTok or Reel link.
 struct AddLinkSheet: View {
+    /// Called with the saved post's id after the sheet closes.
+    var onSaved: (UUID) -> Void = { _ in }
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
@@ -64,6 +66,7 @@ struct AddLinkSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationBackground(Color.surface)
+        .onAppear { isFocused = true }
     }
 
     private func save() {
@@ -71,7 +74,8 @@ struct AddLinkSheet: View {
             showError = true
             return
         }
-        store.save(url: url)
+        let id = withAnimation(.snappy) { store.save(url: url) }
         dismiss()
+        onSaved(id)
     }
 }

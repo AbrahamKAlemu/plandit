@@ -39,6 +39,8 @@
 		77346D9BC3ACE7E2AF63A533 /* LocationPermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CF268CEFCAB8945101303E /* LocationPermission.swift */; };
 		7863B1012507869EE8C85C12 /* PlaceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092CB3E68477D4DBAE321AAC /* PlaceExtractor.swift */; };
 		789669A09315E475EF9FC626 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */; };
+		7B374A3FA7F0280A2DDE9B6B /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E14D92B44EE48F44F09115E /* Persistence.swift */; };
+		80B1FC38577F76229B5AA280 /* PlanditStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E617A3E3996B4A8A800A2725 /* PlanditStoreTests.swift */; };
 		83A8F5B7A5871B6B27043C66 /* LinkParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB333CD79DB125872198E3A4 /* LinkParsing.swift */; };
 		879882A30F7DDD3D077382B5 /* AddLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15AC2801DC9EA6D58175224D /* AddLinkSheet.swift */; };
 		8E61BE6EE8287A0B7DA2611F /* AppearanceModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */; };
@@ -57,6 +59,7 @@
 		C908066BF19E5B751DF8EE77 /* TodaySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130BEB57FE12B63F0783900B /* TodaySheet.swift */; };
 		CA123F96243E9291C1B3D846 /* MapViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABB71B38BB71279BDBE8730 /* MapViewport.swift */; };
 		CF41404254105771AFA6C382 /* Manrope-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D70C41725CF5E3CC2016BBEB /* Manrope-Regular.ttf */; };
+		D0042643FC621187A32463D4 /* ProfileEditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E406CD266A29740D1E47C77 /* ProfileEditScreens.swift */; };
 		D1D84D1534F5C2A2EAD72278 /* SavedPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4EA2889EFD0ED181368F449 /* SavedPost.swift */; };
 		D2A118CC181CB4CBCC01E532 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A277942AF5DD87C0431CAB /* Appearance.swift */; };
 		D2D73E736BE4B5B5D77E9A7A /* Manrope-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */; };
@@ -122,6 +125,7 @@
 		38E148AE835FA73CDABE5EF1 /* PlanditMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditMapView.swift; sourceTree = "<group>"; };
 		49054A5C535AFD8CFA871269 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		4DD1E7E04067200EB6C8B550 /* AppearanceMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceMode.swift; sourceTree = "<group>"; };
+		4E14D92B44EE48F44F09115E /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
 		4F8B33EE15876B22FF476D62 /* Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigation.swift; sourceTree = "<group>"; };
 		59A277942AF5DD87C0431CAB /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Manrope-Bold.ttf"; sourceTree = "<group>"; };
@@ -131,6 +135,7 @@
 		66ADDD9568AE6197BC040C05 /* AppearanceFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceFlowTests.swift; sourceTree = "<group>"; };
 		66E71E938405EB27C0E59A78 /* MapPins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapPins.swift; sourceTree = "<group>"; };
 		7A0D8D86876DB353253B402A /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
+		7E406CD266A29740D1E47C77 /* ProfileEditScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditScreens.swift; sourceTree = "<group>"; };
 		83DB9DA4AF78C40241259AEE /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		8896624B417A22D10DD3E7E5 /* ProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSheet.swift; sourceTree = "<group>"; };
 		894E93D2483E91645C6F60E6 /* SavedPostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPostDetailView.swift; sourceTree = "<group>"; };
@@ -158,6 +163,7 @@
 		DC9522645F592BE457D9E1E5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		DCCE2C042090764A16B12587 /* PlanditStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditStore.swift; sourceTree = "<group>"; };
 		E59E8E23998E8DD242E27519 /* RouteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteService.swift; sourceTree = "<group>"; };
+		E617A3E3996B4A8A800A2725 /* PlanditStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditStoreTests.swift; sourceTree = "<group>"; };
 		EA42EFDFC3C4B3021E413BFE /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
 		EF3C828DEB21FBE95CE5194C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F4EA2889EFD0ED181368F449 /* SavedPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPost.swift; sourceTree = "<group>"; };
@@ -235,6 +241,7 @@
 		55F869AF37E3488C5BBB3919 /* Profile */ = {
 			isa = PBXGroup;
 			children = (
+				7E406CD266A29740D1E47C77 /* ProfileEditScreens.swift */,
 				8896624B417A22D10DD3E7E5 /* ProfileSheet.swift */,
 				83DB9DA4AF78C40241259AEE /* SettingsScreen.swift */,
 			);
@@ -300,6 +307,7 @@
 			isa = PBXGroup;
 			children = (
 				93CF268CEFCAB8945101303E /* LocationPermission.swift */,
+				4E14D92B44EE48F44F09115E /* Persistence.swift */,
 				092CB3E68477D4DBAE321AAC /* PlaceExtractor.swift */,
 				DCCE2C042090764A16B12587 /* PlanditStore.swift */,
 				E59E8E23998E8DD242E27519 /* RouteService.swift */,
@@ -322,6 +330,7 @@
 			isa = PBXGroup;
 			children = (
 				FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */,
+				E617A3E3996B4A8A800A2725 /* PlanditStoreTests.swift */,
 			);
 			path = PlanditTests;
 			sourceTree = "<group>";
@@ -561,6 +570,7 @@
 				5D824D7142CA2510CA13B630 /* MapPins.swift in Sources */,
 				CA123F96243E9291C1B3D846 /* MapViewport.swift in Sources */,
 				4A7DD92E72EAA24415F22F4F /* Navigation.swift in Sources */,
+				7B374A3FA7F0280A2DDE9B6B /* Persistence.swift in Sources */,
 				109FC9DAB21085E572C723FE /* Place.swift in Sources */,
 				7863B1012507869EE8C85C12 /* PlaceExtractor.swift in Sources */,
 				C09E519668C9F27F08946702 /* PlanTimeline.swift in Sources */,
@@ -568,6 +578,7 @@
 				2929BAE0E20821EEDBCC76DE /* PlanditMapView.swift in Sources */,
 				E4192E25B89C10A1F7E77E4C /* PlanditStore.swift in Sources */,
 				0AF480CCE66F864A86FFD82D /* PlanditTabBar.swift in Sources */,
+				D0042643FC621187A32463D4 /* ProfileEditScreens.swift in Sources */,
 				DB5B30AA8B4F3B1FAA596D8B /* ProfileSheet.swift in Sources */,
 				C61509BBB72504682D435CF3 /* RootView.swift in Sources */,
 				73938BD2A6979E356613CADD /* RouteService.swift in Sources */,
@@ -589,6 +600,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8E61BE6EE8287A0B7DA2611F /* AppearanceModeTests.swift in Sources */,
+				80B1FC38577F76229B5AA280 /* PlanditStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -667,6 +679,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.tests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Plandit.app/Plandit";
 			};
@@ -683,6 +696,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.uitests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Plandit;
 			};
@@ -699,6 +713,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.tests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Plandit.app/Plandit";
 			};
@@ -715,6 +730,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app.uitests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Plandit;
 			};

@@ -3,10 +3,12 @@ import SwiftUI
 struct SavedPostDetailView: View {
     let postID: UUID
     @Environment(PlanditStore.self) private var store
+    @Environment(SheetRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         if let post = store.post(id: postID) {
+            let isInToday = store.isInToday(post)
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     switch post.status {
@@ -18,18 +20,21 @@ struct SavedPostDetailView: View {
                                 .foregroundStyle(.ink)
                         }
                         .planditCard()
+                        .transition(.opacity)
                     case .failed:
                         VStack(alignment: .leading, spacing: Space.sm) {
                             Text("We couldn't find a place").font(.sectionHeading).foregroundStyle(.ink)
                             Text("Nothing in \(post.platform.postPhrase) matched a place in Manhattan. Try again or view the original post.")
                                 .font(.bodyText)
                                 .foregroundStyle(.inkMuted)
-                            Button("Try again") { store.retryExtraction(post.id) }
+                            Button("Try again") { withAnimation(.snappy) { store.retryExtraction(post.id) } }
                                 .buttonStyle(.secondary)
                         }
+                        .transition(.opacity)
                     case .ready, .needsReview:
                         if let place = post.place {
                             PlaceSummary(post: post, place: place)
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
                     }
 
@@ -37,7 +42,7 @@ struct SavedPostDetailView: View {
 
                     VStack(spacing: Space.sm) {
                         if post.isMappable {
-                            if store.isInToday(post) {
+                            if isInToday {
                                 HStack(spacing: Space.xs) {
                                     Icon(.circleCheck, size: 18)
                                     Text("In today's plan")
@@ -45,9 +50,21 @@ struct SavedPostDetailView: View {
                                 .font(.label)
                                 .foregroundStyle(.emeraldDeep)
                                 .frame(maxWidth: .infinity, minHeight: 48)
+                                .transition(.scale(scale: 0.9).combined(with: .opacity))
+
+                                Button {
+                                    router.show(.today)
+                                } label: {
+                                    HStack(spacing: Space.xs) {
+                                        Icon(.route, size: 18)
+                                        Text("View today's plan")
+                                    }
+                                }
+                                .buttonStyle(.secondary)
+                                .transition(.opacity)
                             } else {
                                 Button {
-                                    store.addToToday(post.id)
+                                    withAnimation(.snappy) { _ = store.addToToday(post.id) }
                                 } label: {
                                     HStack(spacing: Space.xs) {
                                         Icon(.plus, size: 18)
@@ -55,12 +72,13 @@ struct SavedPostDetailView: View {
                                     }
                                 }
                                 .buttonStyle(.primary)
+                                .transition(.opacity)
                             }
                         }
 
                         Button(role: .destructive) {
                             dismiss()
-                            store.removePost(post.id)
+                            withAnimation(.snappy) { store.removePost(post.id) }
                         } label: {
                             Text("Remove from saved")
                                 .font(.label)
@@ -70,9 +88,12 @@ struct SavedPostDetailView: View {
                     }
                 }
                 .padding(Space.lg)
+                .animation(.snappy(duration: 0.35), value: post.status)
+                .animation(.snappy(duration: 0.35), value: isInToday)
             }
             .background(Color.surface)
             .navigationBarTitleDisplayMode(.inline)
+            .sensoryFeedback(.success, trigger: isInToday) { _, added in added }
         } else {
             ContentUnavailableView("Removed", image: "Icons/bookmark", description: Text("This post is no longer saved."))
         }
