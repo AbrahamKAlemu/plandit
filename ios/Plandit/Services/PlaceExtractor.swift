@@ -435,18 +435,9 @@ struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
     }
 
     func metadata(for url: URL) async throws -> SocialMetadata? {
-        let supported = try SupportedSocialURL(url)
-        guard supported.platform == .tiktok,
-              let endpoint = URL(string: "http://127.0.0.1:8000/v1/social-evidence") else {
+        guard let request = try Self.request(for: url) else {
             return nil
         }
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode([
-            "sourceUrl": supported.canonicalURL.absoluteString
-        ])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
             throw URLError(.badServerResponse)
@@ -460,6 +451,25 @@ struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
             thumbnailURL: nil,
             searchEvidence: payload.combinedText
         )
+    }
+
+    static func request(for url: URL) throws -> URLRequest? {
+        let supported = try SupportedSocialURL(url)
+        guard supported.platform == .tiktok,
+              let endpoint = URL(string: "http://127.0.0.1:8000/v1/social-evidence") else {
+            return nil
+        }
+        var request = URLRequest(
+            url: endpoint,
+            cachePolicy: .reloadIgnoringLocalCacheData,
+            timeoutInterval: 60
+        )
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode([
+            "sourceUrl": supported.canonicalURL.absoluteString
+        ])
+        return request
     }
 }
 

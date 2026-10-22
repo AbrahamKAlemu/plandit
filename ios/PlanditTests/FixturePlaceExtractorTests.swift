@@ -108,6 +108,19 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(metadata?.title, expected.title)
     }
 
+    func testDevelopmentEvidenceRequestBypassesURLCache() throws {
+        let request = try XCTUnwrap(DevelopmentSocialEvidenceClient.request(
+            for: URL(string: "https://www.tiktok.com/t/ZTfDj7vmC/")!
+        ))
+
+        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Content-Type"),
+            "application/json"
+        )
+    }
+
     func testQueryBuilderPrioritizesPlaceAfterCue() {
         let queries = PlaceQueryBuilder.queries(
             from: "Best slice in NYC at Joe's Pizza #foodtok"

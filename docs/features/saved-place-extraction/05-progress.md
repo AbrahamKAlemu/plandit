@@ -92,6 +92,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Wire EnsembleData into the Debug simulator | Complete (local evaluation) | Debug simulator calls a DEBUG-gated localhost endpoint, falls back to TikTok oEmbed when unavailable, keeps provider evidence search-only, and uses a five-minute in-memory cache to avoid duplicate paid retries |
 | Prioritize structured caption addresses | Complete | Double-space-separated creator caption fields now produce a place + street + city query before noisy prose; the Lululala / 139 Hester St case and cue-separated captions have regression coverage |
 | Associate separated venue and address signals | Complete | Venue handles explicitly described as businesses and spoken `called` names are positionally paired with the nearest following address; creator handles, repeated names, and multi-venue captions have regression coverage |
+| Prevent cross-URL evidence reuse | Complete | The iOS POST request bypasses URLCache and the development endpoint returns `Cache-Control: no-store`, while the intentional source-URL-keyed five-minute server cache remains enabled |
 
 ## EnsembleData live trial
 

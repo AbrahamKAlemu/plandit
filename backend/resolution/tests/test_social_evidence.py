@@ -41,6 +41,7 @@ class SocialEvidenceApiTests(TestCase):
             response.json()["combinedText"],
             "Chubby Bowls at 809 Broadway\nNear 14th Street and Union Square",
         )
+        self.assertEqual(response["Cache-Control"], "no-store")
         client_type.return_value.evidence_for.assert_called_once_with(
             "https://www.tiktok.com/t/ZTfDj7vmC"
         )

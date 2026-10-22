@@ -84,7 +84,9 @@ def social_evidence(request: HttpRequest) -> JsonResponse:
             response_payload,
             timeout=settings.SOCIAL_EVIDENCE_CACHE_SECONDS,
         )
-    return JsonResponse(response_payload)
+    response = JsonResponse(response_payload)
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @csrf_exempt
