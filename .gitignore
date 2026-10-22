@@ -3,6 +3,14 @@
 .DS_Store
 node_modules/
 __pycache__/
+
+# Xcode
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+
+# Vercel / Python
 .vercel
 .venv/
 .pytest_cache/
