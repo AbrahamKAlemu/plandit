@@ -3,15 +3,88 @@ import json
 import time
 import uuid
 
+from django.conf import settings
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import ResolutionAttempt
+from .providers.ensembledata import EnsembleDataClient, EnsembleDataError
 from .services import resolve_candidates
 from .url_policy import SourceUrlError, parse_supported_source_url
 
 MAX_EVIDENCE_LENGTH = 5000
+MAX_SOCIAL_EVIDENCE_LENGTH = 20_000
+
+
+@csrf_exempt
+def social_evidence(request: HttpRequest) -> JsonResponse:
+    if not settings.DEBUG or not settings.ENSEMBLEDATA_ENABLED:
+        return _error(
+            None,
+            "not_found",
+            "Development social evidence is disabled.",
+            False,
+            status=404,
+        )
+    if request.method != "POST":
+        return _error(None, "method_not_allowed", "Use POST.", False, status=405)
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return _error(None, "invalid_request", "Request body must be valid JSON.", False)
+    if not isinstance(payload, dict):
+        return _error(None, "invalid_request", "Request body must be a JSON object.", False)
+    source_url = payload.get("sourceUrl")
+    if not isinstance(source_url, str):
+        return _error(None, "invalid_url", "TikTok sourceUrl is required.", False)
+    try:
+        supported = parse_supported_source_url(source_url)
+    except SourceUrlError:
+        return _error(None, "invalid_url", "Use a supported TikTok video URL.", False)
+    if supported.platform != "tiktok":
+        return _error(None, "invalid_url", "Use a supported TikTok video URL.", False)
+    if not settings.ENSEMBLEDATA_API_TOKEN:
+        return _error(
+            None,
+            "provider_unavailable",
+            "Development provider token is not configured.",
+            True,
+            status=503,
+        )
+
+    cache_key = "social-evidence:" + hashlib.sha256(
+        supported.canonical_url.encode()
+    ).hexdigest()
+    response_payload = cache.get(cache_key)
+    if response_payload is None:
+        try:
+            evidence = EnsembleDataClient(
+                settings.ENSEMBLEDATA_API_TOKEN
+            ).evidence_for(supported.canonical_url)
+        except (EnsembleDataError, SourceUrlError):
+            return _error(
+                None,
+                "provider_unavailable",
+                "TikTok evidence could not be retrieved.",
+                True,
+                status=502,
+            )
+
+        response_payload = {
+            "canonicalUrl": evidence.canonical_url,
+            "caption": evidence.caption,
+            "transcript": evidence.transcript,
+            "transcriptLanguage": evidence.transcript_language,
+            "combinedText": evidence.text[:MAX_SOCIAL_EVIDENCE_LENGTH],
+        }
+        cache.set(
+            cache_key,
+            response_payload,
+            timeout=settings.SOCIAL_EVIDENCE_CACHE_SECONDS,
+        )
+    return JsonResponse(response_payload)
 
 
 @csrf_exempt

@@ -58,12 +58,70 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(result.caption, "You have to try Joe's Pizza in Greenwich Village")
     }
 
+    func testSearchOnlyEvidenceIsNotReturnedAsPersistableCaption() async throws {
+        let candidate = PlaceCandidate(
+            id: "mapkit:chubby-bowls",
+            place: SampleData.losTacos,
+            confidence: .medium,
+            reason: "Apple Maps matched the caption or approved text"
+        )
+        let evidence = "Come with me to check out Chubby Bowls at 809 Broadway"
+        let extractor = FixturePlaceExtractor(
+            metadataProvider: StubMetadataProvider(
+                metadata: SocialMetadata(
+                    title: nil,
+                    authorHandle: "@creator",
+                    thumbnailURL: nil,
+                    searchEvidence: evidence
+                )
+            ),
+            placeSearcher: StubPlaceSearcher(
+                candidates: [candidate],
+                expectedEvidence: evidence
+            )
+        )
+
+        let result = try await extractor.extract(
+            from: URL(string: "https://www.tiktok.com/@creator/video/123")!,
+            sharedText: nil
+        )
+
+        XCTAssertEqual(result.candidates, [candidate])
+        XCTAssertNil(result.caption)
+    }
+
+    func testMetadataProviderFallsBackAfterPrimaryFailure() async throws {
+        let expected = SocialMetadata(
+            title: "Fallback caption",
+            authorHandle: "@creator",
+            thumbnailURL: nil
+        )
+        let provider = FallbackSocialMetadataProvider(
+            primary: FailingMetadataProvider(),
+            fallback: StubMetadataProvider(metadata: expected)
+        )
+
+        let metadata = try await provider.metadata(
+            for: URL(string: "https://www.tiktok.com/@creator/video/123")!
+        )
+
+        XCTAssertEqual(metadata?.title, expected.title)
+    }
+
     func testQueryBuilderPrioritizesPlaceAfterCue() {
         let queries = PlaceQueryBuilder.queries(
             from: "Best slice in NYC at Joe's Pizza #foodtok"
         )
 
         XCTAssertEqual(queries.first, "Joe's Pizza foodtok")
+    }
+
+    func testQueryBuilderExtractsPlaceAfterCheckOut() {
+        let queries = PlaceQueryBuilder.queries(
+            from: "Come with me to check out Chubby Bowls in Union Square! Great food."
+        )
+
+        XCTAssertEqual(queries.first, "Chubby Bowls in Union Square")
     }
 }
 
@@ -77,8 +135,28 @@ private struct StubMetadataProvider: SocialMetadataProviding {
 
 private struct StubPlaceSearcher: PlaceSearching {
     let candidates: [PlaceCandidate]
+    var expectedEvidence: String?
+
+    init(candidates: [PlaceCandidate], expectedEvidence: String? = nil) {
+        self.candidates = candidates
+        self.expectedEvidence = expectedEvidence
+    }
 
     func search(evidence: String) async throws -> [PlaceCandidate] {
-        candidates
+        if let expectedEvidence, evidence != expectedEvidence {
+            throw TestError.unexpectedEvidence
+        }
+        return candidates
     }
+}
+
+private struct FailingMetadataProvider: SocialMetadataProviding {
+    func metadata(for url: URL) async throws -> SocialMetadata? {
+        throw TestError.metadataUnavailable
+    }
+}
+
+private enum TestError: Error {
+    case metadataUnavailable
+    case unexpectedEvidence
 }

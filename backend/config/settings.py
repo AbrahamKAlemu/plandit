@@ -79,6 +79,17 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 64 * 1024
 SECURE_CONTENT_TYPE_NOSNIFF = True
+ENSEMBLEDATA_ENABLED = (
+    DEBUG and os.environ.get("ENSEMBLEDATA_ENABLED", "false").lower() == "true"
+)
+ENSEMBLEDATA_API_TOKEN = os.environ.get("ENSEMBLEDATA_API_TOKEN", "")
+SOCIAL_EVIDENCE_CACHE_SECONDS = 300
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "plandit-development-social-evidence",
+    }
+}
 
 if not DEBUG:
     if SECRET_KEY == "development-only-secret":

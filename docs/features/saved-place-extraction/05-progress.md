@@ -14,9 +14,11 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 - Live place-provider selection, billing, production credentials, public-client abuse protection,
   attribution/retention policy, Railway deployment commands, and the evaluation dataset remain
   separate approval gates.
-- The EnsembleData TikTok adapter is development-only. A live call succeeded for the Chubby Bowls
-  test URL; application endpoint/iOS wiring and production approval remain pending.
-- The iOS client still uses its local fixture extractor; wiring it to Django is a later slice.
+- The EnsembleData TikTok integration remains development-only. The local Django endpoint and
+  Debug simulator client work for the Chubby Bowls test URL, but production approval and public
+  abuse controls remain pending.
+- Release/device builds continue using the existing compliant metadata path and never call the
+  local development endpoint.
 - Direct video sharing into the share extension is not implemented; video selection is available
   inside the app.
 
@@ -87,6 +89,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Define core video-to-place milestone | Complete | URL-first flow plus temporary on-device video evidence produces confirmed name/location |
 | Evaluate URL acquisition providers | Complete | [Provider evaluation](06-provider-evaluation.md) ranks development and production options and defines a twenty-URL benchmark |
 | Build EnsembleData evaluation adapter | Complete (live spike) | Direct post-info call with video download disabled, short-link resolution, TikTok CDN subtitle allowlist, JSON/WebVTT parsing, management command, tests, and successful Chubby Bowls live trial |
+| Wire EnsembleData into the Debug simulator | Complete (local evaluation) | Debug simulator calls a DEBUG-gated localhost endpoint, falls back to TikTok oEmbed when unavailable, keeps provider evidence search-only, and uses a five-minute in-memory cache to avoid duplicate paid retries |
 
 ## EnsembleData live trial
 
@@ -103,9 +106,6 @@ On October 22, 2026, the development adapter processed
 - Subtitle transcript included the venue, Broadway address, 14th Street, and Union Square.
 - No LLM was required to obtain or understand the decisive location evidence.
 
-The remaining development step is to pass this evidence through deterministic query generation and
-place validation, then wire the Django response to the iOS client behind development-only cost and
-abuse controls.
 | Obtain consolidated human approval | Complete for core milestone | Fixture-backed core build approved; live provider/API remains a separate gate |
 | Implement durable URL intake and confirmation | Complete | SwiftData persistence, strict canonical URLs, deterministic candidates, explicit confirmation, and relaunch coverage |
 | Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |
@@ -137,7 +137,10 @@ and does not block the approved core milestone.
 | `85c161a` | Temporary on-device video evidence intake |
 | `d64a4b1` | Django place-resolution contract |
 | `c7d0d6e` | Generated backend state excluded |
-| Current corrective commit | Transactional persistence, evidence review gate, request validation, and stable idempotency |
+| `21f1b04` | Transactional persistence, evidence review gate, request validation, and stable idempotency |
+| `9461558` | Development-only EnsembleData adapter and URL support |
+| `1b15bf8` | Live subtitle extraction verification and provider documentation |
+| Current debug wiring commit | Local Django endpoint, Debug simulator client, fallback behavior, ephemeral evidence, and duplicate-request cache |
 
 The approved fixture/local milestone has no paid API usage. Production operating cost remains
 dependent on the later Railway/PostgreSQL deployment and approved place provider; Apify is not part

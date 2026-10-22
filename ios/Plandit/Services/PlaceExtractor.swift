@@ -25,6 +25,7 @@ struct SocialMetadata: Sendable {
     var title: String?
     var authorHandle: String?
     var thumbnailURL: URL?
+    var searchEvidence: String? = nil
 }
 
 struct FixturePlaceExtractor: PlaceExtracting {
@@ -32,16 +33,27 @@ struct FixturePlaceExtractor: PlaceExtracting {
     let placeSearcher: (any PlaceSearching)?
 
     init(
-        metadataProvider: (any SocialMetadataProviding)? = TikTokOEmbedClient(),
+        metadataProvider: (any SocialMetadataProviding)? = Self.defaultMetadataProvider,
         placeSearcher: (any PlaceSearching)? = MapKitPlaceSearcher()
     ) {
         self.metadataProvider = metadataProvider
         self.placeSearcher = placeSearcher
     }
 
+    private static var defaultMetadataProvider: any SocialMetadataProviding {
+#if DEBUG && targetEnvironment(simulator)
+        FallbackSocialMetadataProvider(
+            primary: DevelopmentSocialEvidenceClient(),
+            fallback: TikTokOEmbedClient()
+        )
+#else
+        TikTokOEmbedClient()
+#endif
+    }
+
     func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult {
         let metadata = try? await metadataProvider?.metadata(for: url)
-        let evidence = [metadata?.title, sharedText]
+        let evidence = [metadata?.searchEvidence, metadata?.title, sharedText]
             .compactMap { $0 }
             .joined(separator: "\n")
         let candidates = try await candidates(matching: evidence)
@@ -262,20 +274,74 @@ enum PlaceQueryBuilder {
     }
 
     private static func queryAfterCue(in text: String) -> String? {
-        guard let range = text.range(
-            of: #"\b(?:at|visit|try|called)\s+(.+)"#,
-            options: [.regularExpression, .caseInsensitive]
+        let pattern = #"\b(?:check\s+out|at|visit|try|called)\s+(.+)"#
+        guard let expression = try? NSRegularExpression(
+            pattern: pattern,
+            options: .caseInsensitive
         ) else {
             return nil
         }
-        let match = String(text[range])
-        guard let firstSpace = match.firstIndex(of: " ") else { return nil }
-        let query = match[match.index(after: firstSpace)...]
-            .split(separator: ".", maxSplits: 1)
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = expression.firstMatch(in: text, range: range),
+              let captureRange = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        let query = text[captureRange]
+            .components(separatedBy: CharacterSet(charactersIn: ".!?"))
             .first
-            .map(String.init)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         return query.flatMap { $0.count >= 3 ? $0 : nil }
+    }
+}
+
+struct FallbackSocialMetadataProvider: SocialMetadataProviding {
+    let primary: any SocialMetadataProviding
+    let fallback: any SocialMetadataProviding
+
+    func metadata(for url: URL) async throws -> SocialMetadata? {
+        do {
+            if let metadata = try await primary.metadata(for: url) {
+                return metadata
+            }
+        } catch {
+            return try await fallback.metadata(for: url)
+        }
+        return try await fallback.metadata(for: url)
+    }
+}
+
+struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
+    private struct Response: Decodable {
+        let canonicalUrl: URL
+        let combinedText: String
+    }
+
+    func metadata(for url: URL) async throws -> SocialMetadata? {
+        let supported = try SupportedSocialURL(url)
+        guard supported.platform == .tiktok,
+              let endpoint = URL(string: "http://127.0.0.1:8000/v1/social-evidence") else {
+            return nil
+        }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode([
+            "sourceUrl": supported.canonicalURL.absoluteString
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        let payload = try JSONDecoder().decode(Response.self, from: data)
+        let creator = payload.canonicalUrl.pathComponents
+            .first(where: { $0.hasPrefix("@") })
+        return SocialMetadata(
+            title: nil,
+            authorHandle: creator,
+            thumbnailURL: nil,
+            searchEvidence: payload.combinedText
+        )
     }
 }
 
