@@ -27,6 +27,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 - [Potential scaffolding](03-scaffolding.md)
 - [Implementation plan and verification](04-plan.md)
 - [Progress](05-progress.md)
+- [Provider evaluation](06-provider-evaluation.md)
 
 ## Phase status
 
@@ -82,6 +83,7 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Select backend structure | Complete | Django modular monolith with PostgreSQL on Railway; Supabase deferred |
 | Run persona reviews on amended dossier | Deferred | Owner requested focus on core functionality; prior findings and dispositions preserved |
 | Define core video-to-place milestone | Complete | URL-first flow plus temporary on-device video evidence produces confirmed name/location |
+| Evaluate URL acquisition providers | Complete | [Provider evaluation](06-provider-evaluation.md) ranks development and production options and defines a twenty-URL benchmark |
 | Obtain consolidated human approval | Complete for core milestone | Fixture-backed core build approved; live provider/API remains a separate gate |
 | Implement durable URL intake and confirmation | Complete | SwiftData persistence, strict canonical URLs, deterministic candidates, explicit confirmation, and relaunch coverage |
 | Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |
