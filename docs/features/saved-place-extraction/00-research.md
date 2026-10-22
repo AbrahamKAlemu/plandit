@@ -6,8 +6,9 @@
 
 A consent-based save-to-map pipeline is feasible without scraping public feeds:
 
-- TikTok's official oEmbed endpoint can return the public video's title/caption, author, thumbnail,
-  and embed markup. It does not provide transcripts, OCR, geotags, structured venues, or raw media.
+- TikTok's official oEmbed endpoint may return title/caption, author, thumbnail, and embed markup,
+  but those descriptive fields are not reliable for every current public video. It does not provide
+  transcripts, OCR, geotags, structured venues, or raw media.
 - Instagram oEmbed is for front-end embedding only. Meta prohibits extracting, deriving, or
   persisting its metadata/content for another purpose, so it cannot be Plandit's extraction input.
 - Instagram links should remain source references while the user supplies a place name, caption
@@ -28,6 +29,23 @@ A consent-based save-to-map pipeline is feasible without scraping public feeds:
 | Instagram Platform API | No general URL lookup | Authorized professional-account media | Business/Creator accounts, tokens, permissions, review | Not an MVP solution |
 | User text/screenshot | Yes, through explicit user action | Typed text or on-device OCR | Requires clear consent and correction flow | Use for Instagram fallback |
 | Page/media scraping | Technically possible | Unofficial page/media data | Platform terms, copyright, fragility, anti-abuse risk | Prohibited |
+
+## Live URL verification
+
+On October 21, 2026, the public share URL
+`https://www.tiktok.com/t/ZTfDj7vmC/` was tested end to end:
+
+- TikTok redirected it to
+  `https://www.tiktok.com/@travelwithchyna/video/7655467577765793037`.
+- Both the share URL and canonical video URL returned HTTP 200 from TikTok oEmbed.
+- The oEmbed payload contained the player/embed product ID and iframe markup but omitted `title`,
+  `author_name`, `thumbnail_url`, caption text, transcript, and location evidence.
+- The current client also rejected the `/t/<token>` share path because validation originally covered
+  full `/@user/video/id` URLs plus `vm.tiktok.com` and `vt.tiktok.com`.
+
+Therefore official oEmbed cannot be treated as a dependable arbitrary-URL evidence source. Accepting
+and resolving TikTok share URLs is necessary URL plumbing, but it does not solve place extraction
+when TikTok omits descriptive metadata.
 
 ## Place-provider options
 
@@ -82,4 +100,3 @@ requires separate human approval at build kickoff.
 - [Foursquare usage guidelines](https://docs.foursquare.com/fsq-developers-places/reference/usage-guidelines)
 - [Apple MKLocalSearch](https://developer.apple.com/documentation/mapkit/mklocalsearch)
 - [Apple App Privacy Details](https://developer.apple.com/app-store/app-privacy-details/)
-
