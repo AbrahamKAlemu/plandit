@@ -71,13 +71,21 @@ Asset sources:
 - Lucide icons are ISC licensed and came from `lucide-static@0.469.0`.
 - Manrope is OFL licensed. The static weights were instanced from the Google Fonts variable font.
 
+## Flows worth knowing
+
+- **Share → Plandit → app:** when the app comes back to the foreground it drains the share inbox, switches to Saved, and opens the new post so you can watch it get mapped. Pasting a link does the same.
+- **Saved → Today:** "Add to today's plan" appends the stop, confirms in place, and offers "View today's plan". Long-press a saved post for the same actions.
+- **Moving through the day:** on a stop, "I'm here" makes it the current stop (earlier stops become done); "Done here" finishes it and makes the next one current. The timeline rail, map route and pins follow. Long-press a timeline row for the same actions. When every stop is done, Today shows a completion card.
+- **New day:** a plan belongs to one date. On the first launch of a new day the old plan is filed under Recent plans and Today starts empty with the default budget.
+- **Persistence:** saved posts, today's plan, profile preferences and recent plans are written to `plandit-store.json` in the App Group container (Application Support when unsigned). Launch with `-resetData` to go back to the sample data.
+
 ## Mocked or not built yet
 
-- **Data:** `SampleData` (mock data) feeds every screen. There is no persistence yet, so saved posts reset on relaunch.
+- **Data:** `SampleData` seeds the first launch. Stats on Profile are still mock values.
 - **Extraction:** `StubPlaceExtractor` fetches real TikTok oEmbed metadata (caption, author, thumbnail), then assigns a random sample place. Replace it with the backend (caption, transcript and on-screen text → place).
 - **Planner:** "Add to today's plan" appends the stop with an estimated travel leg. It does not re-optimize order, time or budget.
 - **Transit:** MapKit has no transit geometry, so transit legs are drawn as straight dotted lines. Walking legs use real MapKit walking routes.
 - **Dark mode:** Provisional dark tokens are documented in `docs/features/dark-mode/`. The canonical
   style guide remains unchanged until the design owners approve those tokens.
-- **Profile:** Settings and recent-plan rows open placeholder screens.
+- **Profile:** Default budget, home base and getting around are editable and persisted. Notifications and recent-plan rows open placeholder screens.
 - **Location:** Permission is requested only when the user taps the locate button. Camera bounds keep the map within Manhattan.

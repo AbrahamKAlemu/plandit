@@ -2,9 +2,9 @@ import CoreLocation
 import Foundation
 import Observation
 
-/// App-wide state: today's plan, saved posts, and the profile. Backed by sample data for now.
+/// App-wide state: today's plan, saved posts, and the profile.
+/// Persisted locally after every change; backed by sample data on first launch.
 @Observable
-@MainActor
 final class PlanditStore {
     var today: DayPlan
     var saved: [SavedPost]
@@ -17,6 +17,8 @@ final class PlanditStore {
 
     @ObservationIgnored private let extractor: any PlaceExtracting
     @ObservationIgnored private let routes = RouteService()
+    @ObservationIgnored private let storage: SnapshotStore?
+    @ObservationIgnored private var pendingSave: Task<Void, Never>?
 
     init(
         today: DayPlan,
@@ -25,7 +27,8 @@ final class PlanditStore {
         stats: UserStats,
         pastPlans: [PastPlan],
         visited: [Place],
-        extractor: any PlaceExtracting = StubPlaceExtractor()
+        extractor: any PlaceExtracting = StubPlaceExtractor(),
+        storage: SnapshotStore? = nil
     ) {
         self.today = today
         self.saved = saved
@@ -34,19 +37,41 @@ final class PlanditStore {
         self.pastPlans = pastPlans
         self.visited = visited
         self.extractor = extractor
+        self.storage = storage
         for post in saved where post.status == .processing {
             startExtraction(post.id)
         }
     }
 
-    static func sample() -> PlanditStore {
+    /// What the user left last time, rolled over to today; the sample data on first launch
+    /// or when launched with `-resetData`.
+    static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = StubPlaceExtractor()) -> PlanditStore {
+        if CommandLine.arguments.contains("-resetData") { storage.reset() }
+        guard let snapshot = storage.load() else { return sample(storage: storage, extractor: extractor) }
+        let store = PlanditStore(
+            today: snapshot.today,
+            saved: snapshot.saved,
+            profile: snapshot.profile,
+            stats: SampleData.stats, // still mock; see ios/README.md
+            pastPlans: snapshot.pastPlans,
+            visited: snapshot.visited,
+            extractor: extractor,
+            storage: storage
+        )
+        store.rollOverIfNeeded()
+        return store
+    }
+
+    static func sample(storage: SnapshotStore? = nil, extractor: any PlaceExtracting = StubPlaceExtractor()) -> PlanditStore {
         PlanditStore(
             today: SampleData.dayPlan,
             saved: SampleData.savedPosts,
             profile: SampleData.profile,
             stats: SampleData.stats,
             pastPlans: SampleData.pastPlans,
-            visited: SampleData.visitedPlaces
+            visited: SampleData.visitedPlaces,
+            extractor: extractor,
+            storage: storage
         )
     }
 
@@ -54,9 +79,9 @@ final class PlanditStore {
 
     func stop(id: UUID) -> PlanStop? { today.stop(id: id) }
 
-    func stopNumber(id: UUID) -> Int? {
-        today.stops.firstIndex { $0.id == id }.map { $0 + 1 }
-    }
+    func stopIndex(id: UUID) -> Int? { today.stops.firstIndex { $0.id == id } }
+
+    func stopNumber(id: UUID) -> Int? { stopIndex(id: id).map { $0 + 1 } }
 
     func post(id: UUID?) -> SavedPost? {
         guard let id else { return nil }
@@ -83,13 +108,33 @@ final class PlanditStore {
         }
     }
 
+    // MARK: - Day rollover
+
+    /// A plan belongs to one date. On the first launch of a new day, file the old plan under
+    /// recent plans and start today empty with the default budget.
+    func rollOverIfNeeded(now: Date = .now) {
+        guard !Calendar.current.isDate(today.date, inSameDayAs: now) else { return }
+        if !today.stops.isEmpty {
+            pastPlans.insert(
+                PastPlan(title: today.title, date: today.date, stopCount: today.stops.count, cost: today.totalCost),
+                at: 0
+            )
+            for place in today.stops.map(\.place) where !visited.contains(where: { $0.name == place.name }) {
+                visited.append(place)
+            }
+        }
+        today = .empty(for: now, budget: profile.defaultBudget)
+        legPaths = [:]
+        persist()
+    }
+
     // MARK: - Saved posts
 
     /// Pulls in anything the share extension queued while the app was in the background.
-    func ingestPendingShares() {
-        for share in ShareInbox.drain() {
-            save(url: share.url, sharedText: share.sharedText)
-        }
+    /// Returns the ids of the posts those shares map to, newest last.
+    @discardableResult
+    func ingestPendingShares() -> [UUID] {
+        ShareInbox.drain().map { save(url: $0.url, sharedText: $0.sharedText) }
     }
 
     @discardableResult
@@ -97,6 +142,7 @@ final class PlanditStore {
         if let existing = saved.first(where: { $0.url == url }) { return existing.id }
         let post = SavedPost(url: url, platform: SourcePlatform(url: url), caption: sharedText, savedAt: .now, status: .processing)
         saved.insert(post, at: 0)
+        persist()
         startExtraction(post.id)
         return post.id
     }
@@ -108,6 +154,7 @@ final class PlanditStore {
 
     func removePost(_ id: UUID) {
         saved.removeAll { $0.id == id }
+        persist()
     }
 
     private func startExtraction(_ id: UUID) {
@@ -127,13 +174,15 @@ final class PlanditStore {
     private func update(_ id: UUID, _ change: (inout SavedPost) -> Void) {
         guard let index = saved.firstIndex(where: { $0.id == id }) else { return }
         change(&saved[index])
+        persist()
     }
 
     // MARK: - Today's plan
 
     /// Appends a saved place to the end of today. TODO: let the planner re-optimize order, time and budget.
-    func addToToday(_ postID: UUID) {
-        guard let post = post(id: postID), let place = post.place, !isInToday(post) else { return }
+    @discardableResult
+    func addToToday(_ postID: UUID) -> UUID? {
+        guard let post = post(id: postID), let place = post.place, !isInToday(post) else { return nil }
         let start = (today.stops.last?.end ?? .now).addingTimeInterval(20 * 60)
         let stop = PlanStop(
             place: place,
@@ -146,12 +195,34 @@ final class PlanditStore {
         )
         today.stops.append(stop)
         rebuildLegs()
+        persist()
         Task { await loadRoutes() }
+        return stop.id
     }
 
     func removeStop(_ id: UUID) {
         today.stops.removeAll { $0.id == id }
         rebuildLegs()
+        persist()
+    }
+
+    /// "I'm here": this stop is happening now, everything before it is done, everything after is still planned.
+    func arrive(at stopID: UUID) {
+        guard let index = stopIndex(id: stopID) else { return }
+        setStatuses(doneThrough: index - 1, now: index)
+    }
+
+    /// "Done here": this stop and everything before it are done; the next stop becomes "now".
+    func complete(_ stopID: UUID) {
+        guard let index = stopIndex(id: stopID) else { return }
+        setStatuses(doneThrough: index, now: index + 1 < today.stops.count ? index + 1 : nil)
+    }
+
+    private func setStatuses(doneThrough: Int, now: Int?) {
+        for index in today.stops.indices {
+            today.stops[index].status = index <= doneThrough ? .done : (index == now ? .now : .upcoming)
+        }
+        persist()
     }
 
     /// Keeps existing legs between consecutive stops and estimates any new pairs.
@@ -160,5 +231,39 @@ final class PlanditStore {
         today.legs = zip(today.stops, today.stops.dropFirst()).map { from, to in
             existing.first { $0.fromStopID == from.id && $0.toStopID == to.id } ?? .estimate(from: from, to: to)
         }
+    }
+
+    // MARK: - Profile
+
+    func updateProfile(_ change: (inout UserProfile) -> Void) {
+        change(&profile)
+        if today.stops.isEmpty { today.budget = profile.defaultBudget }
+        persist()
+    }
+
+    // MARK: - Persistence
+
+    private var snapshot: StoreSnapshot {
+        StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited)
+    }
+
+    /// Coalesces bursts of changes into one write a moment later.
+    private func persist() {
+        guard let storage else { return }
+        let snapshot = snapshot
+        pendingSave?.cancel()
+        pendingSave = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            do { try storage.save(snapshot) } catch { print("Plandit: could not save state: \(error)") }
+        }
+    }
+
+    /// Writes any pending change immediately (call when the app leaves the foreground).
+    func flush() {
+        guard let storage else { return }
+        pendingSave?.cancel()
+        pendingSave = nil
+        try? storage.save(snapshot)
     }
 }

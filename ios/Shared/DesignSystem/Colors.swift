@@ -6,7 +6,7 @@ import UIKit
 // should be canvas, surface and ink, with emerald covering the least area.
 
 extension Color {
-    init(hex: UInt32) {
+    nonisolated init(hex: UInt32) {
         self.init(
             .sRGB,
             red: Double((hex >> 16) & 0xFF) / 255,
@@ -15,7 +15,9 @@ extension Color {
         )
     }
 
-    init(light: UInt32, dark: UInt32) {
+    /// Adaptive color. `nonisolated` matters: UIKit and MapKit resolve dynamic colors on background
+    /// threads (e.g. when drawing route lines), and a main-actor closure would trap there.
+    nonisolated init(light: UInt32, dark: UInt32) {
         self.init(uiColor: UIColor { traits in
             UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
         })
@@ -23,7 +25,7 @@ extension Color {
 }
 
 private extension UIColor {
-    convenience init(hex: UInt32) {
+    nonisolated convenience init(hex: UInt32) {
         self.init(
             red: CGFloat((hex >> 16) & 0xFF) / 255,
             green: CGFloat((hex >> 8) & 0xFF) / 255,

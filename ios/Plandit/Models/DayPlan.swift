@@ -2,7 +2,7 @@ import CoreLocation
 import Foundation
 
 /// One Plandit day: an ordered set of stops with the travel between them.
-struct DayPlan: Identifiable {
+struct DayPlan: Identifiable, Codable {
     var id = UUID()
     var date: Date
     var title: String
@@ -11,7 +11,7 @@ struct DayPlan: Identifiable {
     var legs: [TravelLeg]
 }
 
-struct PlanStop: Identifiable, Hashable {
+struct PlanStop: Identifiable, Hashable, Codable {
     var id = UUID()
     var place: Place
     var start: Date
@@ -38,7 +38,7 @@ enum StopStatus: String, Codable {
     }
 }
 
-struct TravelLeg: Identifiable, Hashable {
+struct TravelLeg: Identifiable, Hashable, Codable {
     var id = UUID()
     var fromStopID: UUID
     var toStopID: UUID
@@ -106,6 +106,14 @@ extension DayPlan {
     }
 
     var nextStop: PlanStop? { stops.first { $0.status == .upcoming } }
+
+    /// Every stop is done. Empty plans are never "complete".
+    var isComplete: Bool { !stops.isEmpty && stops.allSatisfy { $0.status == .done } }
+
+    /// A fresh day with no stops yet.
+    static func empty(for date: Date, budget: Double) -> DayPlan {
+        DayPlan(date: date, title: "Today", budget: budget, stops: [], legs: [])
+    }
 
     var savedPostCount: Int { stops.compactMap(\.sourcePostID).count }
 
