@@ -7,7 +7,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.manrope(.semiBold, size: 16))
-            .foregroundStyle(isEnabled ? Color.ink : Color.inkMuted)
+            .foregroundStyle(isEnabled ? Color.onEmerald : Color.inkMuted)
             .frame(maxWidth: .infinity, minHeight: 48)
             .padding(.horizontal, Space.md)
             .background(fill(isPressed: configuration.isPressed), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))

@@ -12,6 +12,7 @@ struct ExtractionResult {
 }
 
 /// Turns a shared TikTok / Reel / link into a place on the map.
+@MainActor
 protocol PlaceExtracting {
     func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult
 }

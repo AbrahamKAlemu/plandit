@@ -1,6 +1,7 @@
 import MapKit
 import SwiftUI
 
+@MainActor
 enum Manhattan {
     static let center = CLLocationCoordinate2D(latitude: 40.7831, longitude: -73.9712)
 
@@ -28,6 +29,7 @@ enum Manhattan {
 }
 
 /// The map's on-screen geometry, used to frame coordinates in the part of the map the sheet doesn't cover.
+@MainActor
 struct MapViewport: Equatable {
     var size: CGSize = .zero
     var topInset: CGFloat = 0
