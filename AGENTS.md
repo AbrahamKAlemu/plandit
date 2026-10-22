@@ -18,9 +18,13 @@ nearby and on budget, shown on a map.
   verification, lessons).
 
 ## How to run it
-- Install: TBD. No app code yet; we pick the stack at build kickoff (Oct 9).
-- Run locally: TBD
-- Test: TBD
+- Stack: SwiftUI iOS app (`ios/`), Django + Django REST Framework API on Supabase Postgres with
+  Supabase Auth (`backend/`), static landing site on Vercel (`website/`).
+- Install: `cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt`.
+  iOS: see `ios/README.md`.
+- Run locally: `cd backend && docker compose up -d && python manage.py migrate && python manage.py runserver 8001`.
+  Website: `cd website && python3 -m http.server 8000`. Details in `backend/README.md`.
+- Test: `cd backend && pytest` (needs the compose Postgres). Lint: `ruff check . && ruff format --check .`
 - Feature Forge skills are installed in `.claude/skills/` (feature-forge, brief, architecture,
   plan, whetstone). To update them, clone https://github.com/kenxle/feature-forge, move the old
   copies out, and run `python3 scripts/install.py /absolute/path/to/this/repo` from the clone.
