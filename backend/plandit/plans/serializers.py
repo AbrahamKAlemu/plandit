@@ -91,3 +91,12 @@ class AddStopSerializer(serializers.Serializer):
 
 class ReorderSerializer(serializers.Serializer):
     stop_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
+
+
+class BuildPlanSerializer(serializers.Serializer):
+    saved_post_ids = serializers.ListField(child=serializers.UUIDField(), required=False, default=list, max_length=25)
+    start = serializers.DateTimeField(required=False)
+    end = serializers.DateTimeField(required=False)  # free until; nothing is planned past it
+    budget = serializers.DecimalField(max_digits=8, decimal_places=2, required=False, min_value=0)
+    mode = serializers.ChoiceField(choices=["add", "replace"], default="add")
+    dry_run = serializers.BooleanField(default=False)

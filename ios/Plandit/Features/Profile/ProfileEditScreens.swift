@@ -41,7 +41,7 @@ struct BudgetScreen: View {
     }
 
     private var budget: Binding<Double> {
-        Binding(get: { store.profile.defaultBudget }, set: set)
+        Binding(get: { store.profile.defaultBudget }, set: { set($0) })
     }
 
     private func set(_ amount: Double) {

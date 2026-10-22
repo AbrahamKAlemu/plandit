@@ -124,6 +124,7 @@ Unauthenticated calls get `401`; another user's objects return `404`.
 | POST | `/api/plans/<id>/stops/` | `{"saved_post_id"}` or `{"place_id"}` plus optional `start`, `duration_minutes`, `estimated_cost`, `note` |
 | POST | `/api/plans/<id>/stops/reorder/` | `{"stop_ids":[...]}` every stop exactly once |
 | PATCH, DELETE | `/api/plans/<id>/stops/<stop_id>/` | PATCH `status`, `start`, `duration_minutes`, `estimated_cost`, `note` |
+| POST | `/api/plans/<id>/build/` | the planner: `{"saved_post_ids":[...], "start", "end", "budget", "mode":"add"\|"replace", "dry_run"}`; returns the plan plus `skipped` (`closed`, `over_budget`, `out_of_time`, `evening_only`). `dry_run` previews without saving. Same rules as the iOS planner; see `plandit/plans/planner.py` |
 
 Every plan mutation returns the full plan, with legs rebuilt between consecutive stops.
 

@@ -74,6 +74,7 @@ Asset sources:
 ## Flows worth knowing
 
 - **Share → Plandit → app:** when the app comes back to the foreground it drains the share inbox, switches to Saved, and opens the new post so you can watch it get mapped. Pasting a link does the same.
+- **+ → Plan a day:** the emerald + in the tab bar (on every tab) opens the planner. Pick saved places (each shows when it was saved), set a start time, an optional "Free until" and a budget, and a live preview shows the order, times, cost and anything left out (closed, over budget, or past the end of the day). "Add to today" keeps stops that are done or underway and re-orders the rest with the new picks; "Start over" replaces the day. The logic lives in `Services/DayPlanner.swift`; `backend/plandit/plans/planner.py` follows the same rules. Launch with `-openPlanner YES` to start in the planner.
 - **Saved → Today:** "Add to today's plan" appends the stop, confirms in place, and offers "View today's plan". Long-press a saved post for the same actions.
 - **Moving through the day:** on a stop, "I'm here" makes it the current stop (earlier stops become done); "Done here" finishes it and makes the next one current. The timeline rail, map route and pins follow. Long-press a timeline row for the same actions. When every stop is done, Today shows a completion card.
 - **New day:** a plan belongs to one date. On the first launch of a new day the old plan is filed under Recent plans and Today starts empty with the default budget.
@@ -83,7 +84,7 @@ Asset sources:
 
 - **Data:** `SampleData` seeds the first launch. Stats on Profile are still mock values.
 - **Extraction:** `StubPlaceExtractor` fetches real TikTok oEmbed metadata (caption, author, thumbnail), then assigns a random sample place. Replace it with the backend (caption, transcript and on-screen text → place).
-- **Planner:** "Add to today's plan" appends the stop with an estimated travel leg. It does not re-optimize order, time or budget.
+- **Planner:** The + planner orders stops by least travel (every order up to 7 stops, a fast search above that), keeps visits inside closing times read from `hours` ("Open until 9 PM"), and stays on budget including subway fares. Nightlife waits for 8 PM (or is left out if the day ends earlier), and "Free until" caps the day. It doesn't know other opening times yet, and travel times are still the straight-line estimate. The long-press "Add to today's plan" still just appends.
 - **Transit:** MapKit has no transit geometry, so transit legs are drawn as straight dotted lines. Walking legs use real MapKit walking routes.
 - **Dark mode:** Provisional dark tokens are documented in `docs/features/dark-mode/`. The canonical
   style guide remains unchanged until the design owners approve those tokens.

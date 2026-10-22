@@ -35,6 +35,8 @@ final class SheetRouter {
     var tab: AppTab = .launchTab
     var todayPath: [UUID] = []
     var savedPath: [UUID] = []
+    /// The "Plan a day" sheet behind the + in the tab bar. Launch with `-openPlanner YES` to start there.
+    var isPlanning = UserDefaults.standard.bool(forKey: "openPlanner")
 
     func selection(in tab: AppTab) -> UUID? {
         switch tab {
@@ -61,6 +63,16 @@ final class SheetRouter {
             tab = .today
             todayPath = [id]
         }
+    }
+
+    func startPlanning() {
+        isPlanning = true
+    }
+
+    /// After a plan is built: land on Today so the new route shows on the map.
+    func finishPlanning() {
+        isPlanning = false
+        show(.today)
     }
 
     func showPost(_ id: UUID) {
