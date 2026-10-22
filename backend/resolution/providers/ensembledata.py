@@ -13,6 +13,7 @@ ENSEMBLEDATA_POST_INFO_URL = "https://ensembledata.com/apis/tt/post/info"
 ALLOWED_SUBTITLE_HOSTS = {"v16m-default.akamaized.net"}
 ALLOWED_SUBTITLE_HOST_SUFFIXES = (
     ".tiktokcdn.com",
+    ".tiktokcdn-eu.com",
     ".tiktokv.com",
     ".byteoversea.com",
     ".ibytedtos.com",

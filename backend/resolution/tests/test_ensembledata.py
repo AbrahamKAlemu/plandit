@@ -115,6 +115,9 @@ Union Square
             "https://p16-sign-va.tiktokcdn.com/captions/english.json"
         )
         _validate_external_https_url(
+            "https://v16-cla.tiktokcdn-eu.com/captions/english.json"
+        )
+        _validate_external_https_url(
             "https://v16m-default.akamaized.net/captions/english.json"
         )
 
