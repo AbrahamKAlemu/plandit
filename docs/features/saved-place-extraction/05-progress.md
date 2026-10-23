@@ -62,6 +62,8 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Video is temporary, never uploaded, and deleted after evidence extraction | Selected |
 | Build compliant core with an unused scraper-provider seam; no Apify dependency or calls | Selected |
 | Mandatory candidate confirmation | Selected |
+| Show up to three compact found-place cards with name and one-line address | Selected |
+| “Not the right one?” opens separate optional name and address fields; at least one is required | Selected |
 | Video results are candidate-first; raw OCR/transcript stays hidden unless the user reviews or corrects extracted details | Selected |
 | Local-first atomic JSON snapshot shared with the planner | Selected; supersedes the extraction-only SwiftData runtime |
 | Discrete emerald cells/circles; no gradient | Selected |
@@ -117,7 +119,8 @@ On October 22, 2026, the development adapter processed
 | Implement temporary on-device video evidence | Complete | AVFoundation frame sampling, Vision OCR, supported on-device Speech transcription, review-before-resolution, and cleanup |
 | Add direct Photos video selection | Complete | Native Photos picker plus Files fallback, pre-copy type/size validation, managed temporary storage, visible extraction errors, and picker UI coverage |
 | Make simulator transcription testable | Complete | On-device Speech remains first; Debug simulator builds may use the owner-approved Apple network fallback, OCR strings provide recognition context, and unavailable transcription is visible |
-| Simplify video result review | Complete | Video evidence resolves directly to suggested places, the first result is marked Best match, confirmation remains mandatory, and None of these / Review extracted details preserve correction |
+| Simplify video result review | Complete | Video evidence resolves directly to up to three compact found-place cards; confirmation remains mandatory, and “Not the right one?” opens a structured name/address search |
+| Verify structured place correction | Complete | UI coverage submits both name and address, verifies found-place results return, caps confirmation cards at three, and confirms the place remains unavailable to planning until selection |
 | Implement Django resolution contract | Complete | Strict request validation, redacted operational records, stable idempotent response replay, admin, OpenAPI, and PostgreSQL production configuration |
 | Add arbitrary-place prototype fallback | Complete | TikTok oEmbed captions and user-approved evidence fall back to on-device MapKit search when fixture aliases do not match; Instagram URL-only still requires an approved metadata source |
 | Verify approved user flow | Complete | URL/evidence to candidate to confirmation to relaunch UI test passes on iPhone 16 Pro / iOS 18.6 |
@@ -152,6 +155,7 @@ and does not block the approved core milestone.
 | `79165af` | Cross-URL cache isolation |
 | `7c1e7c9` | Address-first MapKit resolution |
 | `29ba56f` | Extracted street-number validation |
+| `4212153` | Compact found-place confirmation cards and structured name/address correction |
 
 ## Planner integration
 
@@ -177,7 +181,7 @@ Integration verification:
 - iOS application build passes.
 - All `PlanditTests` unit tests pass, including old-snapshot decoding, confirmation-to-planner
   eligibility, and stale-snapshot/share-acknowledgement regression coverage.
-- `SavedPostExtractionUITests` and `PlanFlowTests` pass on iPhone 16 Pro / iOS 18.6.
+- `SavedPlaceExtractionFlowTests` and `PlanFlowTests` pass on iPhone 16 Pro / iOS 18.6.
 - All 18 extraction backend tests pass.
 - All 40 pure-Python planner tests pass.
 - Ruff, Django system checks, migration drift checks, and `git diff --check` pass.
