@@ -2,7 +2,7 @@ import XCTest
 @testable import Plandit
 
 final class VideoEvidenceTests: XCTestCase {
-    func testCombinesAndDeduplicatesEvidence() {
+    @MainActor func testCombinesAndDeduplicatesEvidence() {
         let evidence = VideoEvidence.combine(
             frameText: ["Levain Bakery", "LEVain bakery", "Upper West Side"],
             transcript: "Try Levain Bakery on the Upper West Side"
@@ -13,7 +13,7 @@ final class VideoEvidenceTests: XCTestCase {
         XCTAssertEqual(evidence.components(separatedBy: "\n").filter { $0 == "Levain Bakery" }.count, 1)
     }
 
-    func testTemporaryMediaIsRemoved() throws {
+    @MainActor func testTemporaryMediaIsRemoved() throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "TemporaryMediaStoreTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         let source = root.appending(path: "source.mov")
@@ -29,7 +29,7 @@ final class VideoEvidenceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: staged.path))
     }
 
-    func testOversizedVideoIsRejectedBeforeStaging() throws {
+    @MainActor func testOversizedVideoIsRejectedBeforeStaging() throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "OversizedVideoTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         let source = root.appending(path: "large.mov")
@@ -48,7 +48,7 @@ final class VideoEvidenceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.root.path))
     }
 
-    func testSilentVideoSkipsSpeechRecognition() {
+    @MainActor func testSilentVideoSkipsSpeechRecognition() {
         XCTAssertFalse(VideoEvidenceExtractor.shouldAttemptTranscription(audioTrackCount: 0))
         XCTAssertTrue(VideoEvidenceExtractor.shouldAttemptTranscription(audioTrackCount: 1))
     }

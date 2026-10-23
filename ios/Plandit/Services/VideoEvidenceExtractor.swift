@@ -45,7 +45,7 @@ struct VideoEvidence: Sendable {
     }
 }
 
-struct TemporaryMediaStore {
+nonisolated struct TemporaryMediaStore {
     private static let maximumBytes: Int64 = 250 * 1024 * 1024
     let root: URL
 
@@ -156,7 +156,10 @@ struct VideoEvidenceExtractor {
         audioTrackCount > 0
     }
 
-    private func recognizeFrameText(asset: AVAsset, duration: TimeInterval) async throws -> [String] {
+    /// Runs off the main actor: AVAssetImageGenerator isn't Sendable and its async API hops threads,
+    /// so the generator must live and die on one background task.
+    @concurrent
+    private nonisolated func recognizeFrameText(asset: AVAsset, duration: TimeInterval) async throws -> [String] {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 1280, height: 1280)

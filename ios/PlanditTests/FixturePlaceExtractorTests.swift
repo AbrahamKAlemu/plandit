@@ -2,7 +2,7 @@ import XCTest
 @testable import Plandit
 
 final class FixturePlaceExtractorTests: XCTestCase {
-    func testKnownEvidenceReturnsMatchingPlaceFirst() async throws {
+    @MainActor func testKnownEvidenceReturnsMatchingPlaceFirst() async throws {
         let extractor = FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil)
         let url = URL(string: "https://www.tiktok.com/@creator/video/123")!
 
@@ -15,7 +15,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertLessThanOrEqual(result.candidates.count, 3)
     }
 
-    func testUnknownEvidenceNeedsMoreDetails() async throws {
+    @MainActor func testUnknownEvidenceNeedsMoreDetails() async throws {
         let extractor = FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil)
         let url = URL(string: "https://www.instagram.com/reel/ABC/")!
 
@@ -24,7 +24,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertTrue(result.candidates.isEmpty)
     }
 
-    func testTikTokMetadataFallsBackToPlaceSearch() async throws {
+    @MainActor func testTikTokMetadataFallsBackToPlaceSearch() async throws {
         let candidate = PlaceCandidate(
             id: "mapkit:joes-pizza",
             place: Place(
@@ -58,7 +58,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(result.caption, "You have to try Joe's Pizza in Greenwich Village")
     }
 
-    func testSearchOnlyEvidenceIsNotReturnedAsPersistableCaption() async throws {
+    @MainActor func testSearchOnlyEvidenceIsNotReturnedAsPersistableCaption() async throws {
         let candidate = PlaceCandidate(
             id: "mapkit:chubby-bowls",
             place: SampleData.losTacos,
@@ -90,7 +90,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertNil(result.caption)
     }
 
-    func testMetadataProviderFallsBackAfterPrimaryFailure() async throws {
+    @MainActor func testMetadataProviderFallsBackAfterPrimaryFailure() async throws {
         let expected = SocialMetadata(
             title: "Fallback caption",
             authorHandle: "@creator",
@@ -108,7 +108,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(metadata?.title, expected.title)
     }
 
-    func testDailyLimitSurvivesAnEmptyTikTokFallback() async {
+    @MainActor func testDailyLimitSurvivesAnEmptyTikTokFallback() async {
         let provider = FallbackSocialMetadataProvider(
             primary: QuotaMetadataProvider(),
             fallback: StubMetadataProvider(
@@ -130,7 +130,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         }
     }
 
-    func testCaptionFallbackStillWorksDuringDailyLimit() async throws {
+    @MainActor func testCaptionFallbackStillWorksDuringDailyLimit() async throws {
         let provider = FallbackSocialMetadataProvider(
             primary: QuotaMetadataProvider(),
             fallback: StubMetadataProvider(
@@ -149,7 +149,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(metadata?.title, "Levain Bakery on the Upper West Side")
     }
 
-    func testSharedPlaceTextStillResolvesDuringDailyLimit() async throws {
+    @MainActor func testSharedPlaceTextStillResolvesDuringDailyLimit() async throws {
         let extractor = FixturePlaceExtractor(
             metadataProvider: FallbackSocialMetadataProvider(
                 primary: QuotaMetadataProvider(),
@@ -172,7 +172,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(result.candidates.first?.place.name, "Levain Bakery")
     }
 
-    func testUrlOnlyShareStillReportsDailyLimit() async {
+    @MainActor func testUrlOnlyShareStillReportsDailyLimit() async {
         let extractor = FixturePlaceExtractor(
             metadataProvider: QuotaMetadataProvider(),
             placeSearcher: nil
@@ -189,7 +189,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         }
     }
 
-    func testDevelopmentEvidenceRequestBypassesURLCache() throws {
+    @MainActor func testDevelopmentEvidenceRequestBypassesURLCache() throws {
         let request = try XCTUnwrap(DevelopmentSocialEvidenceClient.request(
             for: URL(string: "https://www.tiktok.com/t/ZTfDj7vmC/")!
         ))
@@ -202,7 +202,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testProductionEvidenceRequestUsesConfiguredEndpointAndBearerToken() throws {
+    @MainActor func testProductionEvidenceRequestUsesConfiguredEndpointAndBearerToken() throws {
         let endpoint = URL(string: "https://api.plandit.example/v1/social-evidence")!
         let request = try XCTUnwrap(DevelopmentSocialEvidenceClient.request(
             for: URL(string: "https://www.tiktok.com/t/ZTfDj7vmC/")!,
@@ -217,7 +217,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testDevelopmentEvidenceClientRecognizesDailyLimit() {
+    @MainActor func testDevelopmentEvidenceClientRecognizesDailyLimit() {
         let data = Data(
             """
             {"error":{"code":"provider_quota_exceeded"}}
@@ -233,7 +233,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testQueryBuilderPrioritizesPlaceAfterCue() {
+    @MainActor func testQueryBuilderPrioritizesPlaceAfterCue() {
         let queries = PlaceQueryBuilder.queries(
             from: "Best slice in NYC at Joe's Pizza #foodtok"
         )
@@ -241,7 +241,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(queries.first, "Joe's Pizza foodtok")
     }
 
-    func testQueryBuilderExtractsPlaceAfterCheckOut() {
+    @MainActor func testQueryBuilderExtractsPlaceAfterCheckOut() {
         let queries = PlaceQueryBuilder.queries(
             from: "Come with me to check out Chubby Bowls in Union Square! Great food."
         )
@@ -249,7 +249,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(queries.first, "Chubby Bowls in Union Square")
     }
 
-    func testQueryBuilderPrioritizesCompleteCaptionAddress() {
+    @MainActor func testQueryBuilderPrioritizesCompleteCaptionAddress() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             NYC is too expensive is back! $7 chicken bowl at this Korean spot is so fire you need to try it NOW  Lululala  139 Hester st  New York, NY
@@ -260,7 +260,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(queries.first, "139 Hester st New York, NY")
     }
 
-    func testQueryBuilderPreservesCueAcrossCaptionFieldSeparator() {
+    @MainActor func testQueryBuilderPreservesCueAcrossCaptionFieldSeparator() {
         let queries = PlaceQueryBuilder.queries(
             from: "Come with me to check out  Chubby Bowls in Union Square"
         )
@@ -268,7 +268,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(queries.first, "Chubby Bowls in Union Square")
     }
 
-    func testQueryBuilderAssociatesBusinessMentionWithDistantAddress() {
+    @MainActor func testQueryBuilderAssociatesBusinessMentionWithDistantAddress() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             Must Try Dominican Street Food in Brooklyn!  @Antojitos BK is a Dominican restaurant in Brooklyn serving fire dishes.  SR Rating: A.  📍224 4th Avenue Brooklyn, NY 11215
@@ -283,7 +283,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testQueryBuilderDoesNotTreatCreatorHandleAsVenue() {
+    @MainActor func testQueryBuilderDoesNotTreatCreatorHandleAsVenue() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             @Antojitos BK is a Dominican restaurant in Brooklyn.  @foodwithsam is the creator reviewing this restaurant.  224 4th Avenue Brooklyn, NY 11215
@@ -296,7 +296,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testQueryBuilderPairsEachVenueWithNearestAddress() {
+    @MainActor func testQueryBuilderPairsEachVenueWithNearestAddress() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             @Cafe One is a neighborhood cafe.  1 First St New York, NY 10001
@@ -312,7 +312,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testQueryBuilderPreservesRepeatedVenuePositionForPairing() {
+    @MainActor func testQueryBuilderPreservesRepeatedVenuePositionForPairing() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             @Cafe One is a neighborhood cafe. @Cafe Two is a neighborhood cafe.
@@ -323,7 +323,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(queries.first, "1 First St New York, NY 10001")
     }
 
-    func testQueryBuilderUsesSquareAddressIndependently() {
+    @MainActor func testQueryBuilderUsesSquareAddressIndependently() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             Brooklyn, NY — we had to see what the hype was about. We stopped by Fat Fowl, a Caribbean spot inside DeKalb Market Hall.
@@ -341,7 +341,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testQueryBuilderSearchesCompleteAddressWithoutPlaceName() {
+    @MainActor func testQueryBuilderSearchesCompleteAddressWithoutPlaceName() {
         let queries = PlaceQueryBuilder.queries(
             from: "The location is 445 Albee Square Brooklyn, NY 11201."
         )
@@ -349,7 +349,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(queries.first, "445 Albee Square Brooklyn, NY 11201")
     }
 
-    func testQueryBuilderRecognizesPinnedPlaceAndExactAddress() {
+    @MainActor func testQueryBuilderRecognizesPinnedPlaceAndExactAddress() {
         let queries = PlaceQueryBuilder.queries(
             from: """
             Original deal — $68 Sunday through Thursday. Kings of Kobe 📍650 W 42nd St, New York, NY 10036
@@ -366,7 +366,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
-    func testAddressCandidateMustMatchExtractedHouseNumber() {
+    @MainActor func testAddressCandidateMustMatchExtractedHouseNumber() {
         let number = PlaceQueryBuilder.streetNumber(
             from: "Kings of Kobe 650 W 42nd St, New York, NY 10036"
         )
@@ -386,7 +386,7 @@ final class FixturePlaceExtractorTests: XCTestCase {
         ))
     }
 
-    func testStreetNumberIgnoresPricesAndSupportsRanges() {
+    @MainActor func testStreetNumberIgnoresPricesAndSupportsRanges() {
         XCTAssertNil(PlaceQueryBuilder.streetNumber(
             from: "Only $68 dinner on West 42nd St"
         ))

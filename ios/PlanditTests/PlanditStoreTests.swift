@@ -115,7 +115,7 @@ final class PlanditStoreTests: XCTestCase {
         XCTAssertEqual(loaded.profile.homeBase, "Harlem")
     }
 
-    func testSavedPostDecodesSnapshotsFromBeforeExtractionFieldsWereAdded() throws {
+    @MainActor func testSavedPostDecodesSnapshotsFromBeforeExtractionFieldsWereAdded() throws {
         let original = SampleData.levainPost
         let encoded = try JSONEncoder().encode(original)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])

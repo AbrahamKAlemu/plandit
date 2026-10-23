@@ -1,9 +1,8 @@
 import XCTest
 @testable import Plandit
 
-@MainActor
 final class SavedPostPersistenceTests: XCTestCase {
-    func testPostSurvivesRepositoryReload() throws {
+    @MainActor func testPostSurvivesRepositoryReload() throws {
         let persistence = try SavedPostPersistence(inMemory: true)
         let post = SavedPost(
             url: URL(string: "https://www.tiktok.com/@creator/video/123")!,
@@ -28,7 +27,7 @@ final class SavedPostPersistenceTests: XCTestCase {
         XCTAssertEqual(try persistence.load().first, post)
     }
 
-    func testCanonicalURLUpsertsInsteadOfDuplicating() throws {
+    @MainActor func testCanonicalURLUpsertsInsteadOfDuplicating() throws {
         let persistence = try SavedPostPersistence(inMemory: true)
         var post = SavedPost(
             url: URL(string: "https://instagram.com/reel/ABC")!,

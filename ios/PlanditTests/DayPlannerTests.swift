@@ -9,7 +9,7 @@ final class DayPlannerTests: XCTestCase {
         return calendar
     }()
 
-    private func time(_ hour: Int, _ minute: Int = 0, dayOffset: Int = 0) -> Date {
+    @MainActor private func time(_ hour: Int, _ minute: Int = 0, dayOffset: Int = 0) -> Date {
         Self.calendar.date(from: DateComponents(year: 2026, month: 10, day: 22 + dayOffset, hour: hour, minute: minute))!
     }
 

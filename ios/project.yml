@@ -55,7 +55,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Production extraction (see README). These are public values; the provider token stays on the server.
-        PLANDIT_API_BASE_URL: ""
+        PLANDIT_API_BASE_URL: https://plandit-api.onrender.com
         PLANDIT_SUPABASE_URL: https://bkjepupqdwkraajyewyy.supabase.co
         PLANDIT_SUPABASE_ANON_KEY: sb_publishable_tHfWoU3B9FYYEsqHvOxk5g_bZAyunDc
     dependencies:

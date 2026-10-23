@@ -5,5 +5,5 @@
 // and returns a 2xx status only after the email is stored (for example a
 // Formspree, ConvertKit/Kit, Mailchimp or Loops form endpoint, or your own API).
 window.PLANDIT_WAITLIST = {
-  endpoint: ""
+  endpoint: "https://plandit-api.onrender.com/api/waitlist/"
 };

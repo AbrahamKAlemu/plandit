@@ -1,8 +1,7 @@
 import XCTest
 
-@MainActor
 final class SavedPlaceExtractionFlowTests: XCTestCase {
-    func testVideoCanBeChosenFromPhotos() {
+    @MainActor func testVideoCanBeChosenFromPhotos() {
         let app = XCUIApplication()
         app.launchArguments = [
             "-startTab", "saved",
@@ -20,7 +19,7 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         XCTAssertFalse(save.frame.intersects(cancel.frame))
     }
 
-    func testPasteConfirmAndRelaunchPersistsPlace() {
+    @MainActor func testPasteConfirmAndRelaunchPersistsPlace() {
         let app = XCUIApplication()
         app.launchArguments = [
             "-startTab", "saved",
@@ -64,7 +63,7 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Levain Bakery"].firstMatch.waitForExistence(timeout: 5))
     }
 
-    func testNotRightPlaceOpensNameAndAddressSearch() {
+    @MainActor func testNotRightPlaceOpensNameAndAddressSearch() {
         let app = XCUIApplication()
         app.launchArguments = [
             "-startTab", "saved",

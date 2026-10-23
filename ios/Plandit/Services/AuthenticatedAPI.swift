@@ -128,7 +128,8 @@ actor SupabaseAnonymousSession: AccessTokenProviding {
     }
 }
 
-private struct SessionKeychain: Sendable {
+/// Nonisolated: used from the SupabaseAnonymousSession actor, never from the main actor.
+nonisolated private struct SessionKeychain: Sendable {
     private let service = "com.plandit.app.supabase"
     private let account = "anonymous-session"
 
@@ -174,7 +175,7 @@ private struct SessionKeychain: Sendable {
 }
 
 private extension JSONDecoder {
-    static var supabase: JSONDecoder {
+    nonisolated static var supabase: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder

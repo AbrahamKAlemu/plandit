@@ -732,6 +732,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				PLANDIT_API_BASE_URL = "https://plandit-api.onrender.com";
+				PLANDIT_SUPABASE_ANON_KEY = sb_publishable_tHfWoU3B9FYYEsqHvOxk5g_bZAyunDc;
+				PLANDIT_SUPABASE_URL = "https://bkjepupqdwkraajyewyy.supabase.co";
 				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -822,6 +825,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				PLANDIT_API_BASE_URL = "https://plandit-api.onrender.com";
+				PLANDIT_SUPABASE_ANON_KEY = sb_publishable_tHfWoU3B9FYYEsqHvOxk5g_bZAyunDc;
+				PLANDIT_SUPABASE_URL = "https://bkjepupqdwkraajyewyy.supabase.co";
 				PRODUCT_BUNDLE_IDENTIFIER = com.plandit.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
