@@ -217,7 +217,7 @@ final class PlanditStore {
             guard let candidate = post.candidates.first(where: { $0.id == candidateID }) else { return }
             post.place = candidate.place
             post.estimatedCost = candidate.estimatedCost
-            post.status = candidate.place.hours == nil ? .needsReview : .ready
+            post.status = .ready
             post.candidates = []
         }
     }

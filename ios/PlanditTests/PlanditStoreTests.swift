@@ -158,6 +158,7 @@ final class PlanditStoreTests: XCTestCase {
 
         store.confirm(postID: post.id, candidateID: candidate.id)
 
+        XCTAssertEqual(store.post(id: post.id)?.status, .ready)
         XCTAssertEqual(store.plannablePosts.map { $0.id }, [post.id])
         XCTAssertEqual(
             store.buildPlan(postIDs: [post.id], start: SampleData.at(10), budget: 30, mode: PlanditStore.PlanMode.replace).stops.first?.place,

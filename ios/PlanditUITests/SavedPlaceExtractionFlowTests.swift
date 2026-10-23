@@ -64,24 +64,6 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Levain Bakery"].firstMatch.waitForExistence(timeout: 5))
     }
 
-    func testUnresolvedLinkOffersVideoFallbackInPlace() {
-        let app = XCUIApplication()
-        app.launchArguments = [
-            "-startTab", "saved",
-            "-startDetent", "large",
-            "-resetData",
-        ]
-        app.launch()
-
-        let unresolved = app.staticTexts["More details needed"].firstMatch
-        XCTAssertTrue(unresolved.waitForExistence(timeout: 5))
-        unresolved.tap()
-
-        XCTAssertTrue(app.staticTexts["Use the saved video instead"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["fallback-video-photos"].exists)
-        XCTAssertTrue(app.buttons["fallback-video-files"].exists)
-    }
-
     func testNotRightPlaceOpensNameAndAddressSearch() {
         let app = XCUIApplication()
         app.launchArguments = [

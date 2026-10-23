@@ -43,8 +43,8 @@ enum SampleData {
     static let failedPost = SavedPost(url: URL(string: "https://www.instagram.com/reel/SAMPLE0012/")!, platform: .instagram, creatorHandle: "@city.moods", caption: "POV: Sunday reset", savedAt: daysAgo(7), status: .failed)
 
     static let savedPosts: [SavedPost] = [
-        processingPost, levainPost, tacosPost, highLinePost, littleIslandPost, pastryPost,
-        smallsPost, failedPost, metPost, cloistersPost, russPost, tramPost,
+        levainPost, tacosPost, highLinePost, littleIslandPost, pastryPost,
+        smallsPost, metPost, cloistersPost, russPost, tramPost,
     ]
 
     // MARK: - Today
