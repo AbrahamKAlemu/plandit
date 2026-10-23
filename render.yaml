@@ -8,7 +8,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     region: virginia # same coast as the Supabase project (us-east-1)
-    plan: starter # free instances sleep after 15 min, which makes extraction time out
+    plan: free # sleeps after 15 min idle (30-60 s cold start); switch to starter when testers grow
     healthCheckPath: /api/health/
     autoDeploy: true
     envVars:
