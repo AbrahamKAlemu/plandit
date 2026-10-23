@@ -45,6 +45,7 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBackground
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIRequiresFullScreen: true # portrait-only; opts out of iPad multitasking, which App Store validation otherwise requires
     entitlements:
       path: Plandit/Resources/Plandit.entitlements
       properties:
