@@ -13,6 +13,11 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         app.buttons["Add a link"].tap()
 
         XCTAssertTrue(app.buttons["choose-video-photos"].waitForExistence(timeout: 5))
+        let save = app.buttons["save-social-link"]
+        let cancel = app.buttons["cancel-add-link"]
+        XCTAssertTrue(save.exists)
+        XCTAssertTrue(cancel.isHittable)
+        XCTAssertFalse(save.frame.intersects(cancel.frame))
     }
 
     func testPasteConfirmAndRelaunchPersistsPlace() {
