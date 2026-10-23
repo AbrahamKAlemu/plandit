@@ -8,13 +8,7 @@ struct ProfileSheet: View {
         let profile = store.profile
         VStack(spacing: 0) {
             SheetHeader(title: "Profile") {
-                NavigationLink {
-                    SettingsScreen()
-                } label: {
-                    CircleIconLabel(icon: .settings)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
+                EmptyView()
             }
 
             ScrollView {
