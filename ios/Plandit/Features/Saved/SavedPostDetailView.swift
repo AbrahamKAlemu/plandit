@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SavedPostDetailView: View {
     let postID: UUID
@@ -7,6 +9,10 @@ struct SavedPostDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var evidenceText = ""
     @State private var isReviewingExtractedDetails = false
+    @State private var selectedVideo: PhotosPickerItem?
+    @State private var isChoosingVideo = false
+    @State private var isProcessingVideo = false
+    @State private var videoErrorMessage: String?
 
     var body: some View {
         if let post = store.post(id: postID) {
@@ -32,6 +38,7 @@ struct SavedPostDetailView: View {
                         ) {
                             store.submitEvidence(postID: post.id, text: evidenceText)
                         }
+                        videoFallback(for: post)
                     case .needsConfirmation:
                         CandidateList(
                             post: post,
@@ -69,6 +76,7 @@ struct SavedPostDetailView: View {
                         ) {
                             store.submitEvidence(postID: post.id, text: evidenceText)
                         }
+                        videoFallback(for: post)
                     case .ready, .needsReview:
                         if let place = post.place {
                             PlaceSummary(post: post, place: place)
@@ -136,6 +144,37 @@ struct SavedPostDetailView: View {
                     evidenceText = post.caption ?? ""
                 }
             }
+            .onChange(of: selectedVideo) { _, item in
+                guard let item else { return }
+                isProcessingVideo = true
+                videoErrorMessage = nil
+                Task {
+                    do {
+                        guard let video = try await item.loadTransferable(type: PickedVideo.self) else {
+                            throw VideoEvidenceError.unsupportedType
+                        }
+                        defer { try? FileManager.default.removeItem(at: video.url) }
+                        try await store.processVideo(postID: post.id, fileURL: video.url)
+                    } catch {
+                        videoErrorMessage = error.localizedDescription
+                    }
+                    selectedVideo = nil
+                    isProcessingVideo = false
+                }
+            }
+            .fileImporter(
+                isPresented: $isChoosingVideo,
+                allowedContentTypes: [.movie],
+                allowsMultipleSelection: false
+            ) { result in
+                guard case .success(let urls) = result, let url = urls.first else {
+                    if case .failure(let error) = result {
+                        videoErrorMessage = error.localizedDescription
+                    }
+                    return
+                }
+                processVideo(postID: post.id, at: url)
+            }
             .alert(
                 "Saved place unavailable",
                 isPresented: Binding(
@@ -150,6 +189,69 @@ struct SavedPostDetailView: View {
             .sensoryFeedback(.success, trigger: isInToday) { _, added in added }
         } else {
             ContentUnavailableView("Removed", image: "Icons/bookmark", description: Text("This post is no longer saved."))
+        }
+    }
+
+    @ViewBuilder
+    private func videoFallback(for post: SavedPost) -> some View {
+        if post.platform != .video {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text("Use the saved video instead")
+                        .font(.sectionHeading)
+                        .foregroundStyle(.ink)
+                    Text("Plandit reads it on this device and deletes the temporary copy.")
+                        .font(.bodyText)
+                        .foregroundStyle(.inkMuted)
+                }
+
+                PhotosPicker(
+                    selection: $selectedVideo,
+                    matching: .videos,
+                    photoLibrary: .shared()
+                ) {
+                    Text("Choose from Photos")
+                }
+                .buttonStyle(.secondary)
+                .disabled(isProcessingVideo)
+                .accessibilityIdentifier("fallback-video-photos")
+
+                Button("Choose from Files") {
+                    isChoosingVideo = true
+                }
+                .buttonStyle(.plain)
+                .disabled(isProcessingVideo)
+                .accessibilityIdentifier("fallback-video-files")
+
+                if isProcessingVideo {
+                    HStack(spacing: Space.xs) {
+                        ProgressView().controlSize(.small)
+                        Text("Reading video…")
+                    }
+                    .font(.metadata)
+                    .foregroundStyle(.inkMuted)
+                }
+
+                if let videoErrorMessage {
+                    Text(videoErrorMessage)
+                        .font(.metadata)
+                        .foregroundStyle(.error)
+                }
+            }
+            .planditCard()
+        }
+    }
+
+    private func processVideo(postID: UUID, at url: URL) {
+        isProcessingVideo = true
+        videoErrorMessage = nil
+        Task {
+            do {
+                try await store.processVideo(postID: postID, fileURL: url)
+            } catch {
+                videoErrorMessage = error.localizedDescription
+            }
+            isProcessingVideo = false
         }
     }
 }

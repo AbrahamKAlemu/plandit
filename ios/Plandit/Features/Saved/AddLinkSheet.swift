@@ -3,7 +3,7 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-private struct PickedVideo: Transferable {
+struct PickedVideo: Transferable {
     let url: URL
 
     static var transferRepresentation: some TransferRepresentation {

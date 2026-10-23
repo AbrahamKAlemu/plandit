@@ -233,27 +233,32 @@ final class PlanditStore {
         try persistSaved(updated)
         saved = updated
 
-        let evidence: VideoEvidence
         do {
-            evidence = try await videoExtractor.extract(from: fileURL)
+            try await applyVideoEvidence(postID: id, fileURL: fileURL)
         } catch {
             removePost(id)
             throw error
         }
-        guard updateAndPersist(id, mutation: {
-            $0.caption = evidence.text
+        return id
+    }
+
+    func processVideo(postID: UUID, fileURL: URL) async throws {
+        guard post(id: postID) != nil else { throw SavedPlacePersistenceError() }
+        guard updateAndPersist(postID, mutation: {
             $0.status = .processing
-            $0.failureMessage = evidence.transcriptionNotice
+            $0.failureMessage = nil
         }) else {
             throw SavedPlacePersistenceError()
         }
-        await resolveEvidence(
-            postID: id,
-            text: evidence.text,
-            noCandidatesMessage: evidence.transcriptionNotice
-                ?? "We couldn't confidently match this video. Review the extracted details and try again."
-        )
-        return id
+        do {
+            try await applyVideoEvidence(postID: postID, fileURL: fileURL)
+        } catch {
+            updateAndPersist(postID) {
+                $0.status = .needsEvidence
+                $0.failureMessage = error.localizedDescription
+            }
+            throw error
+        }
     }
 
     func removeExpiredTemporaryMedia() {
@@ -275,12 +280,34 @@ final class PlanditStore {
         do {
             let result = try await extractor.extract(from: post.url, sharedText: post.caption)
             updateAndPersist(id) { $0.apply(result) }
+        } catch let error as DevelopmentSocialEvidenceError {
+            updateAndPersist(id) {
+                $0.status = .needsEvidence
+                $0.failureMessage = error.localizedDescription
+            }
         } catch {
             updateAndPersist(id) {
                 $0.status = .failed
                 $0.failureMessage = "We couldn't read this source. Add details or try again."
             }
         }
+    }
+
+    private func applyVideoEvidence(postID: UUID, fileURL: URL) async throws {
+        let evidence = try await videoExtractor.extract(from: fileURL)
+        guard updateAndPersist(postID, mutation: {
+            $0.caption = evidence.text
+            $0.status = .processing
+            $0.failureMessage = evidence.transcriptionNotice
+        }) else {
+            throw SavedPlacePersistenceError()
+        }
+        await resolveEvidence(
+            postID: postID,
+            text: evidence.text,
+            noCandidatesMessage: evidence.transcriptionNotice
+                ?? "We couldn't confidently match this video. Review the extracted details and try again."
+        )
     }
 
     private func resolveEvidence(

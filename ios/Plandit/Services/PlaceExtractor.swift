@@ -26,6 +26,12 @@ struct SocialMetadata: Sendable {
     var authorHandle: String?
     var thumbnailURL: URL?
     var searchEvidence: String? = nil
+
+    var hasPlaceEvidence: Bool {
+        [searchEvidence, title].contains {
+            $0?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+    }
 }
 
 struct FixturePlaceExtractor: PlaceExtracting {
@@ -52,7 +58,15 @@ struct FixturePlaceExtractor: PlaceExtracting {
     }
 
     func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult {
-        let metadata = try? await metadataProvider?.metadata(for: url)
+        let metadata: SocialMetadata?
+        do {
+            metadata = try await metadataProvider?.metadata(for: url)
+        } catch let error as DevelopmentSocialEvidenceError {
+            guard Self.hasMeaningfulSharedText(sharedText) else { throw error }
+            metadata = nil
+        } catch {
+            metadata = nil
+        }
         let evidence = [metadata?.searchEvidence, metadata?.title, sharedText]
             .compactMap { $0 }
             .joined(separator: "\n")
@@ -63,6 +77,17 @@ struct FixturePlaceExtractor: PlaceExtracting {
             thumbnailURL: metadata?.thumbnailURL,
             candidates: candidates
         )
+    }
+
+    private static func hasMeaningfulSharedText(_ value: String?) -> Bool {
+        let withoutURLs = value?.replacingOccurrences(
+            of: #"https?://\S+"#,
+            with: "",
+            options: .regularExpression
+        )
+        return withoutURLs?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
     }
 
     func resolve(evidence: String, platform: SourcePlatform) async throws -> ExtractionResult {
@@ -472,10 +497,27 @@ struct FallbackSocialMetadataProvider: SocialMetadataProviding {
             if let metadata = try await primary.metadata(for: url) {
                 return metadata
             }
+        } catch let primaryError as DevelopmentSocialEvidenceError {
+            if let metadata = try? await fallback.metadata(for: url),
+               metadata.hasPlaceEvidence {
+                return metadata
+            }
+            throw primaryError
         } catch {
             return try await fallback.metadata(for: url)
         }
         return try await fallback.metadata(for: url)
+    }
+}
+
+enum DevelopmentSocialEvidenceError: LocalizedError, Equatable {
+    case dailyLimit
+
+    var errorDescription: String? {
+        switch self {
+        case .dailyLimit:
+            "Automatic TikTok imports are paused for today. Add the place name or address below, or use the saved video instead."
+        }
     }
 }
 
@@ -485,12 +527,35 @@ struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
         let combinedText: String
     }
 
+    private struct ErrorResponse: Decodable {
+        struct Detail: Decodable {
+            let code: String
+        }
+
+        let error: Detail
+    }
+
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
     func metadata(for url: URL) async throws -> SocialMetadata? {
         guard let request = try Self.request(for: url) else {
             return nil
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        if let providerError = Self.providerError(
+            statusCode: http.statusCode,
+            data: data
+        ) {
+            throw providerError
+        }
+        guard 200..<300 ~= http.statusCode else {
             throw URLError(.badServerResponse)
         }
         let payload = try JSONDecoder().decode(Response.self, from: data)
@@ -502,6 +567,18 @@ struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
             thumbnailURL: nil,
             searchEvidence: payload.combinedText
         )
+    }
+
+    static func providerError(
+        statusCode: Int,
+        data: Data
+    ) -> DevelopmentSocialEvidenceError? {
+        guard statusCode == 429,
+              let payload = try? JSONDecoder().decode(ErrorResponse.self, from: data),
+              payload.error.code == "provider_quota_exceeded" else {
+            return nil
+        }
+        return .dailyLimit
     }
 
     static func request(for url: URL) throws -> URLRequest? {

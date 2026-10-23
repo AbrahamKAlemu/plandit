@@ -10,7 +10,11 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import ResolutionAttempt
-from .providers.ensembledata import EnsembleDataClient, EnsembleDataError
+from .providers.ensembledata import (
+    EnsembleDataClient,
+    EnsembleDataError,
+    EnsembleDataQuotaExceeded,
+)
 from .services import resolve_candidates
 from .url_policy import SourceUrlError, parse_supported_source_url
 
@@ -63,6 +67,14 @@ def social_evidence(request: HttpRequest) -> JsonResponse:
             evidence = EnsembleDataClient(
                 settings.ENSEMBLEDATA_API_TOKEN
             ).evidence_for(supported.canonical_url)
+        except EnsembleDataQuotaExceeded:
+            return _error(
+                None,
+                "provider_quota_exceeded",
+                "Automatic TikTok imports are paused for today.",
+                True,
+                status=429,
+            )
         except (EnsembleDataError, SourceUrlError):
             return _error(
                 None,
