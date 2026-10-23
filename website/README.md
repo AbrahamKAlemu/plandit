@@ -2,6 +2,19 @@
 
 A responsive, static launch site prepared for `https://plandit.app/`. It can be deployed to Vercel, Netlify, GitHub Pages, Cloudflare Pages, or any basic static host.
 
+## Campaign pages
+
+- `/group-plans/` speaks to the friend who turns group-chat ideas into a concrete, budget-visible plan.
+- `/free-window/` speaks to students with a short free window who need a close, time-boxed plan.
+
+Both pages share the main site's assets and waitlist integration. Their forms send `group-plans`
+or `free-window` in the waitlist request's `source` field for campaign attribution.
+
+Each campaign page has an email CTA in the hero and another at the close. Signups are stored by
+Formspree, and each request includes its page source. Vercel Web Analytics records page traffic;
+GA4 records CTA clicks, successful `waitlist_signup` events, and `waitlist_error` events with the
+page and form location, without sending email addresses to analytics.
+
 ## Preview locally
 
 Run a local server from this folder:
