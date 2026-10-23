@@ -1,0 +1,11 @@
+# Railway service config. Deploy from this folder (`cd backend && railway up`) or set the
+# service's Root Directory to `backend` when connecting the GitHub repo.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health/"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
