@@ -58,10 +58,19 @@ final class PlanditStore {
     /// or when launched with `-resetData`.
     static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = FixturePlaceExtractor()) -> PlanditStore {
         if CommandLine.arguments.contains("-resetData") { storage.reset() }
-        guard let snapshot = storage.load() else { return sample(storage: storage, extractor: extractor) }
+        let resetsSavedData = CommandLine.arguments.contains("-resetSavedData")
+        guard let snapshot = storage.load() else {
+            let store = sample(
+                storage: storage,
+                extractor: extractor,
+                saved: resetsSavedData ? [] : SampleData.savedPosts
+            )
+            if resetsSavedData { store.flush() }
+            return store
+        }
         let store = PlanditStore(
             today: snapshot.today,
-            saved: snapshot.saved,
+            saved: resetsSavedData ? [] : snapshot.saved,
             profile: snapshot.profile,
             stats: SampleData.stats, // still mock; see ios/README.md
             pastPlans: snapshot.pastPlans,
@@ -70,13 +79,18 @@ final class PlanditStore {
             storage: storage
         )
         store.rollOverIfNeeded()
+        if resetsSavedData { store.flush() }
         return store
     }
 
-    static func sample(storage: SnapshotStore? = nil, extractor: any PlaceExtracting = FixturePlaceExtractor()) -> PlanditStore {
+    static func sample(
+        storage: SnapshotStore? = nil,
+        extractor: any PlaceExtracting = FixturePlaceExtractor(),
+        saved: [SavedPost] = SampleData.savedPosts
+    ) -> PlanditStore {
         PlanditStore(
             today: SampleData.dayPlan,
-            saved: SampleData.savedPosts,
+            saved: saved,
             profile: SampleData.profile,
             stats: SampleData.stats,
             pastPlans: SampleData.pastPlans,

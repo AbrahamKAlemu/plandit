@@ -8,7 +8,9 @@ struct SavedPostDetailView: View {
     @Environment(SheetRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
     @State private var evidenceText = ""
-    @State private var isReviewingExtractedDetails = false
+    @State private var isSearchingForPlace = false
+    @State private var searchName = ""
+    @State private var searchAddress = ""
     @State private var selectedVideo: PhotosPickerItem?
     @State private var isChoosingVideo = false
     @State private var isProcessingVideo = false
@@ -45,18 +47,21 @@ struct SavedPostDetailView: View {
                             onConfirm: { candidateID in
                                 store.confirm(postID: post.id, candidateID: candidateID)
                             },
-                            onReviewDetails: {
-                                isReviewingExtractedDetails = true
+                            onSearch: {
+                                isSearchingForPlace = true
                             }
                         )
-                        if isReviewingExtractedDetails {
-                            EvidenceEditor(
-                                platform: post.platform,
-                                text: $evidenceText,
-                                message: "Correct the place name, neighborhood, address, or other clues, then search again."
+                        if isSearchingForPlace {
+                            PlaceSearchEditor(
+                                name: $searchName,
+                                address: $searchAddress
                             ) {
-                                isReviewingExtractedDetails = false
-                                store.submitEvidence(postID: post.id, text: evidenceText)
+                                let query = [searchName, searchAddress]
+                                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                                    .filter { !$0.isEmpty }
+                                    .joined(separator: ", ")
+                                isSearchingForPlace = false
+                                store.submitEvidence(postID: post.id, text: query)
                             }
                         }
                     case .failed:
@@ -259,85 +264,127 @@ struct SavedPostDetailView: View {
 private struct CandidateList: View {
     let post: SavedPost
     let onConfirm: (String) -> Void
-    let onReviewDetails: () -> Void
+    let onSearch: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
             VStack(alignment: .leading, spacing: Space.xxs) {
-                Text("Confirm the place").font(.sectionHeading).foregroundStyle(.ink)
-                Text("Nothing is added to your map until you choose the right match.")
+                Text("Places found").font(.sectionHeading).foregroundStyle(.ink)
+                Text("Choose the place from the video to add it to your map.")
                     .font(.bodyText)
                     .foregroundStyle(.inkMuted)
             }
 
-            ForEach(Array(post.candidates.enumerated()), id: \.element.id) { index, candidate in
+            ForEach(Array(post.candidates.prefix(3))) { candidate in
                 CandidateCard(
                     candidate: candidate,
-                    isBestMatch: index == 0,
                     onConfirm: onConfirm
                 )
             }
 
-            Button("None of these") {
-                onReviewDetails()
+            Button("Not the right one?") {
+                onSearch()
             }
             .buttonStyle(.secondary)
-
-            Button("Review extracted details") {
-                onReviewDetails()
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("review-extracted-details")
+            .accessibilityIdentifier("not-right-place")
         }
     }
 }
 
 private struct CandidateCard: View {
     let candidate: PlaceCandidate
-    let isBestMatch: Bool
     let onConfirm: (String) -> Void
+
+    var body: some View {
+        Button {
+            onConfirm(candidate.id)
+        } label: {
+            HStack(spacing: Space.sm) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(candidate.place.name)
+                        .font(.manrope(.bold, size: 16))
+                        .foregroundStyle(.ink)
+                        .lineLimit(1)
+                    Text(candidate.place.address)
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Spacer(minLength: Space.xs)
+                Icon(.chevronRight, size: 18)
+                    .foregroundStyle(.inkMuted)
+            }
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .planditCard(padding: Space.sm)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            "Confirm \(candidate.place.name), \(candidate.place.address)"
+        )
+    }
+}
+
+private struct PlaceSearchEditor: View {
+    @Binding var name: String
+    @Binding var address: String
+    let onSubmit: () -> Void
+
+    private var canSubmit: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             VStack(alignment: .leading, spacing: Space.xxs) {
-                if isBestMatch {
-                    Text("Best match")
-                        .font(.metadata)
-                        .foregroundStyle(.surface)
-                        .padding(.horizontal, Space.xs)
-                        .padding(.vertical, Space.xxs)
-                        .background(Color.emeraldDeep, in: Capsule())
-                        .accessibilityIdentifier("best-place-match")
-                }
-                Text(candidate.place.name)
-                    .font(.cardHeading)
+                Text("Search for the place")
+                    .font(.sectionHeading)
                     .foregroundStyle(.ink)
-                Text("\(candidate.place.neighborhood) · \(candidate.place.address)")
+                Text("Add the name, address, or both.")
                     .font(.bodyText)
                     .foregroundStyle(.inkMuted)
-                Text("\(candidate.confidence.label) · \(candidate.reason)")
-                    .font(.metadata)
-                    .foregroundStyle(.inkMuted)
             }
-            if isBestMatch {
-                Button("Confirm \(candidate.place.name)") {
-                    onConfirm(candidate.id)
-                }
+
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Place name").font(.label).foregroundStyle(.ink)
+                TextField("Place name", text: $name)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("place-search-name")
+                    .searchFieldStyle()
+
+                Text("Address").font(.label).foregroundStyle(.ink)
+                TextField("Street address, neighborhood, or city", text: $address)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("place-search-address")
+                    .searchFieldStyle()
+            }
+
+            Button("Search", action: onSubmit)
                 .buttonStyle(.primary)
-            } else {
-                Button("Confirm \(candidate.place.name)") {
-                    onConfirm(candidate.id)
-                }
-                .buttonStyle(.secondary)
-            }
+                .disabled(!canSubmit)
+                .accessibilityIdentifier("search-for-place")
         }
         .planditCard()
-        .overlay {
-            if isBestMatch {
-                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                    .strokeBorder(Color.emeraldDeep, lineWidth: 2)
+    }
+}
+
+private extension View {
+    func searchFieldStyle() -> some View {
+        self
+            .font(.bodyText)
+            .padding(.horizontal, Space.sm)
+            .frame(minHeight: 48)
+            .background(
+                Color.canvas,
+                in: RoundedRectangle(cornerRadius: Radius.control)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.control)
+                    .strokeBorder(Color.border, lineWidth: 1)
             }
-        }
     }
 }
 
