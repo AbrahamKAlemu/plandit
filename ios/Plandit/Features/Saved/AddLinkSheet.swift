@@ -3,7 +3,7 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-private struct PickedVideo: Transferable {
+struct PickedVideo: Transferable {
     let url: URL
 
     static var transferRepresentation: some TransferRepresentation {
@@ -42,98 +42,105 @@ struct AddLinkSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: Space.md) {
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Add a link").font(.sectionHeading).foregroundStyle(.ink)
-                    Text("Paste a TikTok or Instagram Reel link. We'll add the place to your map with its price and hours.")
-                        .font(.bodyText)
-                        .foregroundStyle(.inkMuted)
-                }
-
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Link").font(.label).foregroundStyle(.ink)
-                    TextField("tiktok.com/@creator/video/…", text: $text)
-                        .font(.bodyText)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.done)
-                        .focused($isFocused)
-                        .onSubmit(save)
-                        .padding(.horizontal, Space.sm)
-                        .frame(minHeight: 48)
-                        .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                                .strokeBorder(isFocused ? Color.ink : Color.border, lineWidth: isFocused ? 2 : 1)
-                        )
-                        .accessibilityIdentifier("social-link-field")
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.metadata)
-                            .foregroundStyle(.error)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.md) {
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("Add a link").font(.sectionHeading).foregroundStyle(.ink)
+                        Text("Paste a TikTok or Instagram Reel link. We'll add the place to your map with its price and hours.")
+                            .font(.bodyText)
+                            .foregroundStyle(.inkMuted)
                     }
-                    PasteButton(payloadType: String.self) { strings in
-                        text = strings.first ?? ""
-                        errorMessage = nil
-                    }
-                    .labelStyle(.titleOnly)
-                    .tint(Color.ink)
-                }
 
-                HStack(spacing: Space.sm) {
-                    Rectangle().fill(Color.border).frame(height: 1)
-                    Text("or").font(.metadata).foregroundStyle(.inkMuted)
-                    Rectangle().fill(Color.border).frame(height: 1)
-                }
-
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Use a video").font(.label).foregroundStyle(.ink)
-                    Text("If the link does not include enough detail, choose a video you are allowed to share. Plandit reads it on this device and deletes the temporary copy.")
-                        .font(.bodyText)
-                        .foregroundStyle(.inkMuted)
-                    PhotosPicker(
-                        selection: $selectedVideo,
-                        matching: .videos,
-                        photoLibrary: .shared()
-                    ) {
-                        Label("Choose from Photos", systemImage: "video")
-                    }
-                    .buttonStyle(.secondary)
-                    .disabled(isProcessingVideo)
-                    .accessibilityIdentifier("choose-video-photos")
-
-                    if isProcessingVideo {
-                        HStack(spacing: Space.xs) {
-                            ProgressView().controlSize(.small)
-                            Text("Reading video…")
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("Link").font(.label).foregroundStyle(.ink)
+                        TextField("tiktok.com/@creator/video/…", text: $text)
+                            .font(.bodyText)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.done)
+                            .focused($isFocused)
+                            .onSubmit(save)
+                            .padding(.horizontal, Space.sm)
+                            .frame(minHeight: 48)
+                            .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                                    .strokeBorder(isFocused ? Color.ink : Color.border, lineWidth: isFocused ? 2 : 1)
+                            )
+                            .accessibilityIdentifier("social-link-field")
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.metadata)
+                                .foregroundStyle(.error)
                         }
-                        .font(.metadata)
-                        .foregroundStyle(.inkMuted)
+                        PasteButton(payloadType: String.self) { strings in
+                            text = strings.first ?? ""
+                            errorMessage = nil
+                        }
+                        .labelStyle(.titleOnly)
+                        .tint(Color.ink)
                     }
 
-                    Button {
-                        isChoosingVideo = true
-                    } label: {
-                        Text("Choose from Files")
+                    HStack(spacing: Space.sm) {
+                        Rectangle().fill(Color.border).frame(height: 1)
+                        Text("or").font(.metadata).foregroundStyle(.inkMuted)
+                        Rectangle().fill(Color.border).frame(height: 1)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isProcessingVideo)
+
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("Use a video").font(.label).foregroundStyle(.ink)
+                        Text("If the link does not include enough detail, choose a video you are allowed to share. Plandit reads it on this device and deletes the temporary copy.")
+                            .font(.bodyText)
+                            .foregroundStyle(.inkMuted)
+                        PhotosPicker(
+                            selection: $selectedVideo,
+                            matching: .videos,
+                            photoLibrary: .shared()
+                        ) {
+                            Label("Choose from Photos", systemImage: "video")
+                        }
+                        .buttonStyle(.secondary)
+                        .disabled(isProcessingVideo)
+                        .accessibilityIdentifier("choose-video-photos")
+
+                        if isProcessingVideo {
+                            HStack(spacing: Space.xs) {
+                                ProgressView().controlSize(.small)
+                                Text("Reading video…")
+                            }
+                            .font(.metadata)
+                            .foregroundStyle(.inkMuted)
+                        }
+
+                        Button {
+                            isChoosingVideo = true
+                        } label: {
+                            Text("Choose from Files")
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isProcessingVideo)
+                    }
                 }
-
-                Spacer(minLength: 0)
-
-                Button("Save to Plandit", action: save)
-                    .buttonStyle(.primary)
-                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityIdentifier("save-social-link")
+                .padding(Space.lg)
             }
-            .padding(Space.lg)
+            .scrollDismissesKeyboard(.interactively)
             .background(Color.surface)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: Space.sm) {
+                    Button("Save to Plandit", action: save)
+                        .buttonStyle(.primary)
+                        .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityIdentifier("save-social-link")
+
                     Button("Cancel") { dismiss() }
+                        .buttonStyle(.secondary)
+                        .accessibilityIdentifier("cancel-add-link")
                 }
+                .padding(.horizontal, Space.lg)
+                .padding(.vertical, Space.sm)
+                .background(Color.surface)
+                .overlay(alignment: .top) { Hairline() }
             }
         }
         .presentationDetents([.medium, .large])

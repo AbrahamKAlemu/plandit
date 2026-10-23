@@ -24,6 +24,10 @@ class EnsembleDataError(RuntimeError):
     pass
 
 
+class EnsembleDataQuotaExceeded(EnsembleDataError):
+    pass
+
+
 @dataclass(frozen=True)
 class SocialEvidence:
     canonical_url: str
@@ -152,7 +156,13 @@ def _fetch_json(url: str) -> object:
     try:
         with urlopen(request, timeout=20) as response:
             return json.load(response)
-    except (HTTPError, OSError, json.JSONDecodeError) as error:
+    except HTTPError as error:
+        if error.code == 495:
+            raise EnsembleDataQuotaExceeded(
+                "EnsembleData daily request limit reached"
+            ) from error
+        raise EnsembleDataError("EnsembleData request failed") from error
+    except (OSError, json.JSONDecodeError) as error:
         raise EnsembleDataError("EnsembleData request failed") from error
 
 

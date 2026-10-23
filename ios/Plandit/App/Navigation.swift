@@ -2,7 +2,7 @@ import Observation
 import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case today, saved, profile
+    case today, saved, profile, settings
 
     var id: String { rawValue }
 
@@ -11,10 +11,11 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: "Today"
         case .saved: "Saved"
         case .profile: "Profile"
+        case .settings: "Settings"
         }
     }
 
-    /// Launch with `-startTab saved` (or `profile`) to open on another tab; handy for screenshots and UI tests.
+    /// Launch with `-startTab saved` (or another raw value) to open on another tab.
     static var launchTab: AppTab {
         UserDefaults.standard.string(forKey: "startTab").flatMap(AppTab.init(rawValue:)) ?? .today
     }
@@ -24,6 +25,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: .route
         case .saved: .bookmark
         case .profile: .userRound
+        case .settings: .settings
         }
     }
 }
@@ -42,7 +44,7 @@ final class SheetRouter {
         switch tab {
         case .today: todayPath.last
         case .saved: savedPath.last
-        case .profile: nil
+        case .profile, .settings: nil
         }
     }
 
@@ -53,7 +55,7 @@ final class SheetRouter {
             switch tab {
             case .today: todayPath = []
             case .saved: savedPath = []
-            case .profile: break
+            case .profile, .settings: break
             }
         }
     }

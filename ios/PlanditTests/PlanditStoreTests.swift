@@ -7,16 +7,32 @@ final class PlanditStoreTests: XCTestCase {
         func resolve(evidence: String, platform: SourcePlatform) async throws -> ExtractionResult { ExtractionResult(candidates: []) }
     }
 
+    @MainActor private struct QuotaExtractor: PlaceExtracting {
+        func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult {
+            throw DevelopmentSocialEvidenceError.dailyLimit
+        }
+
+        func resolve(evidence: String, platform: SourcePlatform) async throws -> ExtractionResult {
+            ExtractionResult(candidates: [])
+        }
+    }
+
     @MainActor private func stop(_ place: Place, hour: Int, status: StopStatus = .upcoming) -> PlanStop {
         PlanStop(place: place, start: SampleData.at(hour), durationMinutes: 60, estimatedCost: 10, status: status)
     }
 
-    @MainActor private func makeStore(stops: [PlanStop] = [], saved: [SavedPost] = [], date: Date = .now, storage: SnapshotStore? = nil) -> PlanditStore {
+    @MainActor private func makeStore(
+        stops: [PlanStop] = [],
+        saved: [SavedPost] = [],
+        date: Date = .now,
+        storage: SnapshotStore? = nil,
+        extractor: any PlaceExtracting = NoExtractor()
+    ) -> PlanditStore {
         var plan = DayPlan(date: date, title: "Test day", budget: 60, stops: stops, legs: [])
         plan.legs = zip(plan.stops, plan.stops.dropFirst()).map { .estimate(from: $0, to: $1) }
         return PlanditStore(
             today: plan, saved: saved, profile: SampleData.profile, stats: SampleData.stats,
-            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+            pastPlans: [], visited: [], extractor: extractor, storage: storage
         )
     }
 
@@ -142,6 +158,7 @@ final class PlanditStoreTests: XCTestCase {
 
         store.confirm(postID: post.id, candidateID: candidate.id)
 
+        XCTAssertEqual(store.post(id: post.id)?.status, .ready)
         XCTAssertEqual(store.plannablePosts.map { $0.id }, [post.id])
         XCTAssertEqual(
             store.buildPlan(postIDs: [post.id], start: SampleData.at(10), budget: 30, mode: PlanditStore.PlanMode.replace).stops.first?.place,
@@ -177,5 +194,21 @@ final class PlanditStoreTests: XCTestCase {
         let loaded = try XCTUnwrap(storage.load())
         XCTAssertEqual(loaded.saved.map(\.url), [sharedURL])
         XCTAssertTrue(ShareInbox.pending().isEmpty)
+    }
+
+    @MainActor func testDailyUrlLimitOffersEvidenceFallback() async throws {
+        let store = makeStore(extractor: QuotaExtractor())
+        let id = try store.save(
+            url: URL(string: "https://www.tiktok.com/@someone/video/7400000000000000102")!
+        )
+
+        try await Task.sleep(for: .milliseconds(100))
+
+        let post = try XCTUnwrap(store.post(id: id))
+        XCTAssertEqual(post.status, .needsEvidence)
+        XCTAssertEqual(
+            post.failureMessage,
+            "Automatic TikTok imports are paused for today. Add the place name or address below, or use the saved video instead."
+        )
     }
 }

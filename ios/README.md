@@ -24,6 +24,19 @@ open Plandit.xcodeproj
 2. If you change the bundle IDs (`com.plandit.app`, `com.plandit.app.share`), also change the App Group `group.com.plandit.app` in `project.yml` (in both entitlements blocks) and in `Shared/Sharing/ShareInbox.swift`.
 3. Run the **Plandit** scheme. Deployment target: iOS 17.
 
+For an archive that uses production link extraction, set these build settings without committing
+private provider credentials:
+
+| Build setting | Value |
+|---|---|
+| `PLANDIT_API_BASE_URL` | HTTPS URL for the deployed Django API |
+| `PLANDIT_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+| `PLANDIT_SUPABASE_ANON_KEY` | Supabase's public client key |
+
+Anonymous sign-ins must be enabled in the Supabase project. The public key is embedded in the app;
+the EnsembleData token remains only on the server. If any value is absent, release builds fall back
+to TikTok oEmbed rather than sending an unauthenticated provider request.
+
 Dev launch arguments (Scheme → Run → Arguments): `-startTab saved|profile` and `-startDetent peek|large`.
 
 Appearance follows the device by default. Open **Profile → Settings → Appearance** to choose
@@ -83,7 +96,9 @@ Asset sources:
 ## Mocked or not built yet
 
 - **Data:** `SampleData` seeds the first launch. Stats on Profile are still mock values.
-- **Extraction:** `StubPlaceExtractor` fetches real TikTok oEmbed metadata (caption, author, thumbnail), then assigns a random sample place. Replace it with the backend (caption, transcript and on-screen text → place).
+- **Extraction:** TikTok links use the authenticated Django evidence endpoint when production
+  configuration is present, then search MapKit for matching places. Instagram still depends on
+  shared text or manually attached media; broader provider support is not built.
 - **Planner:** The + planner orders stops by least travel (every order up to 7 stops, a fast search above that), keeps visits inside closing times read from `hours` ("Open until 9 PM"), and stays on budget including subway fares. Nightlife waits for 8 PM (or is left out if the day ends earlier), and "Free until" caps the day. It doesn't know other opening times yet, and travel times are still the straight-line estimate. The long-press "Add to today's plan" still just appends.
 - **Transit:** MapKit has no transit geometry, so transit legs are drawn as straight dotted lines. Walking legs use real MapKit walking routes.
 - **Dark mode:** Provisional dark tokens are documented in `docs/features/dark-mode/`. The canonical

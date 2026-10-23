@@ -25,6 +25,7 @@
 		2DEE93E655D34F499CD19F7B /* Manrope-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3A2637EF392793AB0EBDE7F /* Manrope-ExtraBold.ttf */; };
 		3025C99E05B3AD848B959100 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57CF7ECA1069F68EE86C3CF /* Colors.swift */; };
 		326DFD212CC8E91AFFA148E1 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */; };
+		32CDA229B854413D1ADBEAD1 /* AuthenticatedAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FEADE27D31DC9BE404E8996 /* AuthenticatedAPI.swift */; };
 		3EBD5EACA826F5A6D6731964 /* SavedPostPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C343DED8648F131B64A81DBF /* SavedPostPersistenceTests.swift */; };
 		4435657B68299E78AD404C75 /* LinkParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB333CD79DB125872198E3A4 /* LinkParsing.swift */; };
 		4819F8E3BB1F34A98A3453AD /* DayPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6194CE06CC90504B47F20BF /* DayPlan.swift */; };
@@ -137,6 +138,7 @@
 		130BEB57FE12B63F0783900B /* TodaySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodaySheet.swift; sourceTree = "<group>"; };
 		15AC2801DC9EA6D58175224D /* AddLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddLinkSheet.swift; sourceTree = "<group>"; };
 		1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
+		1FEADE27D31DC9BE404E8996 /* AuthenticatedAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedAPI.swift; sourceTree = "<group>"; };
 		2C5FEF54EECEB97BC5504BCF /* SavedPlaceExtractionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPlaceExtractionFlowTests.swift; sourceTree = "<group>"; };
 		2E28CCCF74AAA2AC8972B24A /* Place.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Place.swift; sourceTree = "<group>"; };
 		2FC3F2A4DE1C4FEEC73159BB /* PlanditTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PlanditTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -346,6 +348,7 @@
 		8C3FCB26F663A8A3DF9D091E /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				1FEADE27D31DC9BE404E8996 /* AuthenticatedAPI.swift */,
 				C237CB292F0F86FA6CE814A9 /* DayPlanner.swift */,
 				93CF268CEFCAB8945101303E /* LocationPermission.swift */,
 				4E14D92B44EE48F44F09115E /* Persistence.swift */,
@@ -609,6 +612,7 @@
 				879882A30F7DDD3D077382B5 /* AddLinkSheet.swift in Sources */,
 				D2A118CC181CB4CBCC01E532 /* Appearance.swift in Sources */,
 				283E80DF9A999A7EE15E76FC /* AppearanceMode.swift in Sources */,
+				32CDA229B854413D1ADBEAD1 /* AuthenticatedAPI.swift in Sources */,
 				789669A09315E475EF9FC626 /* ButtonStyles.swift in Sources */,
 				3025C99E05B3AD848B959100 /* Colors.swift in Sources */,
 				50952145C90904CFAA721AB9 /* Components.swift in Sources */,

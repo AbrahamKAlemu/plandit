@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings_test"
 python_files = ["test_*.py"]
-testpaths = ["tests"]
+testpaths = ["tests", "resolution/tests"]
 addopts = "-q --reuse-db"
 filterwarnings = ["ignore:No directory at:UserWarning"]
 

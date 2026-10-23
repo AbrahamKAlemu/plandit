@@ -58,10 +58,19 @@ final class PlanditStore {
     /// or when launched with `-resetData`.
     static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = FixturePlaceExtractor()) -> PlanditStore {
         if CommandLine.arguments.contains("-resetData") { storage.reset() }
-        guard let snapshot = storage.load() else { return sample(storage: storage, extractor: extractor) }
+        let resetsSavedData = CommandLine.arguments.contains("-resetSavedData")
+        guard let snapshot = storage.load() else {
+            let store = sample(
+                storage: storage,
+                extractor: extractor,
+                saved: resetsSavedData ? [] : SampleData.savedPosts
+            )
+            if resetsSavedData { store.flush() }
+            return store
+        }
         let store = PlanditStore(
             today: snapshot.today,
-            saved: snapshot.saved,
+            saved: resetsSavedData ? [] : snapshot.saved,
             profile: snapshot.profile,
             stats: SampleData.stats, // still mock; see ios/README.md
             pastPlans: snapshot.pastPlans,
@@ -70,13 +79,18 @@ final class PlanditStore {
             storage: storage
         )
         store.rollOverIfNeeded()
+        if resetsSavedData { store.flush() }
         return store
     }
 
-    static func sample(storage: SnapshotStore? = nil, extractor: any PlaceExtracting = FixturePlaceExtractor()) -> PlanditStore {
+    static func sample(
+        storage: SnapshotStore? = nil,
+        extractor: any PlaceExtracting = FixturePlaceExtractor(),
+        saved: [SavedPost] = SampleData.savedPosts
+    ) -> PlanditStore {
         PlanditStore(
             today: SampleData.dayPlan,
-            saved: SampleData.savedPosts,
+            saved: saved,
             profile: SampleData.profile,
             stats: SampleData.stats,
             pastPlans: SampleData.pastPlans,
@@ -197,12 +211,13 @@ final class PlanditStore {
         }
     }
 
-    func confirm(postID: UUID, candidateID: String) {
+    @discardableResult
+    func confirm(postID: UUID, candidateID: String) -> Bool {
         updateAndPersist(postID) { post in
             guard let candidate = post.candidates.first(where: { $0.id == candidateID }) else { return }
             post.place = candidate.place
             post.estimatedCost = candidate.estimatedCost
-            post.status = candidate.place.hours == nil ? .needsReview : .ready
+            post.status = .ready
             post.candidates = []
         }
     }
@@ -233,27 +248,32 @@ final class PlanditStore {
         try persistSaved(updated)
         saved = updated
 
-        let evidence: VideoEvidence
         do {
-            evidence = try await videoExtractor.extract(from: fileURL)
+            try await applyVideoEvidence(postID: id, fileURL: fileURL)
         } catch {
             removePost(id)
             throw error
         }
-        guard updateAndPersist(id, mutation: {
-            $0.caption = evidence.text
+        return id
+    }
+
+    func processVideo(postID: UUID, fileURL: URL) async throws {
+        guard post(id: postID) != nil else { throw SavedPlacePersistenceError() }
+        guard updateAndPersist(postID, mutation: {
             $0.status = .processing
-            $0.failureMessage = evidence.transcriptionNotice
+            $0.failureMessage = nil
         }) else {
             throw SavedPlacePersistenceError()
         }
-        await resolveEvidence(
-            postID: id,
-            text: evidence.text,
-            noCandidatesMessage: evidence.transcriptionNotice
-                ?? "We couldn't confidently match this video. Review the extracted details and try again."
-        )
-        return id
+        do {
+            try await applyVideoEvidence(postID: postID, fileURL: fileURL)
+        } catch {
+            updateAndPersist(postID) {
+                $0.status = .needsEvidence
+                $0.failureMessage = error.localizedDescription
+            }
+            throw error
+        }
     }
 
     func removeExpiredTemporaryMedia() {
@@ -275,12 +295,34 @@ final class PlanditStore {
         do {
             let result = try await extractor.extract(from: post.url, sharedText: post.caption)
             updateAndPersist(id) { $0.apply(result) }
+        } catch let error as DevelopmentSocialEvidenceError {
+            updateAndPersist(id) {
+                $0.status = .needsEvidence
+                $0.failureMessage = error.localizedDescription
+            }
         } catch {
             updateAndPersist(id) {
                 $0.status = .failed
                 $0.failureMessage = "We couldn't read this source. Add details or try again."
             }
         }
+    }
+
+    private func applyVideoEvidence(postID: UUID, fileURL: URL) async throws {
+        let evidence = try await videoExtractor.extract(from: fileURL)
+        guard updateAndPersist(postID, mutation: {
+            $0.caption = evidence.text
+            $0.status = .processing
+            $0.failureMessage = evidence.transcriptionNotice
+        }) else {
+            throw SavedPlacePersistenceError()
+        }
+        await resolveEvidence(
+            postID: postID,
+            text: evidence.text,
+            noCandidatesMessage: evidence.transcriptionNotice
+                ?? "We couldn't confidently match this video. Review the extracted details and try again."
+        )
     }
 
     private func resolveEvidence(

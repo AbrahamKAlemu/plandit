@@ -108,6 +108,87 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(metadata?.title, expected.title)
     }
 
+    func testDailyLimitSurvivesAnEmptyTikTokFallback() async {
+        let provider = FallbackSocialMetadataProvider(
+            primary: QuotaMetadataProvider(),
+            fallback: StubMetadataProvider(
+                metadata: SocialMetadata(
+                    title: nil,
+                    authorHandle: nil,
+                    thumbnailURL: nil
+                )
+            )
+        )
+
+        do {
+            _ = try await provider.metadata(
+                for: URL(string: "https://www.tiktok.com/@creator/video/123")!
+            )
+            XCTFail("Expected the daily limit to be preserved")
+        } catch {
+            XCTAssertEqual(error as? DevelopmentSocialEvidenceError, .dailyLimit)
+        }
+    }
+
+    func testCaptionFallbackStillWorksDuringDailyLimit() async throws {
+        let provider = FallbackSocialMetadataProvider(
+            primary: QuotaMetadataProvider(),
+            fallback: StubMetadataProvider(
+                metadata: SocialMetadata(
+                    title: "Levain Bakery on the Upper West Side",
+                    authorHandle: "@creator",
+                    thumbnailURL: nil
+                )
+            )
+        )
+
+        let metadata = try await provider.metadata(
+            for: URL(string: "https://www.tiktok.com/@creator/video/123")!
+        )
+
+        XCTAssertEqual(metadata?.title, "Levain Bakery on the Upper West Side")
+    }
+
+    func testSharedPlaceTextStillResolvesDuringDailyLimit() async throws {
+        let extractor = FixturePlaceExtractor(
+            metadataProvider: FallbackSocialMetadataProvider(
+                primary: QuotaMetadataProvider(),
+                fallback: StubMetadataProvider(
+                    metadata: SocialMetadata(
+                        title: nil,
+                        authorHandle: nil,
+                        thumbnailURL: nil
+                    )
+                )
+            ),
+            placeSearcher: nil
+        )
+
+        let result = try await extractor.extract(
+            from: URL(string: "https://www.tiktok.com/@creator/video/123")!,
+            sharedText: "Try Levain Bakery on the Upper West Side https://www.tiktok.com/@creator/video/123"
+        )
+
+        XCTAssertEqual(result.candidates.first?.place.name, "Levain Bakery")
+    }
+
+    func testUrlOnlyShareStillReportsDailyLimit() async {
+        let extractor = FixturePlaceExtractor(
+            metadataProvider: QuotaMetadataProvider(),
+            placeSearcher: nil
+        )
+
+        do {
+            _ = try await extractor.extract(
+                from: URL(string: "https://www.tiktok.com/@creator/video/123")!,
+                sharedText: "https://www.tiktok.com/@creator/video/123"
+            )
+            XCTFail("Expected the daily limit")
+        } catch {
+            XCTAssertEqual(error as? DevelopmentSocialEvidenceError, .dailyLimit)
+        }
+    }
+
     func testDevelopmentEvidenceRequestBypassesURLCache() throws {
         let request = try XCTUnwrap(DevelopmentSocialEvidenceClient.request(
             for: URL(string: "https://www.tiktok.com/t/ZTfDj7vmC/")!
@@ -118,6 +199,37 @@ final class FixturePlaceExtractorTests: XCTestCase {
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "Content-Type"),
             "application/json"
+        )
+    }
+
+    func testProductionEvidenceRequestUsesConfiguredEndpointAndBearerToken() throws {
+        let endpoint = URL(string: "https://api.plandit.example/v1/social-evidence")!
+        let request = try XCTUnwrap(DevelopmentSocialEvidenceClient.request(
+            for: URL(string: "https://www.tiktok.com/t/ZTfDj7vmC/")!,
+            endpoint: endpoint,
+            accessToken: "test-access-token"
+        ))
+
+        XCTAssertEqual(request.url, endpoint)
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Authorization"),
+            "Bearer test-access-token"
+        )
+    }
+
+    func testDevelopmentEvidenceClientRecognizesDailyLimit() {
+        let data = Data(
+            """
+            {"error":{"code":"provider_quota_exceeded"}}
+            """.utf8
+        )
+
+        XCTAssertEqual(
+            DevelopmentSocialEvidenceClient.providerError(
+                statusCode: 429,
+                data: data
+            ),
+            .dailyLimit
         )
     }
 
@@ -324,6 +436,12 @@ private struct StubPlaceSearcher: PlaceSearching {
 private struct FailingMetadataProvider: SocialMetadataProviding {
     func metadata(for url: URL) async throws -> SocialMetadata? {
         throw TestError.metadataUnavailable
+    }
+}
+
+private struct QuotaMetadataProvider: SocialMetadataProviding {
+    func metadata(for url: URL) async throws -> SocialMetadata? {
+        throw DevelopmentSocialEvidenceError.dailyLimit
     }
 }
 

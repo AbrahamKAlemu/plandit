@@ -37,8 +37,8 @@ final class PlanFlowTests: XCTestCase {
         app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", text)).firstMatch.waitForExistence(timeout: 5)
     }
 
-    @MainActor func testPlusIsInTheTabBarOnEveryTab() {
-        for tab in ["today", "saved", "profile"] {
+    @MainActor func testPlanIsInTheTabBarOnEveryTab() {
+        for tab in ["today", "saved", "profile", "settings"] {
             let app = launch(["-startTab", tab])
             XCTAssertTrue(app.buttons["plan-button"].waitForExistence(timeout: 5), "missing on \(tab)")
             XCTAssertEqual(app.buttons["plan-button"].label, "Plan a day")

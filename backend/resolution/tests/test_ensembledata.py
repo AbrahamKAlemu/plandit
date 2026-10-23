@@ -1,5 +1,7 @@
 import os
+from io import BytesIO
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -8,6 +10,8 @@ from django.test import SimpleTestCase
 from resolution.providers.ensembledata import (
     EnsembleDataClient,
     EnsembleDataError,
+    EnsembleDataQuotaExceeded,
+    _fetch_json,
     _validate_external_https_url,
     parse_subtitle_text,
 )
@@ -91,6 +95,19 @@ class EnsembleDataClientTests(SimpleTestCase):
 
         with self.assertRaises(EnsembleDataError):
             client.evidence_for("https://www.tiktok.com/t/unchanged")
+
+    @patch("resolution.providers.ensembledata.urlopen")
+    def test_classifies_daily_request_limit(self, urlopen):
+        urlopen.side_effect = HTTPError(
+            "https://ensembledata.com/apis/tt/post/info",
+            495,
+            "Maximum requests limit reached",
+            {},
+            BytesIO(b'{"detail":"Maximum requests limit reached for today."}'),
+        )
+
+        with self.assertRaises(EnsembleDataQuotaExceeded):
+            _fetch_json("https://ensembledata.com/apis/tt/post/info")
 
 
 class SubtitleParsingTests(SimpleTestCase):
