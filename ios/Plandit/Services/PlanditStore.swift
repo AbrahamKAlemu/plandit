@@ -211,7 +211,8 @@ final class PlanditStore {
         }
     }
 
-    func confirm(postID: UUID, candidateID: String) {
+    @discardableResult
+    func confirm(postID: UUID, candidateID: String) -> Bool {
         updateAndPersist(postID) { post in
             guard let candidate = post.candidates.first(where: { $0.id == candidateID }) else { return }
             post.place = candidate.place

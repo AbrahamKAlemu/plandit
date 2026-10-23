@@ -11,6 +11,7 @@ struct SavedPostDetailView: View {
     @State private var isSearchingForPlace = false
     @State private var searchName = ""
     @State private var searchAddress = ""
+    @State private var didConfirmPlace = false
     @State private var selectedVideo: PhotosPickerItem?
     @State private var isChoosingVideo = false
     @State private var isProcessingVideo = false
@@ -45,7 +46,9 @@ struct SavedPostDetailView: View {
                         CandidateList(
                             post: post,
                             onConfirm: { candidateID in
-                                store.confirm(postID: post.id, candidateID: candidateID)
+                                if store.confirm(postID: post.id, candidateID: candidateID) {
+                                    didConfirmPlace = true
+                                }
                             },
                             onSearch: {
                                 isSearchingForPlace = true
@@ -89,8 +92,6 @@ struct SavedPostDetailView: View {
                         }
                     }
 
-                    SourceCard(post: post)
-
                     VStack(spacing: Space.sm) {
                         if post.isMappable {
                             if isInToday {
@@ -127,6 +128,14 @@ struct SavedPostDetailView: View {
                             }
                         }
 
+                        if didConfirmPlace {
+                            Button("Confirm") {
+                                dismiss()
+                            }
+                            .buttonStyle(.secondary)
+                            .accessibilityIdentifier("finish-place-confirmation")
+                        }
+
                         Button(role: .destructive) {
                             dismiss()
                             withAnimation(.snappy) { store.removePost(post.id) }
@@ -136,7 +145,10 @@ struct SavedPostDetailView: View {
                                 .foregroundStyle(.error)
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }
+                        .accessibilityIdentifier("remove-saved-place")
                     }
+
+                    SourceCard(post: post)
                 }
                 .padding(Space.lg)
                 .animation(.snappy(duration: 0.35), value: post.status)

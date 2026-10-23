@@ -39,6 +39,18 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
         XCTAssertTrue(app.staticTexts["167 W 74th St"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Add to today's plan"].exists)
+        XCTAssertTrue(app.buttons["remove-saved-place"].isHittable)
+        let finish = app.buttons["finish-place-confirmation"]
+        XCTAssertTrue(finish.isHittable)
+        finish.tap()
+        XCTAssertTrue(app.buttons["Add a link"].waitForExistence(timeout: 5))
+
+        let savedRow = app.staticTexts["Levain Bakery"].firstMatch
+        XCTAssertTrue(savedRow.waitForExistence(timeout: 5))
+        savedRow.tap()
+        XCTAssertTrue(app.buttons["Add to today's plan"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["finish-place-confirmation"].exists)
 
         app.terminate()
         app.launchArguments = ["-startTab", "saved", "-startDetent", "large"]
