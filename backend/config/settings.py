@@ -143,7 +143,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
-    "DEFAULT_THROTTLE_RATES": {"anon": "60/min", "user": "600/min", "waitlist": "10/min"},
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "600/min",
+        "waitlist": "10/min",
+    },
     "COERCE_DECIMAL_TO_STRING": False,
 }
 if DEBUG:
@@ -167,8 +171,9 @@ if not DEBUG:
 # Dotted path to the class that turns post text into a Place. Swap for an LLM + places API later.
 PLANDIT_PLACE_MATCHER = env("PLANDIT_PLACE_MATCHER", "plandit.saved.extraction.NameMatcher")
 PLANDIT_OEMBED_TIMEOUT_SECONDS = float(env("PLANDIT_OEMBED_TIMEOUT_SECONDS", "5"))
-ENSEMBLEDATA_ENABLED = DEBUG and env_bool("ENSEMBLEDATA_ENABLED")
+ENSEMBLEDATA_ENABLED = env_bool("ENSEMBLEDATA_ENABLED")
 ENSEMBLEDATA_API_TOKEN = env("ENSEMBLEDATA_API_TOKEN")
+SOCIAL_EVIDENCE_THROTTLE_RATE = env("SOCIAL_EVIDENCE_THROTTLE_RATE", "30/day")
 SOCIAL_EVIDENCE_CACHE_SECONDS = 300
 CACHES = {
     "default": {

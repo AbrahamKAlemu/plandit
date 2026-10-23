@@ -52,7 +52,9 @@ python manage.py runserver 8001       # the website's dev server uses 8000
    (the default for new projects) need nothing else: public keys are fetched from
    `/auth/v1/.well-known/jwks.json` and cached. Projects still on the legacy shared secret also
    set `SUPABASE_JWT_SECRET` (Project Settings → JWT Keys → Legacy JWT secret).
-4. Enable the sign-in providers you want under Authentication → Providers (Apple, Google, email).
+4. Enable anonymous sign-ins under Authentication → Providers. The iOS TestFlight build uses one
+   anonymous user per installation so extraction requests can be authenticated and rate limited
+   without adding onboarding.
 5. Run once against the Supabase database:
    ```sh
    python manage.py migrate
@@ -68,8 +70,8 @@ rows. If you want belt and braces, also remove `public` from *Exposed schemas* u
 
 ### How the iOS app authenticates
 
-Sign in with [supabase-swift](https://github.com/supabase/supabase-swift), then send the session's
-access token on every request:
+The app signs in anonymously through the Supabase Auth REST API, stores the refresh token in the
+iOS Keychain, refreshes expired sessions, and sends the access token on extraction requests:
 
 ```
 Authorization: Bearer <session.accessToken>
@@ -99,6 +101,9 @@ Required environment in production:
 | `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
 | `SUPABASE_JWT_SECRET` | only for legacy HS256 projects |
 | `CORS_ALLOWED_ORIGINS` | `https://plandit.app,https://www.plandit.app` |
+| `ENSEMBLEDATA_ENABLED` | `1` to enable social evidence extraction; `0` is the kill switch |
+| `ENSEMBLEDATA_API_TOKEN` | server-side provider token; never put this in the iOS build |
+| `SOCIAL_EVIDENCE_THROTTLE_RATE` | authenticated per-user limit, default `30/day` |
 
 Point `api.plandit.app` at the host, then set `endpoint: "https://api.plandit.app/api/waitlist/"`
 in `website/config.js` so the landing page's form starts saving signups.
@@ -113,6 +118,7 @@ Unauthenticated calls get `401`; another user's objects return `404`.
 |---|---|---|
 | GET | `/api/health/` | `{"status":"ok"}` after a database ping |
 | POST | `/api/waitlist/` | `{"email","source"}` → `201` stored, `200` already there. 10/min per IP |
+| POST | `/v1/social-evidence` | authenticated TikTok caption/transcript evidence; 30/day per user by default |
 | GET, PATCH | `/api/me/` | profile: `name`, `school`, `home_base`, `default_budget`, `travel_modes` |
 | GET | `/api/me/stats/` | `plans_completed`, `neighborhoods_visited`, `miles_walked`, `average_spend`, `plans_under_budget`, `streak_weeks` |
 | GET | `/api/places/?q=&category=` | search the shared place catalog (max 100) |

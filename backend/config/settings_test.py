@@ -1,9 +1,19 @@
 """Settings used by pytest. Keeps secrets out of the environment and auth deterministic."""
 
 import os
+from pathlib import Path
+from urllib.parse import quote
+
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 os.environ.setdefault("DJANGO_SECRET_KEY", "test-only-secret-key")
 os.environ.setdefault("DJANGO_DEBUG", "0")
+if not os.environ.get("DATABASE_URL"):
+    password = os.environ.get("POSTGRES_PASSWORD", "test-only-postgres-password")
+    os.environ["DATABASE_URL"] = f"postgresql://plandit:{quote(password, safe='')}@127.0.0.1:5433/plandit"
 
 from .settings import *  # noqa: E402, F403
 

@@ -5,11 +5,23 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+    throttle_classes,
+)
+from rest_framework.permissions import BasePermission
+from rest_framework.throttling import BaseThrottle
 
-from .models import ResolutionAttempt
+from plandit.core.auth import SupabaseJWTAuthentication
+
+from .models import ResolutionAttempt, SocialEvidenceThrottleState
 from .providers.ensembledata import (
     EnsembleDataClient,
     EnsembleDataError,
@@ -22,18 +34,68 @@ MAX_EVIDENCE_LENGTH = 5000
 MAX_SOCIAL_EVIDENCE_LENGTH = 20_000
 
 
-@csrf_exempt
+class SocialEvidenceThrottle(BaseThrottle):
+    def __init__(self):
+        try:
+            count, period = settings.SOCIAL_EVIDENCE_THROTTLE_RATE.split("/", 1)
+            self.request_limit = int(count)
+            self.window_seconds = {
+                "s": 1,
+                "m": 60,
+                "h": 60 * 60,
+                "d": 24 * 60 * 60,
+            }[period[0].lower()]
+            if self.request_limit <= 0:
+                raise ValueError
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError) as error:
+            raise ImproperlyConfigured("SOCIAL_EVIDENCE_THROTTLE_RATE must look like '30/day'.") from error
+        self.retry_after = None
+
+    def allow_request(self, request, view):
+        if settings.DEBUG or not settings.ENSEMBLEDATA_ENABLED:
+            return True
+
+        now = timezone.now()
+        with transaction.atomic():
+            state, _ = SocialEvidenceThrottleState.objects.select_for_update().get_or_create(
+                user=request.user,
+                defaults={"window_started_at": now},
+            )
+            elapsed = (now - state.window_started_at).total_seconds()
+            if elapsed >= self.window_seconds:
+                state.window_started_at = now
+                state.request_count = 1
+                state.save(update_fields=["window_started_at", "request_count"])
+                return True
+            if state.request_count >= self.request_limit:
+                self.retry_after = self.window_seconds - elapsed
+                return False
+            state.request_count += 1
+            state.save(update_fields=["request_count"])
+            return True
+
+    def wait(self):
+        return self.retry_after
+
+
+class IsAuthenticatedOrDebug(BasePermission):
+    def has_permission(self, request, view):
+        return settings.DEBUG or bool(request.user and request.user.is_authenticated)
+
+
+@api_view(["POST"])
+@authentication_classes([SupabaseJWTAuthentication])
+@permission_classes([IsAuthenticatedOrDebug])
+@throttle_classes([SocialEvidenceThrottle])
 def social_evidence(request: HttpRequest) -> JsonResponse:
-    if not settings.DEBUG or not settings.ENSEMBLEDATA_ENABLED:
+    if not settings.ENSEMBLEDATA_ENABLED:
         return _error(
             None,
             "not_found",
-            "Development social evidence is disabled.",
+            "Social evidence is disabled.",
             False,
             status=404,
         )
-    if request.method != "POST":
-        return _error(None, "method_not_allowed", "Use POST.", False, status=405)
     try:
         payload = json.loads(request.body)
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -58,15 +120,11 @@ def social_evidence(request: HttpRequest) -> JsonResponse:
             status=503,
         )
 
-    cache_key = "social-evidence:" + hashlib.sha256(
-        supported.canonical_url.encode()
-    ).hexdigest()
+    cache_key = "social-evidence:" + hashlib.sha256(supported.canonical_url.encode()).hexdigest()
     response_payload = cache.get(cache_key)
     if response_payload is None:
         try:
-            evidence = EnsembleDataClient(
-                settings.ENSEMBLEDATA_API_TOKEN
-            ).evidence_for(supported.canonical_url)
+            evidence = EnsembleDataClient(settings.ENSEMBLEDATA_API_TOKEN).evidence_for(supported.canonical_url)
         except EnsembleDataQuotaExceeded:
             return _error(
                 None,

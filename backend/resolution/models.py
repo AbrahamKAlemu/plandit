@@ -1,5 +1,7 @@
 from django.db import models
 
+from plandit.core.models import Profile
+
 
 class ResolutionAttempt(models.Model):
     request_id = models.UUIDField(unique=True)
@@ -17,3 +19,9 @@ class ResolutionAttempt(models.Model):
 
     def __str__(self) -> str:
         return f"{self.request_id} {self.platform} {self.outcome}"
+
+
+class SocialEvidenceThrottleState(models.Model):
+    user = models.OneToOneField(Profile, on_delete=models.CASCADE, primary_key=True)
+    window_started_at = models.DateTimeField()
+    request_count = models.PositiveIntegerField(default=0)
