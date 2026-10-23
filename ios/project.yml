@@ -31,6 +31,9 @@ targets:
         CFBundleDisplayName: Plandit
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        PlanditAPIBaseURL: $(PLANDIT_API_BASE_URL)
+        PlanditSupabaseURL: $(PLANDIT_SUPABASE_URL)
+        PlanditSupabaseAnonKey: $(PLANDIT_SUPABASE_ANON_KEY)
         ITSAppUsesNonExemptEncryption: false
         NSLocationWhenInUseUsageDescription: Plandit uses your location to start today's route from where you are.
         NSSpeechRecognitionUsageDescription: Plandit can transcribe a video on this device to identify the place you want to save.

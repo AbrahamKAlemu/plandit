@@ -53,7 +53,19 @@ struct FixturePlaceExtractor: PlaceExtracting {
             fallback: TikTokOEmbedClient()
         )
 #else
-        TikTokOEmbedClient()
+        if let configuration = ProductionAPIConfiguration.current {
+            let endpoint = configuration.apiBaseURL.appending(path: "v1/social-evidence")
+            return FallbackSocialMetadataProvider(
+                primary: DevelopmentSocialEvidenceClient(
+                    endpoint: endpoint,
+                    accessTokenProvider: SupabaseAnonymousSession(
+                        configuration: configuration
+                    )
+                ),
+                fallback: TikTokOEmbedClient()
+            )
+        }
+        return TikTokOEmbedClient()
 #endif
     }
 
@@ -536,13 +548,26 @@ struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
     }
 
     private let session: URLSession
+    private let endpoint: URL
+    private let accessTokenProvider: (any AccessTokenProviding)?
 
-    init(session: URLSession = .shared) {
+    init(
+        session: URLSession = .shared,
+        endpoint: URL = URL(string: "http://127.0.0.1:8000/v1/social-evidence")!,
+        accessTokenProvider: (any AccessTokenProviding)? = nil
+    ) {
         self.session = session
+        self.endpoint = endpoint
+        self.accessTokenProvider = accessTokenProvider
     }
 
     func metadata(for url: URL) async throws -> SocialMetadata? {
-        guard let request = try Self.request(for: url) else {
+        let accessToken = try await accessTokenProvider?.accessToken()
+        guard let request = try Self.request(
+            for: url,
+            endpoint: endpoint,
+            accessToken: accessToken
+        ) else {
             return nil
         }
         let (data, response) = try await session.data(for: request)
@@ -581,10 +606,13 @@ struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
         return .dailyLimit
     }
 
-    static func request(for url: URL) throws -> URLRequest? {
+    static func request(
+        for url: URL,
+        endpoint: URL = URL(string: "http://127.0.0.1:8000/v1/social-evidence")!,
+        accessToken: String? = nil
+    ) throws -> URLRequest? {
         let supported = try SupportedSocialURL(url)
-        guard supported.platform == .tiktok,
-              let endpoint = URL(string: "http://127.0.0.1:8000/v1/social-evidence") else {
+        guard supported.platform == .tiktok else {
             return nil
         }
         var request = URLRequest(
@@ -594,6 +622,9 @@ struct DevelopmentSocialEvidenceClient: SocialMetadataProviding {
         )
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let accessToken {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONEncoder().encode([
             "sourceUrl": supported.canonicalURL.absoluteString
         ])

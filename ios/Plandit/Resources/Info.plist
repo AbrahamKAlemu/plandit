@@ -31,6 +31,12 @@
 	<string>Plandit uses your location to start today's route from where you are.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Plandit can transcribe a video on this device to identify the place you want to save.</string>
+	<key>PlanditAPIBaseURL</key>
+	<string>$(PLANDIT_API_BASE_URL)</string>
+	<key>PlanditSupabaseAnonKey</key>
+	<string>$(PLANDIT_SUPABASE_ANON_KEY)</string>
+	<key>PlanditSupabaseURL</key>
+	<string>$(PLANDIT_SUPABASE_URL)</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Manrope-Regular.ttf</string>

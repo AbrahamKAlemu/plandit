@@ -192,3 +192,22 @@ Integration verification:
 The approved fixture/local milestone has no paid API usage. Production operating cost remains
 dependent on the later Railway/PostgreSQL deployment and approved place provider; Apify is not part
 of the implementation.
+
+## Authenticated TestFlight extraction
+
+On October 23, 2026, the production extraction path was prepared for a small TestFlight cohort.
+
+- `/v1/social-evidence` now reuses Supabase JWT authentication in production and applies a
+  configurable per-user throttle (`30/day` by default).
+- `ENSEMBLEDATA_ENABLED` is an explicit production kill switch instead of being tied to Django
+  debug mode. The provider token remains server-side.
+- Release builds can silently create and refresh a Supabase anonymous session, keep it in the iOS
+  Keychain, and send its bearer token to the configured HTTPS API.
+- The API base URL, Supabase URL, and public Supabase client key are build settings. Missing release
+  configuration degrades to TikTok oEmbed rather than making an unauthenticated paid-provider call.
+- Debug simulator builds retain the localhost evidence client for development.
+
+The iOS Debug and Release simulator builds and focused extraction tests pass. Database-backed
+endpoint tests remain dependent on the repository's PostgreSQL service because its RLS migrations
+cannot run on SQLite. Deployment still requires enabling Supabase anonymous sign-ins, configuring
+Railway variables, and validating one authenticated request against the deployed service.

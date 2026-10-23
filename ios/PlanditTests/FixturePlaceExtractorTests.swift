@@ -202,6 +202,21 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
+    func testProductionEvidenceRequestUsesConfiguredEndpointAndBearerToken() throws {
+        let endpoint = URL(string: "https://api.plandit.example/v1/social-evidence")!
+        let request = try XCTUnwrap(DevelopmentSocialEvidenceClient.request(
+            for: URL(string: "https://www.tiktok.com/t/ZTfDj7vmC/")!,
+            endpoint: endpoint,
+            accessToken: "test-access-token"
+        ))
+
+        XCTAssertEqual(request.url, endpoint)
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Authorization"),
+            "Bearer test-access-token"
+        )
+    }
+
     func testDevelopmentEvidenceClientRecognizesDailyLimit() {
         let data = Data(
             """
