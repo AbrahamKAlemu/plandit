@@ -3,7 +3,7 @@ import XCTest
 final class AppearanceFlowTests: XCTestCase {
     @MainActor func testSelectingDarkPersistsAcrossRelaunch() {
         let app = XCUIApplication()
-        app.launchArguments = ["-startTab", "profile", "-startDetent", "large"]
+        app.launchArguments = ["-skipAuth", "-startTab", "profile", "-startDetent", "large"]
         continueAfterFailure = false
         app.launch()
         openAppearance(in: app)

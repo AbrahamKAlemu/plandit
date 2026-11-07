@@ -53,14 +53,13 @@ struct FixturePlaceExtractor: PlaceExtracting {
             fallback: TikTokOEmbedClient()
         )
 #else
-        if let configuration = ProductionAPIConfiguration.current {
+        // The signed-in account's token; the extractor never signs anyone in on its own.
+        if let configuration = ProductionAPIConfiguration.current, let auth = SupabaseAuthClient.shared {
             let endpoint = configuration.apiBaseURL.appending(path: "v1/social-evidence")
             return FallbackSocialMetadataProvider(
                 primary: DevelopmentSocialEvidenceClient(
                     endpoint: endpoint,
-                    accessTokenProvider: SupabaseAnonymousSession(
-                        configuration: configuration
-                    )
+                    accessTokenProvider: auth
                 ),
                 fallback: TikTokOEmbedClient()
             )

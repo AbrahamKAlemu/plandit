@@ -31,7 +31,7 @@ final class PlanditStoreTests: XCTestCase {
         var plan = DayPlan(date: date, title: "Test day", budget: 60, stops: stops, legs: [])
         plan.legs = zip(plan.stops, plan.stops.dropFirst()).map { .estimate(from: $0, to: $1) }
         return PlanditStore(
-            today: plan, saved: saved, profile: SampleData.profile, stats: SampleData.stats,
+            today: plan, saved: saved, profile: SampleData.profile,
             pastPlans: [], visited: [], extractor: extractor, storage: storage
         )
     }

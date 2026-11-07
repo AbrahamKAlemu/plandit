@@ -5,6 +5,7 @@ import SwiftUI
 struct TodaySheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
+    @State private var isAddingLink = false
 
     var body: some View {
         let plan = store.today
@@ -21,7 +22,27 @@ struct TodaySheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
-                    if plan.stops.isEmpty {
+                    if plan.stops.isEmpty, store.saved.isEmpty {
+                        // Nothing to plan from yet: the first step is a place, not a plan.
+                        EmptyState(
+                            icon: .route,
+                            title: "Nothing planned yet",
+                            message: "Add a place first. Share a TikTok or Reel to Plandit, or paste a link."
+                        ) {
+                            Button {
+                                isAddingLink = true
+                            } label: {
+                                HStack(spacing: Space.xs) {
+                                    Icon(.clipboardPaste, size: 18)
+                                    Text("Paste a link")
+                                }
+                            }
+                            .buttonStyle(.secondary)
+                            .accessibilityIdentifier("today-paste-link")
+                        }
+                        .padding(.top, Space.md)
+                        .transition(.opacity)
+                    } else if plan.stops.isEmpty {
                         EmptyState(
                             icon: .route,
                             title: "Nothing planned yet",
@@ -72,6 +93,12 @@ struct TodaySheet: View {
         }
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $isAddingLink) {
+            AddLinkSheet { id in
+                // Same landing as from Saved: watch the new post get mapped.
+                router.showPost(id)
+            }
+        }
     }
 }
 

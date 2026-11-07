@@ -29,7 +29,8 @@ nearby and on budget, shown on a map.
   Details in `backend/README.md`.
 - Website: `cd website && python3 -m http.server 8000`.
 - Test: `cd backend && pytest` (needs the compose Postgres). Lint: `ruff check . && ruff format --check .`
-  iOS: no tests yet.
+  iOS: `cd ios && xcodebuild test -project Plandit.xcodeproj -scheme Plandit -destination
+  'platform=iOS Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO` (unit + UI tests).
 - Feature Forge skills are installed in `.claude/skills/` (feature-forge, brief, architecture,
   plan, whetstone). To update them, clone https://github.com/kenxle/feature-forge, move the old
   copies out, and run `python3 scripts/install.py /absolute/path/to/this/repo` from the clone.
@@ -53,6 +54,18 @@ nearby and on budget, shown on a map.
 - Never commit secrets. Keys go in `.env`, which is gitignored.
 - Don't edit docs/brand_position.md or docs/style_guide.md without their owners' sign-off.
 - When a feature ships, the Feature Forge cleanup step updates this file with what we learned.
+
+## What we learned
+- Accounts and metrics (Nov 2026, docs/features/accounts-and-metrics/):
+  - `backend/.env` points at the production Supabase database. `pytest` refuses Supabase hosts;
+    `manage.py migrate` does not, so pass a local `DATABASE_URL` when you migrate locally.
+  - The app requires an account. UI tests launch with `-skipAuth` (DEBUG only) to use a local test
+    account with sync off; `-resetAuth` clears the Keychain session.
+  - Supabase "Confirm email" is off: there is no custom SMTP, and the built-in sender only delivers
+    to team members. Add SMTP before turning it back on.
+  - Class metrics: `GET https://plandit-api.onrender.com/api/metrics/?days=30` with header
+    `X-Metrics-Key` (value in the Render service's environment). "Real user" = built a plan with
+    at least one stop.
 
 ## Team
 | Person | Owns |
