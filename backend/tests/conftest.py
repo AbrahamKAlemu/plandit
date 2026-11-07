@@ -7,12 +7,32 @@ from django.conf import settings
 from django.core.cache import cache
 from rest_framework.test import APIClient
 
+from config.test_db_guard import refuse_remote_test_host
 from plandit.core.models import Profile
 from plandit.places.models import Place, PlaceCategory
 
 
-def make_token(user_id=None, *, email="student@columbia.edu", name="Abraham", expires_in=3600, **overrides) -> str:
+def pytest_sessionstart(session):
+    """Refuse a Supabase (production) database host before any test database is created, no
+    matter which settings module pytest was pointed at (config.settings_test does it too)."""
+    refuse_remote_test_host(settings.DATABASES["default"].get("HOST"))
+
+
+def make_token(
+    user_id=None,
+    *,
+    email="student@columbia.edu",
+    name="Abraham",
+    expires_in=3600,
+    is_anonymous=False,
+    app_metadata=None,
+    **overrides,
+) -> str:
+    """A Supabase-shaped access token. `is_anonymous=True, email=""` mimics an anonymous session;
+    `app_metadata={"provider": "apple"}` an Apple sign-in. Any other claim goes in `overrides`."""
     now = datetime.now(UTC)
+    if app_metadata is None:
+        app_metadata = {} if is_anonymous else {"provider": "email", "providers": ["email"]}
     claims = {
         "sub": str(user_id or uuid.uuid4()),
         "aud": settings.SUPABASE_JWT_AUDIENCE,
@@ -20,6 +40,8 @@ def make_token(user_id=None, *, email="student@columbia.edu", name="Abraham", ex
         "role": "authenticated",
         "email": email,
         "user_metadata": {"full_name": name},
+        "app_metadata": app_metadata,
+        "is_anonymous": is_anonymous,
         "iat": now,
         "exp": now + timedelta(seconds=expires_in),
     }

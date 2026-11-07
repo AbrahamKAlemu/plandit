@@ -32,5 +32,9 @@ services:
         sync: false
       - key: SOCIAL_EVIDENCE_THROTTLE_RATE
         value: 30/day
+      - key: METRICS_API_KEY
+        generateValue: true # GET /api/metrics/ key for the course staff; copy it from the dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # Supabase -> Project Settings -> API keys (secret); account deletion
       - key: WEB_CONCURRENCY
         value: "2"

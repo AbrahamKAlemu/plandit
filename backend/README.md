@@ -9,7 +9,7 @@ Plandit tables (see "Row level security" below).
 backend/
   config/            settings, urls, wsgi/asgi, test settings
   plandit/
-    core/            Supabase JWT auth, Profile (one per Supabase user), /api/me, stats, RLS migration
+    core/            Supabase JWT auth, Profile, /api/me (+ snapshot, events, delete), activity, /api/metrics, RLS migrations
     places/          Place catalog + Manhattan seed fixture
     saved/           Saved TikToks/Reels/links and the extraction pipeline (oEmbed -> place matcher)
     plans/           Day plans, stops, travel legs
@@ -37,6 +37,8 @@ python manage.py runserver 8001       # the website's dev server uses 8000
 - `POSTGRES_PASSWORD` is required for local development. Django constructs the loopback-only
   database URL from it; deployed environments must provide `DATABASE_URL` instead.
 - Tests: `pytest` (needs the compose Postgres; it creates its own `test_plandit` database).
+  The test settings refuse a `DATABASE_URL` whose host contains `supabase` so a production URL
+  in `.env` is never used for tests; set `PLANDIT_ALLOW_REMOTE_TEST_DB=1` to override on purpose.
 - Lint: `ruff check . && ruff format --check .`
 - Admin: `python manage.py createsuperuser`, then http://localhost:8001/admin/.
 - Health: `curl http://localhost:8001/api/health/`
@@ -78,7 +80,15 @@ Authorization: Bearer <session.accessToken>
 ```
 
 The first authenticated request creates the `Profile` row from the token's `sub`, `email`, and
-`user_metadata.full_name`. Tokens are verified locally; no call to Supabase per request.
+`user_metadata.full_name`. Every request also syncs `is_anonymous` and `app_metadata.provider`,
+sets `signed_up_at` the first time a non-anonymous token is seen, and records the account as
+active today (at most one write per 5 minutes). Tokens are verified locally; no call to Supabase
+per request.
+
+Accounts (email + password, Sign in with Apple) sync the app's whole local store through
+`/api/me/snapshot/` and report `link_saved`, `place_saved` and `plan_built` through
+`/api/me/events/`. A **real user** is a non-anonymous profile with `activated_at` set, which
+happens on the first `plan_built` event or the first snapshot containing a plan with stops.
 
 ## Deploy
 
@@ -104,6 +114,8 @@ Required environment in production:
 | `ENSEMBLEDATA_ENABLED` | `1` to enable social evidence extraction; `0` is the kill switch |
 | `ENSEMBLEDATA_API_TOKEN` | server-side provider token; never put this in the iOS build |
 | `SOCIAL_EVIDENCE_THROTTLE_RATE` | authenticated per-user limit, default `30/day` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (Project Settings → API keys, secret); used only to delete auth users on `DELETE /api/me/`. Without it, account deletion removes Plandit data only |
+| `METRICS_API_KEY` | shared secret for `GET /api/metrics/` (course staff). Empty turns the endpoint off. The Render blueprint generates one |
 
 Point `api.plandit.app` at the host, then set `endpoint: "https://api.plandit.app/api/waitlist/"`
 in `website/config.js` so the landing page's form starts saving signups.
@@ -111,8 +123,8 @@ in `website/config.js` so the landing page's form starts saving signups.
 ## API
 
 JSON in and out, snake_case keys, money as numbers, UUID ids, ISO 8601 timestamps. Every route
-needs `Authorization: Bearer <Supabase access token>` except `/api/health/` and `/api/waitlist/`.
-Unauthenticated calls get `401`; another user's objects return `404`.
+needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/api/waitlist/` and
+`/api/metrics/` (secret key). Unauthenticated calls get `401`; another user's objects return `404`.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -120,7 +132,12 @@ Unauthenticated calls get `401`; another user's objects return `404`.
 | POST | `/api/waitlist/` | `{"email","source"}` → `201` stored, `200` already there. 10/min per IP |
 | POST | `/v1/social-evidence` | authenticated TikTok caption/transcript evidence; 30/day per user by default |
 | GET, PATCH | `/api/me/` | profile: `name`, `school`, `home_base`, `default_budget`, `travel_modes` |
+| DELETE | `/api/me/` | delete the account: the Supabase auth user (Admin API) and then every Plandit row. `204`; `502` and nothing deleted if Supabase fails, so the app can retry. A tombstone keeps the still-valid token from re-creating the profile (`401 Account deleted.`) |
 | GET | `/api/me/stats/` | `plans_completed`, `neighborhoods_visited`, `miles_walked`, `average_spend`, `plans_under_budget`, `streak_weeks` |
+| GET | `/api/me/snapshot/` | the app's whole local store for this account: `{"version", "updated_at", "data"}`; `data` is the iOS `StoreSnapshot` exactly as sent (camelCase). `404` until the first PUT |
+| PUT | `/api/me/snapshot/` | `{"data": {...}}` → `{"version", "updated_at"}`; last writer wins, `version` starts at 1. `data` must be an object under 1,000,000 bytes (`413`). Mirrors `data.profile` into `/api/me/` and marks the account activated when a plan has stops |
+| POST | `/api/me/events/` | `{"name": "link_saved"\|"place_saved"\|"plan_built", "occurred_at"?}` → `201`. `occurred_at` is clamped to the last 7 days; `plan_built` activates the account. 120/min per user |
+| GET | `/api/metrics/?days=30` | aggregate usage for the course staff; no JWT, key in the `X-Metrics-Key` header (preferred; `?key=` also works but lands in access logs, so rotate the key after the course). `totals` (signups, real users, actives, events, waitlist, anonymous sessions) plus a zero-filled `daily` series of `days` (1–365) entries in America/New_York. Counts only, never emails. `404` when `METRICS_API_KEY` is unset, `403` on a bad key, 30/min per IP |
 | GET | `/api/places/?q=&category=` | search the shared place catalog (max 100) |
 | GET | `/api/places/<id>/` | one place |
 | GET | `/api/saved/` | my saved posts, newest first |
