@@ -98,9 +98,7 @@ if not database_url and DEBUG:
     local_database_password = env("POSTGRES_PASSWORD")
     if not local_database_password:
         raise RuntimeError("POSTGRES_PASSWORD must be set for local development.")
-    database_url = (
-        f"postgresql://plandit:{quote(local_database_password, safe='')}@127.0.0.1:5433/plandit"
-    )
+    database_url = f"postgresql://plandit:{quote(local_database_password, safe='')}@127.0.0.1:5433/plandit"
 if not database_url:
     raise RuntimeError("DATABASE_URL must be set when DJANGO_DEBUG is off.")
 
@@ -137,6 +135,10 @@ SUPABASE_JWKS_URL = env("SUPABASE_JWKS_URL") or (
 )
 SUPABASE_JWT_AUDIENCE = "authenticated"
 SUPABASE_JWT_ISSUER = f"{SUPABASE_URL}/auth/v1" if SUPABASE_URL else None
+# Service-role key for the Supabase Admin API (account deletion). Server-side only, never in the app.
+SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY")
+# Shared secret for GET /api/metrics/ (aggregate usage for the course staff). Empty turns it off.
+METRICS_API_KEY = env("METRICS_API_KEY")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["plandit.core.auth.SupabaseJWTAuthentication"],
@@ -147,6 +149,8 @@ REST_FRAMEWORK = {
         "anon": "60/min",
         "user": "600/min",
         "waitlist": "10/min",
+        "events": "120/min",
+        "metrics": "30/min",
     },
     "COERCE_DECIMAL_TO_STRING": False,
 }
