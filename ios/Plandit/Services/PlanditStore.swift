@@ -16,42 +16,100 @@ final class PlanditStore {
     var today: DayPlan
     var saved: [SavedPost]
     var profile: UserProfile
-    var stats: UserStats
     var pastPlans: [PastPlan]
     var visited: [Place]
     var savedErrorMessage: String?
     /// Real walking geometry per leg, filled in by `loadRoutes()`.
     private(set) var legPaths: [UUID: [CLLocationCoordinate2D]] = [:]
 
+    /// Computed from real past plans and visited places; never sample numbers.
+    var stats: UserStats { UserStats.compute(pastPlans: pastPlans, visited: visited) }
+
+    /// Called after every successful local write with what was written. The sync coordinator hooks in here.
+    @ObservationIgnored var onChange: ((StoreSnapshot) -> Void)?
+    /// Usage events for the metrics API. Injected so tests can capture them; nil drops them.
+    @ObservationIgnored var events: ((UsageEvent) -> Void)?
+
     @ObservationIgnored private let extractor: any PlaceExtracting
     @ObservationIgnored private let videoExtractor: VideoEvidenceExtractor
     @ObservationIgnored private let routes = RouteService()
     @ObservationIgnored private let storage: SnapshotStore?
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
+    /// Posts whose extraction or evidence lookup is still running; never started twice.
+    @ObservationIgnored private var inFlight: Set<UUID> = []
+    /// Closed with its account session: no write reaches the file, no hook fires.
+    @ObservationIgnored private(set) var isClosed = false
 
     init(
         today: DayPlan,
         saved: [SavedPost],
         profile: UserProfile,
-        stats: UserStats,
         pastPlans: [PastPlan],
         visited: [Place],
         extractor: any PlaceExtracting = FixturePlaceExtractor(),
         storage: SnapshotStore? = nil,
-        videoExtractor: VideoEvidenceExtractor = VideoEvidenceExtractor()
+        videoExtractor: VideoEvidenceExtractor = VideoEvidenceExtractor(),
+        events: ((UsageEvent) -> Void)? = nil
     ) {
         self.today = today
         self.saved = saved
         self.profile = profile
-        self.stats = stats
         self.pastPlans = pastPlans
         self.visited = visited
         self.extractor = extractor
         self.storage = storage
         self.videoExtractor = videoExtractor
+        self.events = events
         for post in saved where post.status == .processing {
             startExtraction(post.id)
         }
+    }
+
+    /// An account's store from its snapshot (local file or cloud copy).
+    convenience init(
+        snapshot: StoreSnapshot,
+        extractor: any PlaceExtracting = FixturePlaceExtractor(),
+        storage: SnapshotStore? = nil,
+        events: ((UsageEvent) -> Void)? = nil
+    ) {
+        self.init(
+            today: snapshot.today,
+            saved: snapshot.saved,
+            profile: snapshot.profile,
+            pastPlans: snapshot.pastPlans,
+            visited: snapshot.visited,
+            extractor: extractor,
+            storage: storage,
+            events: events
+        )
+    }
+
+    /// Swaps in another copy of this account's data (the server's, after sync) and writes it locally.
+    /// Routes and leg paths are rebuilt; the day is rolled over if that copy is from an earlier date.
+    func replace(with snapshot: StoreSnapshot) {
+        pendingSave?.cancel()
+        pendingSave = nil
+        today = snapshot.today
+        saved = snapshot.saved
+        profile = snapshot.profile
+        pastPlans = snapshot.pastPlans
+        visited = snapshot.visited
+        legPaths = [:]
+        persistNow()
+        rollOverIfNeeded()
+        for post in saved where post.status == .processing {
+            startExtraction(post.id)
+        }
+        Task { await loadRoutes() }
+    }
+
+    /// Detaches the store from its account: pending writes are dropped and later ones (a late
+    /// extraction result, say) never touch the file or the hooks.
+    func close() {
+        cancelPendingSave()
+        isClosed = true
+        onChange = nil
+        events = nil
     }
 
     /// What the user left last time, rolled over to today; the sample data on first launch
@@ -65,21 +123,20 @@ final class PlanditStore {
                 extractor: extractor,
                 saved: resetsSavedData ? [] : SampleData.savedPosts
             )
-            if resetsSavedData { store.flush() }
+            if resetsSavedData { store.persistNow() }
             return store
         }
         let store = PlanditStore(
             today: snapshot.today,
             saved: resetsSavedData ? [] : snapshot.saved,
             profile: snapshot.profile,
-            stats: SampleData.stats, // still mock; see ios/README.md
             pastPlans: snapshot.pastPlans,
             visited: snapshot.visited,
             extractor: extractor,
             storage: storage
         )
         store.rollOverIfNeeded()
-        if resetsSavedData { store.flush() }
+        if resetsSavedData { store.persistNow() }
         return store
     }
 
@@ -92,7 +149,6 @@ final class PlanditStore {
             today: SampleData.dayPlan,
             saved: saved,
             profile: SampleData.profile,
-            stats: SampleData.stats,
             pastPlans: SampleData.pastPlans,
             visited: SampleData.visitedPlaces,
             extractor: extractor,
@@ -141,7 +197,14 @@ final class PlanditStore {
         guard !Calendar.current.isDate(today.date, inSameDayAs: now) else { return }
         if !today.stops.isEmpty {
             pastPlans.insert(
-                PastPlan(title: today.title, date: today.date, stopCount: today.stops.count, cost: today.totalCost),
+                PastPlan(
+                    title: today.title,
+                    date: today.date,
+                    stopCount: today.stops.count,
+                    cost: today.totalCost,
+                    budget: today.budget,
+                    walkingMiles: today.walkingMiles
+                ),
                 at: 0
             )
             for place in today.stops.map(\.place) where !visited.contains(where: { $0.name == place.name }) {
@@ -189,6 +252,7 @@ final class PlanditStore {
         updated.insert(post, at: 0)
         try persistSaved(updated)
         saved = updated
+        events?(.linkSaved)
         startExtraction(post.id)
         return post.id
     }
@@ -213,13 +277,15 @@ final class PlanditStore {
 
     @discardableResult
     func confirm(postID: UUID, candidateID: String) -> Bool {
-        updateAndPersist(postID) { post in
-            guard let candidate = post.candidates.first(where: { $0.id == candidateID }) else { return }
+        guard let candidate = post(id: postID)?.candidates.first(where: { $0.id == candidateID }) else { return false }
+        let confirmed = updateAndPersist(postID) { post in
             post.place = candidate.place
             post.estimatedCost = candidate.estimatedCost
             post.status = .ready
             post.candidates = []
         }
+        if confirmed { events?(.placeSaved) }
+        return confirmed
     }
 
     func submitEvidence(postID: UUID, text: String) {
@@ -254,6 +320,8 @@ final class PlanditStore {
             removePost(id)
             throw error
         }
+        // Only a post that stays counts as a save.
+        events?(.linkSaved)
         return id
     }
 
@@ -287,10 +355,12 @@ final class PlanditStore {
     }
 
     private func startExtraction(_ id: UUID) {
+        guard inFlight.insert(id).inserted else { return }
         Task { await extract(id) }
     }
 
     private func extract(_ id: UUID) async {
+        defer { inFlight.remove(id) }
         guard let post = post(id: id) else { return }
         do {
             let result = try await extractor.extract(from: post.url, sharedText: post.caption)
@@ -330,7 +400,8 @@ final class PlanditStore {
         text: String,
         noCandidatesMessage: String? = nil
     ) async {
-        guard let post = post(id: postID) else { return }
+        guard inFlight.insert(postID).inserted, let post = post(id: postID) else { return }
+        defer { inFlight.remove(postID) }
         do {
             let result = try await extractor.resolve(evidence: text, platform: post.platform)
             updateAndPersist(postID) {
@@ -370,16 +441,16 @@ final class PlanditStore {
     private func persistSaved(_ updatedSaved: [SavedPost]) throws {
         pendingSave?.cancel()
         pendingSave = nil
-        guard let storage else { return }
-        try storage.save(
-            StoreSnapshot(
-                saved: updatedSaved,
-                today: today,
-                profile: profile,
-                pastPlans: pastPlans,
-                visited: visited
-            )
+        guard let storage, !isClosed else { return }
+        let snapshot = StoreSnapshot(
+            saved: updatedSaved,
+            today: today,
+            profile: profile,
+            pastPlans: pastPlans,
+            visited: visited
         )
+        try storage.save(snapshot)
+        onChange?(snapshot)
     }
 
     // MARK: - Today's plan
@@ -401,6 +472,7 @@ final class PlanditStore {
         today.stops.append(stop)
         rebuildLegs()
         persist()
+        events?(.planBuilt)
         Task { await loadRoutes() }
         return stop.id
     }
@@ -494,6 +566,7 @@ final class PlanditStore {
             today.title = Self.title(for: today.stops)
         }
         persist()
+        if !outcome.stops.isEmpty { events?(.planBuilt) }
         Task { await loadRoutes() }
         return outcome
     }
@@ -550,27 +623,51 @@ final class PlanditStore {
 
     // MARK: - Persistence
 
-    private var snapshot: StoreSnapshot {
+    var snapshot: StoreSnapshot {
         StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited)
     }
 
+    /// The current state in the exact JSON shape the file and the cloud copy use.
+    var encodedSnapshot: Data? { try? SnapshotStore.encode(snapshot) }
+
     /// Coalesces bursts of changes into one write a moment later.
     private func persist() {
-        guard let storage else { return }
+        guard let storage, !isClosed else { return }
         let snapshot = snapshot
         pendingSave?.cancel()
         pendingSave = Task {
             try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            do { try storage.save(snapshot) } catch { print("Plandit: could not save state: \(error)") }
+            guard !Task.isCancelled, !isClosed else { return }
+            do {
+                try storage.save(snapshot)
+                pendingSave = nil
+                onChange?(snapshot)
+            } catch {
+                print("Plandit: could not save state: \(error)")
+            }
         }
     }
 
-    /// Writes any pending change immediately (call when the app leaves the foreground).
-    func flush() {
-        guard let storage else { return }
+    /// Drops a queued write without performing it (the account's file is about to be deleted).
+    func cancelPendingSave() {
         pendingSave?.cancel()
         pendingSave = nil
-        try? storage.save(snapshot)
+    }
+
+    /// Writes a pending change immediately (call when the app leaves the foreground). With nothing
+    /// pending it does nothing, so the sync hook never sees a change that did not happen.
+    func flush() {
+        guard pendingSave != nil else { return }
+        persistNow()
+    }
+
+    /// Writes the current state now, pending change or not, and tells the hook.
+    func persistNow() {
+        pendingSave?.cancel()
+        pendingSave = nil
+        guard let storage, !isClosed else { return }
+        let snapshot = snapshot
+        guard (try? storage.save(snapshot)) != nil else { return }
+        onChange?(snapshot)
     }
 }

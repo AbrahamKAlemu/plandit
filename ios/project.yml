@@ -50,6 +50,7 @@ targets:
       path: Plandit/Resources/Plandit.entitlements
       properties:
         com.apple.security.application-groups: [group.com.plandit.app]
+        com.apple.developer.applesignin: [Default]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.plandit.app

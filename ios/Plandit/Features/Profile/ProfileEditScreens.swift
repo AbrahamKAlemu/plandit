@@ -51,6 +51,56 @@ struct BudgetScreen: View {
     }
 }
 
+/// Name: shown at the top of Profile. Accounts made with Apple and no shared name start empty.
+struct NameScreen: View {
+    @Environment(PlanditStore.self) private var store
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.md) {
+                Text("What Plandit calls you.")
+                    .font(.bodyText)
+                    .foregroundStyle(.inkMuted)
+
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text("Name").font(.label).foregroundStyle(.ink)
+                    TextField("Your name", text: $text)
+                        .font(.bodyText)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.done)
+                        .focused($isFocused)
+                        .onSubmit(save)
+                        .padding(.horizontal, Space.sm)
+                        .frame(minHeight: 48)
+                        .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                                .strokeBorder(isFocused ? Color.ink : Color.border, lineWidth: isFocused ? 2 : 1)
+                        )
+                        .animation(.snappy(duration: 0.2), value: isFocused)
+                        .accessibilityIdentifier("profile-name-field")
+                }
+            }
+            .padding(Space.lg)
+        }
+        .scrollIndicators(.hidden)
+        .background(Color.canvas)
+        .navigationTitle("Name")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { text = store.profile.name }
+        .onDisappear(perform: save)
+    }
+
+    private func save() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != store.profile.name else { return }
+        store.updateProfile { $0.name = trimmed }
+    }
+}
+
 /// Home base: the neighborhood a day usually starts from.
 struct HomeBaseScreen: View {
     @Environment(PlanditStore.self) private var store

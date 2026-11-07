@@ -13,7 +13,7 @@ final class PlanBuildingTests: XCTestCase {
         plan.legs = zip(plan.stops, plan.stops.dropFirst()).map { .estimate(from: $0, to: $1) }
         var profile = SampleData.profile
         profile.travelModes = travel
-        return PlanditStore(today: plan, saved: SampleData.savedPosts, profile: profile, stats: SampleData.stats,
+        return PlanditStore(today: plan, saved: SampleData.savedPosts, profile: profile,
                             pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage)
     }
 

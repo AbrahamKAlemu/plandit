@@ -4,6 +4,7 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
     @MainActor func testVideoCanBeChosenFromPhotos() {
         let app = XCUIApplication()
         app.launchArguments = [
+            "-skipAuth",
             "-startTab", "saved",
             "-startDetent", "large",
         ]
@@ -22,6 +23,7 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
     @MainActor func testPasteConfirmAndRelaunchPersistsPlace() {
         let app = XCUIApplication()
         app.launchArguments = [
+            "-skipAuth",
             "-startTab", "saved",
             "-startDetent", "large",
             "-resetSavedData",
@@ -57,7 +59,7 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["finish-place-confirmation"].exists)
 
         app.terminate()
-        app.launchArguments = ["-startTab", "saved", "-startDetent", "large"]
+        app.launchArguments = ["-skipAuth", "-startTab", "saved", "-startDetent", "large"]
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Levain Bakery"].firstMatch.waitForExistence(timeout: 5))
@@ -66,6 +68,7 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
     @MainActor func testNotRightPlaceOpensNameAndAddressSearch() {
         let app = XCUIApplication()
         app.launchArguments = [
+            "-skipAuth",
             "-startTab", "saved",
             "-startDetent", "large",
             "-resetSavedData",

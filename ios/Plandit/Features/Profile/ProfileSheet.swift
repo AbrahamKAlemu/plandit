@@ -14,36 +14,53 @@ struct ProfileSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     HStack(spacing: Space.sm) {
-                        Text(profile.initial)
-                            .font(.manrope(.extraBold, size: 20))
-                            .foregroundStyle(.onInk)
-                            .frame(width: 48, height: 48)
-                            .background(Color.ink, in: Circle())
-                            .accessibilityHidden(true)
+                        Group {
+                            if profile.initial.isEmpty {
+                                Icon(.userRound, size: 22).foregroundStyle(.onInk)
+                            } else {
+                                Text(profile.initial)
+                                    .font(.manrope(.extraBold, size: 20))
+                                    .foregroundStyle(.onInk)
+                            }
+                        }
+                        .frame(width: 48, height: 48)
+                        .background(Color.ink, in: Circle())
+                        .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(profile.name).font(.cardHeading).foregroundStyle(.ink)
-                            Text(profile.school).font(.metadata).foregroundStyle(.inkMuted)
+                            Text(profile.name.isEmpty ? "Your profile" : profile.name).font(.cardHeading).foregroundStyle(.ink)
+                            if !profile.school.isEmpty {
+                                Text(profile.school).font(.metadata).foregroundStyle(.inkMuted)
+                            }
                         }
                     }
                     .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("profile-header")
 
                     VStack(alignment: .leading, spacing: Space.sm) {
                         SectionTitle("Activity")
+                        let stats = store.stats
                         StatsCard(stats: [
-                            ("\(store.stats.plansCompleted)", "Plans completed"),
+                            ("\(stats.plansCompleted)", "Plans completed"),
                             ("\(store.saved.count)", "Places saved"),
-                            ("\(store.stats.neighborhoodsVisited)", "Neighborhoods"),
-                            (store.stats.milesWalked.milesText, "Walked"),
-                            (store.stats.averageSpend.wholeDollarsText, "Average per plan"),
-                            ("\(store.stats.plansUnderBudget) of \(store.stats.plansCompleted)", "Under budget"),
+                            ("\(stats.neighborhoodsVisited)", "Neighborhoods"),
+                            (stats.milesWalked.milesText, "Walked"),
+                            (stats.averageSpend.wholeDollarsText, "Average per plan"),
+                            ("\(stats.plansUnderBudget) of \(stats.plansCompleted)", "Under budget"),
                         ])
                         HStack(spacing: Space.sm) {
                             Icon(.flame, size: 20).foregroundStyle(.ink)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(store.stats.streakWeeks)-week streak").font(.label).foregroundStyle(.ink)
-                                Text("A plan every weekend for \(store.stats.streakWeeks) weeks")
-                                    .font(.metadata)
-                                    .foregroundStyle(.inkMuted)
+                                if stats.streakWeeks > 0 {
+                                    Text("\(stats.streakWeeks)-week streak").font(.label).foregroundStyle(.ink)
+                                    Text(stats.streakWeeks == 1 ? "A plan this week. Keep it going." : "A plan every week. Keep it going.")
+                                        .font(.metadata)
+                                        .foregroundStyle(.inkMuted)
+                                } else {
+                                    Text("No streak yet").font(.label).foregroundStyle(.ink)
+                                    Text("Finish a plan this week to start one.")
+                                        .font(.metadata)
+                                        .foregroundStyle(.inkMuted)
+                                }
                             }
                             Spacer(minLength: 0)
                         }
@@ -52,23 +69,33 @@ struct ProfileSheet: View {
 
                     VStack(alignment: .leading, spacing: Space.sm) {
                         SectionTitle("Recent plans")
-                        VStack(spacing: 0) {
-                            ForEach(store.pastPlans) { plan in
-                                NavigationLink {
-                                    PlaceholderScreen(title: plan.title)
-                                } label: {
-                                    ListRow(title: plan.title, detail: "\(plan.date.shortDay) · \(plan.stopCount) stops · \(plan.cost.wholeDollarsText)")
+                        if store.pastPlans.isEmpty {
+                            Text("Your finished days show up here.")
+                                .font(.bodyText)
+                                .foregroundStyle(.inkMuted)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .planditCard()
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(store.pastPlans) { plan in
+                                    NavigationLink {
+                                        PlaceholderScreen(title: plan.title)
+                                    } label: {
+                                        ListRow(title: plan.title, detail: "\(plan.date.shortDay) · \(plan.stopCount) stops · \(plan.cost.wholeDollarsText)")
+                                    }
+                                    .buttonStyle(.plain)
+                                    if plan.id != store.pastPlans.last?.id { Hairline().padding(.leading, Space.md) }
                                 }
-                                .buttonStyle(.plain)
-                                if plan.id != store.pastPlans.last?.id { Hairline().padding(.leading, Space.md) }
                             }
+                            .planditCard(padding: 0)
                         }
-                        .planditCard(padding: 0)
                     }
 
                     VStack(alignment: .leading, spacing: Space.sm) {
                         SectionTitle("Preferences")
                         VStack(spacing: 0) {
+                            preferenceRow(.userRound, "Name", profile.name.isEmpty ? "Not set" : profile.name) { NameScreen() }
+                            Hairline().padding(.leading, 52)
                             preferenceRow(.wallet, "Default budget", profile.defaultBudget.wholeDollarsText) { BudgetScreen() }
                             Hairline().padding(.leading, 52)
                             preferenceRow(.house, "Home base", profile.homeBase.isEmpty ? "Not set" : profile.homeBase) { HomeBaseScreen() }

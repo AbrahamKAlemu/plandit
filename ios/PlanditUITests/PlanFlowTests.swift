@@ -8,7 +8,7 @@ final class PlanFlowTests: XCTestCase {
 
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-resetData", "-startDetent", "large"] + extra
+        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large"] + extra
         app.launch()
         return app
     }
