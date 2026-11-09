@@ -49,7 +49,7 @@ keeps direct extraction behind a kill switch and does not retain source URLs or 
 | Architecture | Draft complete | [02-architecture.md](02-architecture.md) |
 | Scaffolding | Draft complete | [03-scaffolding.md](03-scaffolding.md) |
 | Plan and verification | Draft complete | [04-plan.md](04-plan.md) |
-| Persona review | Blocked for shipping | Round 3: Sofia, Amara, and Grace approve; Marcus and Andre retain blocking findings in [history](01-brief_reviews.md) |
+| Persona review | Overridden for TestFlight | Round 3: Sofia, Amara, and Grace approve; Marcus and Andre's blocking findings overridden by the product owner on 2026-11-09, not fixed. See [history](01-brief_reviews.md) |
 | Consolidated human approval | Approved for core milestone | User approved the fixture-backed URL/video-to-confirmed-place build on 2026-10-19 |
 | Implementation | Complete for direct-caption slice | Uncommitted changes on `feature/direct-social-import`; no PR created |
 | Verification | Partial for direct-caption slice | 22 focused backend tests, Ruff, Django checks, app build, and diff check pass; PostgreSQL and Xcode 26 suites remain pending |
