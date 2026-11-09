@@ -9,6 +9,32 @@ struct DayPlan: Identifiable, Codable {
     var budget: Double
     var stops: [PlanStop]
     var legs: [TravelLeg]
+    /// Costs that belong to the day, not one stop: "Snacks $8", "Ride home $20".
+    var extras: [CostItem] = []
+
+    init(id: UUID = UUID(), date: Date, title: String, budget: Double, stops: [PlanStop], legs: [TravelLeg], extras: [CostItem] = []) {
+        self.id = id
+        self.date = date
+        self.title = title
+        self.budget = budget
+        self.stops = stops
+        self.legs = legs
+        self.extras = extras
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, date, title, budget, stops, legs, extras }
+
+    /// Files and cloud copies from before extras existed still load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        date = try c.decode(Date.self, forKey: .date)
+        title = try c.decode(String.self, forKey: .title)
+        budget = try c.decode(Double.self, forKey: .budget)
+        stops = try c.decode([PlanStop].self, forKey: .stops)
+        legs = try c.decode([TravelLeg].self, forKey: .legs)
+        extras = try c.decodeIfPresent([CostItem].self, forKey: .extras) ?? []
+    }
 }
 
 struct PlanStop: Identifiable, Hashable, Codable {
@@ -22,6 +48,45 @@ struct PlanStop: Identifiable, Hashable, Codable {
     /// The saved TikTok/Reel this stop came from, if any.
     var sourcePostID: UUID?
     var status: StopStatus
+    /// What the user listed they'll pay for here. When there are any, `estimatedCost` is their total.
+    var costItems: [CostItem] = []
+    /// The user set this stop's cost themselves, so re-planning keeps it.
+    var costIsCustom = false
+
+    init(
+        id: UUID = UUID(), place: Place, start: Date, durationMinutes: Int, estimatedCost: Double,
+        note: String? = nil, sourcePostID: UUID? = nil, status: StopStatus,
+        costItems: [CostItem] = [], costIsCustom: Bool = false
+    ) {
+        self.id = id
+        self.place = place
+        self.start = start
+        self.durationMinutes = durationMinutes
+        self.estimatedCost = estimatedCost
+        self.note = note
+        self.sourcePostID = sourcePostID
+        self.status = status
+        self.costItems = costItems
+        self.costIsCustom = costIsCustom
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, place, start, durationMinutes, estimatedCost, note, sourcePostID, status, costItems, costIsCustom
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        place = try c.decode(Place.self, forKey: .place)
+        start = try c.decode(Date.self, forKey: .start)
+        durationMinutes = try c.decode(Int.self, forKey: .durationMinutes)
+        estimatedCost = try c.decode(Double.self, forKey: .estimatedCost)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        sourcePostID = try c.decodeIfPresent(UUID.self, forKey: .sourcePostID)
+        status = try c.decode(StopStatus.self, forKey: .status)
+        costItems = try c.decodeIfPresent([CostItem].self, forKey: .costItems) ?? []
+        costIsCustom = try c.decodeIfPresent(Bool.self, forKey: .costIsCustom) ?? false
+    }
 
     var end: Date { start.addingTimeInterval(TimeInterval(durationMinutes * 60)) }
 }
@@ -48,14 +113,48 @@ struct TravelLeg: Identifiable, Hashable, Codable {
     var cost: Double = 0
     /// Line name for transit, e.g. "Q train" or "M4 bus".
     var detail: String?
+    /// The user picked this way of getting there, so re-planning keeps it.
+    var isChosen = false
 
-    /// "Walk · 18 min · 0.9 mi" or "M4 bus · 28 min · $2.90".
+    init(
+        id: UUID = UUID(), fromStopID: UUID, toStopID: UUID, mode: TravelMode, minutes: Int, miles: Double,
+        cost: Double = 0, detail: String? = nil, isChosen: Bool = false
+    ) {
+        self.id = id
+        self.fromStopID = fromStopID
+        self.toStopID = toStopID
+        self.mode = mode
+        self.minutes = minutes
+        self.miles = miles
+        self.cost = cost
+        self.detail = detail
+        self.isChosen = isChosen
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, fromStopID, toStopID, mode, minutes, miles, cost, detail, isChosen }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        fromStopID = try c.decode(UUID.self, forKey: .fromStopID)
+        toStopID = try c.decode(UUID.self, forKey: .toStopID)
+        mode = try c.decode(TravelMode.self, forKey: .mode)
+        minutes = try c.decode(Int.self, forKey: .minutes)
+        miles = try c.decode(Double.self, forKey: .miles)
+        cost = try c.decodeIfPresent(Double.self, forKey: .cost) ?? 0
+        detail = try c.decodeIfPresent(String.self, forKey: .detail)
+        isChosen = try c.decodeIfPresent(Bool.self, forKey: .isChosen) ?? false
+    }
+
+    /// "Walk · 18 min · 0.9 mi", "M4 bus · 28 min · $2.90" or "Drive · 12 min · about $15".
     var summary: String {
         switch mode {
         case .walk:
             "Walk · \(minutes) min · \(miles.milesText)"
         case .subway, .bus:
             [detail ?? mode.label, "\(minutes) min", cost.dollarsText].joined(separator: " · ")
+        case .drive:
+            "Drive · \(minutes) min · about \(cost.wholeDollarsText)"
         }
     }
 
@@ -66,24 +165,62 @@ struct TravelLeg: Identifiable, Hashable, Codable {
 
     /// Walk-only always walks, however far.
     static func estimate(from a: Place, to b: Place, fromStopID: UUID, toStopID: UUID, travel: TravelPreference) -> TravelLeg {
+        let miles = streetMiles(from: a, to: b)
+        let mode: TravelMode = miles <= 1.2 || travel == .walkOnly ? .walk : .subway
+        return estimate(mode, miles: miles, fromStopID: fromStopID, toStopID: toStopID)
+    }
+
+    /// A leg by a given mode when Apple Maps hasn't answered (or can't): straight-line miles on Manhattan's grid.
+    /// Drive is a taxi or rideshare: a few minutes to get picked up, about 13 mph, and roughly $4 + $3.50 a mile.
+    static func estimate(_ mode: TravelMode, miles: Double, fromStopID: UUID, toStopID: UUID) -> TravelLeg {
+        switch mode {
+        case .walk:
+            TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .walk, minutes: max(3, Int((miles * 20).rounded())), miles: miles)
+        case .subway:
+            TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .subway, minutes: 10 + Int((miles * 4).rounded()), miles: miles, cost: TravelMode.fare, detail: "Subway")
+        case .bus:
+            TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .bus, minutes: 8 + Int((miles * 7).rounded()), miles: miles, cost: TravelMode.fare, detail: "Bus")
+        case .drive:
+            TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .drive, minutes: 6 + Int((miles * 4.5).rounded()), miles: miles, cost: driveFare(miles: miles))
+        }
+    }
+
+    /// Waiting for a taxi or rideshare to show up.
+    static let pickupMinutes = 5
+
+    /// Taxi or rideshare, whole dollars, never under $10.
+    static func driveFare(miles: Double) -> Double {
+        max(10, (4 + miles * 3.5).rounded())
+    }
+
+    static func streetMiles(from a: Place, to b: Place) -> Double {
         let meters = CLLocation(latitude: a.latitude, longitude: a.longitude)
             .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
-        let miles = meters / 1609.34 * 1.25 // street-grid detour factor
-        if miles <= 1.2 || travel == .walkOnly {
-            return TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .walk, minutes: max(3, Int((miles * 20).rounded())), miles: miles)
-        }
-        return TravelLeg(fromStopID: fromStopID, toStopID: toStopID, mode: .subway, minutes: 10 + Int((miles * 4).rounded()), miles: miles, cost: 2.90, detail: "Subway")
+        return meters / 1609.34 * 1.25 // street-grid detour factor
     }
 }
 
-enum TravelMode: String, Codable {
-    case walk, subway, bus
+enum TravelMode: String, Codable, CaseIterable {
+    case walk, subway, bus, drive
+
+    /// One subway or bus ride in NYC.
+    static let fare = 2.90
+
+    /// The ways you can pick for a trip between stops.
+    static let choices: [TravelMode] = [.walk, .subway, .drive]
+
+    /// A mode a newer app version wrote reads as walking instead of failing the whole file.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = TravelMode(rawValue: raw) ?? .walk
+    }
 
     var label: String {
         switch self {
         case .walk: "Walk"
         case .subway: "Subway"
         case .bus: "Bus"
+        case .drive: "Drive"
         }
     }
 
@@ -92,6 +229,18 @@ enum TravelMode: String, Codable {
         case .walk: .footprints
         case .subway: .trainFront
         case .bus: .bus
+        case .drive: .car
+        }
+    }
+
+    var isTransit: Bool { self == .subway || self == .bus }
+
+    /// Route line pattern on the map and timeline: solid walking, dotted transit, dashed driving.
+    var dash: [CGFloat] {
+        switch self {
+        case .walk: []
+        case .subway, .bus: [1, 9]
+        case .drive: [8, 7]
         }
     }
 }
@@ -103,8 +252,21 @@ enum LegState {
 
 extension DayPlan {
     var totalCost: Double {
-        stops.reduce(0) { $0 + $1.estimatedCost } + legs.reduce(0) { $0 + $1.cost }
+        stopsCost + travelCost + extras.total
     }
+
+    var stopsCost: Double { stops.reduce(0) { $0 + $1.estimatedCost } }
+
+    var travelCost: Double { legs.reduce(0) { $0 + $1.cost } }
+
+    /// Subway and bus fares.
+    var faresCost: Double { legs.filter(\.mode.isTransit).reduce(0) { $0 + $1.cost } }
+
+    /// Taxis and rideshares.
+    var ridesCost: Double { legs.filter { $0.mode == .drive }.reduce(0) { $0 + $1.cost } }
+
+    /// What's left of the budget; negative when over.
+    var remaining: Double { budget - totalCost }
 
     var walkingMiles: Double {
         legs.filter { $0.mode == .walk }.reduce(0) { $0 + $1.miles }
@@ -141,10 +303,12 @@ extension DayPlan {
         let lines = stops.map { stop in
             "\(stop.start.shortTime)  \(stop.place.name) (\(stop.estimatedCost.dollarsText))"
         }
-        let fares = legs.reduce(0) { $0 + $1.cost }
-        let cost = fares > 0
-            ? "About \(totalCost.wholeDollarsText) per person, including \(fares.dollarsText) in subway fares."
-            : "About \(totalCost.wholeDollarsText) per person."
+        var including: [String] = []
+        if faresCost > 0 { including.append("\(faresCost.dollarsText) in subway fares") }
+        if ridesCost > 0 { including.append("\(ridesCost.wholeDollarsText) in rides") }
+        let cost = including.isEmpty
+            ? "About \(totalCost.wholeDollarsText) per person."
+            : "About \(totalCost.wholeDollarsText) per person, including \(including.joined(separator: " and "))."
         let ends = stops.last.map { " Done by \($0.end.shortTime)." } ?? ""
         return ([
             "\(title) · \(date.shortDay)",
@@ -155,5 +319,35 @@ extension DayPlan {
             cost + ends,
             "Planned with Plandit",
         ]).joined(separator: "\n")
+    }
+}
+
+extension DayPlan {
+    /// Replaces a leg (same id) and moves the stops after it by the change in travel time.
+    /// Stops already done or underway never move; a stop never starts before the one ahead of it
+    /// has ended and the trip is made; evening spots still start at 8 PM or later.
+    mutating func setLeg(_ new: TravelLeg, calendar: Calendar = .current) {
+        guard let legIndex = legs.firstIndex(where: { $0.id == new.id }),
+              let first = stops.firstIndex(where: { $0.id == new.toStopID }), first > 0 else { return }
+        let delta = TimeInterval((new.minutes - legs[legIndex].minutes) * 60)
+        legs[legIndex] = new
+        for index in first..<stops.count where stops[index].status == .upcoming {
+            let previous = stops[index - 1]
+            let travel = TimeInterval((leg(after: previous)?.minutes ?? 0) * 60)
+            var start = max(stops[index].start.addingTimeInterval(delta), previous.end.addingTimeInterval(travel))
+            if let opens = stops[index].place.category.earliestStartMinutes,
+               let evening = calendar.date(byAdding: .minute, value: opens, to: calendar.startOfDay(for: stops[index].start)) {
+                start = max(start, evening)
+            }
+            stops[index].start = start
+        }
+    }
+
+    /// Stops you'd get to after they close.
+    func stopsArrivingAfterClose(calendar: Calendar = .current) -> [PlanStop] {
+        stops.filter { stop in
+            guard stop.status == .upcoming, let close = stop.place.closingTime(on: date, calendar: calendar) else { return false }
+            return stop.start >= close
+        }
     }
 }

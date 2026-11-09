@@ -3,7 +3,7 @@ import SwiftUI
 /// Lucide icons bundled in SharedAssets.xcassets/Icons (stroke 1.75, template-rendered).
 /// The style guide allows Lucide only: add new icons to the catalog instead of using SF Symbols.
 enum Lucide: String {
-    case bell, bookmark, bus, check, clock, coffee, flame, footprints, house, info, landmark, link, map, martini
+    case bell, bookmark, bus, car, check, clock, coffee, flame, footprints, house, info, landmark, link, map, martini
     case navigation, play, plus, route, settings, ticket, trees, users, utensils, video, wallet, x
     case calendarDays = "calendar-days"
     case chevronLeft = "chevron-left"

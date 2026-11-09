@@ -193,7 +193,7 @@ struct PlanBuilderSheet: View {
     }
 
     private func spent(_ outcome: DayPlanner.Outcome) -> Double {
-        (mode == .add ? store.lockedCost : 0) + outcome.cost
+        (mode == .add ? store.lockedCost : 0) + outcome.cost + store.today.extras.total
     }
 
     private func setUp() {
@@ -259,7 +259,7 @@ private struct PickRow: View {
                         .foregroundStyle(.ink)
                         .lineLimit(1)
                     if let place = post.place {
-                        Text([place.category.label, place.neighborhood, post.estimatedCost?.dollarsText].compactMap { $0 }.joined(separator: " · "))
+                        Text([place.category.label, place.neighborhood, priceText].compactMap { $0 }.joined(separator: " · "))
                             .font(.metadata)
                             .foregroundStyle(.inkMuted)
                             .lineLimit(1)
@@ -284,6 +284,14 @@ private struct PickRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityIdentifier("pick-\(post.title)")
+    }
+}
+
+extension PickRow {
+    /// The user's price, the post's, or the usual range: "$8", "Free", "$15–30".
+    var priceText: String? {
+        if let userCost = post.userCost { return userCost.dollarsText }
+        return post.postedPrice?.rangeText
     }
 }
 
@@ -376,7 +384,7 @@ struct PlanPreview: View {
 
     /// "1 subway ride", "2 subway rides", or nil for an all-walking day.
     static func subwayRidesText(_ legs: [TravelLeg]) -> String? {
-        let rides = legs.filter { $0.mode != .walk }.count
+        let rides = legs.filter(\.mode.isTransit).count
         return rides == 0 ? nil : (rides == 1 ? "1 subway ride" : "\(rides) subway rides")
     }
 

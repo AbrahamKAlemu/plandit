@@ -37,7 +37,7 @@ struct PlanditMapView: View {
                             lineWidth: state.lineWidth,
                             lineCap: .round,
                             lineJoin: .round,
-                            dash: leg.mode == .walk ? [] : [1, 9] // dotted = transit
+                            dash: leg.mode.dash // solid walk, dotted transit, dashed drive
                         ))
                 }
                 ForEach(Array(store.today.stops.enumerated()), id: \.element.id) { index, stop in

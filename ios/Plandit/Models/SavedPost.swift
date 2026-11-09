@@ -13,6 +13,8 @@ struct SavedPost: Identifiable, Hashable, Codable {
     var status: ExtractionStatus
     var place: Place?
     var estimatedCost: Double?
+    /// The user's own price for this place. Wins over `estimatedCost` and the typical price.
+    var userCost: Double?
     var tags: [String] = []
     var candidates: [PlaceCandidate] = []
     var failureMessage: String?
@@ -29,6 +31,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         case status
         case place
         case estimatedCost
+        case userCost
         case tags
         case candidates
         case failureMessage
@@ -46,6 +49,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         status: ExtractionStatus,
         place: Place? = nil,
         estimatedCost: Double? = nil,
+        userCost: Double? = nil,
         tags: [String] = [],
         candidates: [PlaceCandidate] = [],
         failureMessage: String? = nil
@@ -61,6 +65,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         self.status = status
         self.place = place
         self.estimatedCost = estimatedCost
+        self.userCost = userCost
         self.tags = tags
         self.candidates = candidates
         self.failureMessage = failureMessage
@@ -79,6 +84,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         status = try container.decode(ExtractionStatus.self, forKey: .status)
         place = try container.decodeIfPresent(Place.self, forKey: .place)
         estimatedCost = try container.decodeIfPresent(Double.self, forKey: .estimatedCost)
+        userCost = try container.decodeIfPresent(Double.self, forKey: .userCost)
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         candidates = try container.decodeIfPresent([PlaceCandidate].self, forKey: .candidates) ?? []
         failureMessage = try container.decodeIfPresent(String.self, forKey: .failureMessage)
@@ -97,6 +103,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         try container.encode(status, forKey: .status)
         try container.encodeIfPresent(place, forKey: .place)
         try container.encodeIfPresent(estimatedCost, forKey: .estimatedCost)
+        try container.encodeIfPresent(userCost, forKey: .userCost)
         try container.encode(tags, forKey: .tags)
         try container.encode(candidates, forKey: .candidates)
         try container.encodeIfPresent(failureMessage, forKey: .failureMessage)

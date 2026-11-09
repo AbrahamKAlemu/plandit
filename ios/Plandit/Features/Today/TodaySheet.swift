@@ -6,6 +6,7 @@ struct TodaySheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
     @State private var isAddingLink = false
+    @State private var isShowingBudget = false
 
     var body: some View {
         let plan = store.today
@@ -61,17 +62,17 @@ struct TodaySheet: View {
                         .padding(.top, Space.md)
                         .transition(.opacity)
                     } else {
-                        PlanSummary(plan: plan)
+                        PlanSummary(plan: plan) { isShowingBudget = true }
 
                         if plan.isComplete {
                             DayCompleteCard(plan: plan)
                                 .transition(.scale(scale: 0.96).combined(with: .opacity))
                         } else if let next = plan.nextStop {
                             Button {
-                                next.place.openDirections()
+                                next.place.openDirections(by: store.travelMode(into: next.id))
                             } label: {
                                 HStack(spacing: Space.xs) {
-                                    Icon(.navigation, size: 18)
+                                    Icon(store.travelMode(into: next.id).icon, size: 18)
                                     Text("Directions to \(next.place.name)").lineLimit(1)
                                 }
                             }
@@ -93,6 +94,7 @@ struct TodaySheet: View {
         }
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
                 // Same landing as from Saved: watch the new post get mapped.
@@ -104,6 +106,7 @@ struct TodaySheet: View {
 
 private struct PlanSummary: View {
     let plan: DayPlan
+    let showBudget: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
@@ -118,7 +121,12 @@ private struct PlanSummary: View {
             HStack(spacing: 0) {
                 SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption)
                 Rectangle().fill(Color.border).frame(width: 1)
-                SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption)
+                Button(action: showBudget) {
+                    SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Shows where the money goes and lets you change it")
+                .accessibilityIdentifier("budget-metric")
                 Rectangle().fill(Color.border).frame(width: 1)
                 SummaryMetric(icon: .footprints, value: plan.walkingMiles.milesText, caption: "Walking")
             }
@@ -147,6 +155,7 @@ private struct SummaryMetric: View {
     let icon: Lucide
     let value: String
     let caption: String
+    var showsChevron = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -156,6 +165,9 @@ private struct SummaryMetric: View {
                     .font(.manrope(.bold, size: 17))
                     .foregroundStyle(.ink)
                     .contentTransition(.numericText())
+                if showsChevron {
+                    Icon(.chevronRight, size: 14).foregroundStyle(.inkMuted)
+                }
             }
             Text(caption)
                 .font(.metadata)
