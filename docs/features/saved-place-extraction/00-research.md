@@ -2,6 +2,12 @@
 
 **Research date:** October 16, 2026
 
+> **November 8, 2026 owner decision:** The approved iOS-only release may fetch the exact public
+> TikTok or Instagram URL a user explicitly shares and parse caption metadata behind a server kill
+> switch. Feed/profile crawling, media downloading, private APIs, and access-control bypasses remain
+> prohibited. The current [brief](01-brief.md) and [architecture](02-architecture.md) supersede the
+> original recommendation below where they differ.
+
 ## Executive decision
 
 A consent-based save-to-map pipeline is feasible without scraping public feeds:

@@ -2,23 +2,30 @@
 
 ## Summary
 
-The approved compliant core milestone is implemented on `feature/saved-place-extraction-plan`.
+The approved compliant core milestone is extended on `feature/direct-social-import`.
 Plandit accepts supported TikTok/Instagram URLs or a user-selected video, extracts permitted
-evidence, produces deterministic fixture-backed place candidates, requires confirmation, and
-persists confirmed saves locally. A Django/PostgreSQL-ready API contract provides the same
-fixture-backed resolution behavior without retaining source URLs or evidence.
+evidence directly from the exact shared public post, produces place candidates, auto-saves only a unique
+exact-address-corroborated match, and otherwise requires confirmation. It
+persists confirmed saves locally with canonical source and MapKit identity. The Django endpoint
+keeps direct extraction behind a kill switch and does not retain source URLs or evidence.
 
 ## Attention needed
 
-- Persona review is deferred at the owner's request while core functionality is finalized.
+- The current persona round is complete but not cleared: Marcus's no-saves request conflicts with
+  the focused planner scope, and Andre requires source/event recency before shipping.
 - Live place-provider selection, billing, production credentials, public-client abuse protection,
   attribution/retention policy, Railway deployment commands, and the evaluation dataset remain
   separate approval gates.
 - The EnsembleData TikTok integration remains development-only. The local Django endpoint and
   Debug simulator client work for the Chubby Bowls test URL, but production approval and public
   abuse controls remain pending.
-- Release/device builds continue using the existing compliant metadata path and never call the
-  local development endpoint.
+- A direct exact-post caption adapter now handles owner-approved TikTok and Instagram URLs behind
+  `SOCIAL_PAGE_EXTRACTION_ENABLED`. Ensemble Data remains an optional disabled TikTok fallback.
+- Configured release/device builds use the authenticated production evidence endpoint; missing
+  production configuration falls back to the existing metadata/manual path.
+- Database-backed endpoint tests still require PostgreSQL on port 5433. Focused iOS tests require
+  the repository's Xcode 26 toolchain; Xcode 16.4 stops on the pre-existing mutable `Sendable`
+  fixture in `SyncReviewTests.swift`.
 - Direct video sharing into the share extension is not implemented; video selection is available
   inside the app.
 
@@ -42,11 +49,11 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Architecture | Draft complete | [02-architecture.md](02-architecture.md) |
 | Scaffolding | Draft complete | [03-scaffolding.md](03-scaffolding.md) |
 | Plan and verification | Draft complete | [04-plan.md](04-plan.md) |
-| Persona review | Deferred by owner | Existing findings retained in [history](01-brief_reviews.md) |
+| Persona review | Blocked for shipping | Round 3: Sofia, Amara, and Grace approve; Marcus and Andre retain blocking findings in [history](01-brief_reviews.md) |
 | Consolidated human approval | Approved for core milestone | User approved the fixture-backed URL/video-to-confirmed-place build on 2026-10-19 |
-| Implementation | Complete for approved core | Commits `3f2568e`, `85c161a`, `d64a4b1`, `c7d0d6e`, plus the current corrective commit |
-| Verification | Complete for approved core | iOS unit tests, Saved extraction UI flow, appearance UI flow, Django tests, migration check, deployment check, and diff check pass |
-| Independent code review | Complete | Persistence, evidence-review, request-shape, idempotency replay, and legacy-record findings resolved |
+| Implementation | Complete for direct-caption slice | Uncommitted changes on `feature/direct-social-import`; no PR created |
+| Verification | Partial for direct-caption slice | 22 focused backend tests, Ruff, Django checks, app build, and diff check pass; PostgreSQL and Xcode 26 suites remain pending |
+| Independent code/security review | Complete for direct-caption slice | URL-boundary, cache, address-corroboration, canonical-dedup, provider-identity, and changed-flow findings resolved |
 
 ## Decisions
 
@@ -61,7 +68,8 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Apple network Speech fallback is allowed only in Debug simulator builds; release/device builds remain on-device-only | Selected for demo testing |
 | Video is temporary, never uploaded, and deleted after evidence extraction | Selected |
 | Build compliant core with an unused scraper-provider seam; no Apify dependency or calls | Selected |
-| Mandatory candidate confirmation | Selected |
+| Confidence-based map population | Selected on 2026-11-08: one unique exact-address-corroborated candidate auto-saves; all weaker/ambiguous results require confirmation |
+| iOS-only first release | Selected on 2026-11-08; Android deferred for release simplicity |
 | Show up to three compact found-place cards with name and one-line address | Selected |
 | “Not the right one?” opens separate optional name and address fields; at least one is required | Selected |
 | Video results are candidate-first; raw OCR/transcript stays hidden unless the user reviews or corrects extracted details | Selected |
@@ -91,9 +99,12 @@ fixture-backed resolution behavior without retaining source URLs or evidence.
 | Define core video-to-place milestone | Complete | URL-first flow plus temporary on-device video evidence produces confirmed name/location |
 | Evaluate URL acquisition providers | Complete | [Provider evaluation](06-provider-evaluation.md) ranks development and production options and defines a twenty-URL benchmark |
 | Build EnsembleData evaluation adapter | Complete (live spike) | Direct post-info call with video download disabled, short-link resolution, TikTok CDN subtitle allowlist, JSON/WebVTT parsing, management command, tests, and successful Chubby Bowls live trial |
+| Build direct public-caption adapters | Complete | TikTok hydration and Instagram Open Graph parsers, bounded allowlisted redirects, 2 MB response cap, endpoint cache/throttle/kill switch, and live verification against three owner-supplied URLs |
+| Add confidence-based auto-save | Complete | A single MapKit candidate auto-saves only when its address matches the one complete evidence address by house number/range, street token, and state; ambiguous results retain confirmation |
 | Wire EnsembleData into the Debug simulator | Complete (local evaluation) | Debug simulator calls a DEBUG-gated localhost endpoint, falls back to TikTok oEmbed when unavailable, keeps provider evidence search-only, and uses a five-minute in-memory cache to avoid duplicate paid retries |
 | Prioritize structured caption addresses | Complete | Double-space-separated creator caption fields now produce a place + street + city query before noisy prose; the Lululala / 139 Hester St case and cue-separated captions have regression coverage |
 | Associate separated venue and address signals | Complete | Venue handles explicitly described as businesses and spoken `called` names are positionally paired with the nearest following address; creator handles, repeated names, and multi-venue captions have regression coverage |
+| Associate pinned venue headings with later addresses | Complete | Instagram captions using a standalone `📍VENUE` heading now pair it with the nearest complete address, including Open Graph wrappers such as `account on date: "📍VENUE`. Reel `DHZYjjnPKez` produces `OREGANO 102 Berry St Brooklyn, NY 11249`, verified through the full local-backend-to-simulator-MapKit path. Re-sharing an unresolved canonical URL retries extraction instead of returning the stale failure. |
 | Prevent cross-URL evidence reuse | Complete | The iOS POST request bypasses URLCache and the development endpoint returns `Cache-Control: no-store`, while the intentional source-URL-keyed five-minute server cache remains enabled |
 | Handle provider daily limits | Complete | EnsembleData HTTP 495 is classified as a daily quota limit; URL-only saves keep the link and immediately offer manual details plus Photos/Files video processing in place, while useful share text still resolves automatically |
 | Resolve complete addresses independently | Complete | Full postal addresses, including Square/Sq suffixes, receive reserved MapKit searches before optional name combinations; `stopped by` venue cues and one-candidate-per-query behavior preserve corroborating searches |
@@ -171,6 +182,9 @@ merged by `275ab652d62cb877349c3bc1a379acb70cd2128b`.
   cannot erase an acknowledged share.
 - The polished saved-place navigation, Photos/Files video intake, candidate correction UI, Today
   timeline, route loading, and plan builder coexist in the merged iOS application.
+- The November 9 navigation/budget update from `origin/main` is integrated. A newly auto-mapped
+  place retains its source/provider identity when added to Today, and the focused extraction,
+  store, route/budget, Plan Flow, and Map/Budget UI suites pass together.
 - Django retains the Supabase/DRF `/api/` application and adds the development-only extraction
   contract under `/v1/`.
 - Production `/api/saved/` still uses its separate oEmbed/database matcher; promoting
@@ -198,7 +212,7 @@ of the implementation.
 On October 23, 2026, the production extraction path was prepared for a small TestFlight cohort.
 
 - `/v1/social-evidence` now reuses Supabase JWT authentication in production and applies a
-  configurable per-user throttle (`30/day` by default).
+  configurable per-user throttle (`100/day` by default).
 - `ENSEMBLEDATA_ENABLED` is an explicit production kill switch instead of being tied to Django
   debug mode. The provider token remains server-side.
 - Release builds can silently create and refresh a Supabase anonymous session, keep it in the iOS

@@ -7,12 +7,14 @@ Build the feature as a local-first iOS workflow with a narrow, contract-first re
 - The share extension remains a lightweight URL handoff boundary.
 - The main app validates and durably imports each source into SwiftData before removing it from the
   App Group inbox.
-- An explicit state machine coordinates URL metadata, temporary user-provided video, on-device
-  frame OCR/audio transcription, place candidates, confirmation, retry, and deletion.
-- A Django modular monolith on Railway owns outbound TikTok oEmbed, licensed place-provider calls,
-  operational controls, and the versioned HTTP contract. PostgreSQL stores only approved
+- An explicit state machine coordinates URL captions, temporary user-provided video, on-device
+  frame OCR/audio transcription, place candidates, confidence-based promotion, confirmation,
+  retry, and deletion.
+- A Django modular monolith owns bounded exact-post HTML fetching, TikTok oEmbed fallback,
+  licensed place-provider calls, operational controls, and the versioned HTTP contract. PostgreSQL stores only approved
   server-side operational state; user screenshots and raw evidence are not retained.
-- Only confirmed local saves feed grouped close-zoom pins and deterministic discrete density zones.
+- Only exact-address-corroborated or explicitly confirmed local saves feed grouped close-zoom pins
+  and deterministic discrete density zones.
 
 The [brief](01-brief.md) owns product requirements. The future Plan verification table will be the
 acceptance source of truth rather than duplicating test cases here.
@@ -51,15 +53,16 @@ TikTok / Instagram / clipboard
  Django API       Density engine   Video evidence extractor
        |              |            Vision OCR + Speech
  URL policy       Map annotations
- TikTok oEmbed
+ Exact-post caption adapter
+ TikTok oEmbed fallback
  Evidence parser
  Place provider adapter
 ```
 
-The Django backend never receives screenshots or video in MVP. For TikTok it receives a supported
-source URL; for Instagram it receives only platform type and user-approved evidence text. Both flows
-may include coarse search bias, locale, and an idempotency key. Instagram URLs remain local
-references and the backend must not fetch or derive Instagram page/oEmbed content.
+The Django backend never receives screenshots or video in MVP. For TikTok and Instagram it receives
+the exact supported URL the user shared. A kill-switched adapter follows at most five allowlisted
+redirects, caps the response at 2 MB, and extracts only TikTok's hydration caption or Instagram's
+Open Graph description. Both flows may include coarse search bias, locale, and an idempotency key.
 
 ## Backend topology
 
@@ -442,7 +445,8 @@ another saved item or a day plan; otherwise repository cleanup may remove it.
 | App crashes during share import | Unacknowledged inbox record imports on next activation; unique canonical URL prevents duplication. |
 | TikTok short-link redirect escapes allowlist | Backend aborts and returns `invalid_url`. |
 | Deleted/private TikTok | Preserve source reference and user evidence; offer details/manual search. |
-| Instagram has no evidence | Stay in `needsEvidence`; do not call Instagram endpoints. |
+| Public page omits or changes caption metadata | Return `evidence_unavailable`, preserve the source, and offer shared text, screenshot/video evidence, or manual details. |
+| Exact-post adapter is blocked or disabled | Fall back to TikTok oEmbed/shared text where available; otherwise preserve the source in `needsEvidence`. |
 | OCR is empty or wrong | Keep editable text and allow type/paste/manual search. |
 | Video is unsupported, oversized, or too long | Reject before processing with limits and retain URL/text evidence. |
 | Speech permission denied or on-device recognition unavailable | Continue with share text/frame OCR and typed/manual fallback. |
@@ -462,7 +466,8 @@ another saved item or a day plan; otherwise repository cleanup may remove it.
 1. Share-extension input is untrusted text/URL.
 2. App Group defaults are a handoff queue, not authoritative storage.
 3. Backend request evidence is user-controlled input.
-4. TikTok oEmbed and place providers are external, rate-limited systems.
+4. TikTok/Instagram public pages, TikTok oEmbed, and place providers are external, rate-limited
+   systems.
 5. Provider responses are untrusted data constrained by schemas and display limits.
 
 ### Controls
@@ -472,7 +477,8 @@ another saved item or a day plan; otherwise repository cleanup may remove it.
 - Reject URL credentials, fragments when canonicalizing, nonstandard ports, and IP literals.
 - Resolve and block loopback, private, link-local, multicast, reserved, and metadata-service address
   ranges; pin/verify resolved addresses across connect to mitigate DNS rebinding.
-- Backend egress allowlists for TikTok oEmbed and selected place-provider origins.
+- Backend egress allowlists for exact TikTok/Instagram post URLs, TikTok oEmbed, and selected
+  place-provider origins.
 - Request/response size limits, short timeouts, circuit breakers, and per-user/device rate limits.
 - Provider keys stored in server secret management, never app configuration or logs.
 - Strict decoding and output length limits before data reaches UI/SwiftData.
@@ -494,7 +500,8 @@ compliance.
 | Alternative | Benefit | Cost/risk | Decision |
 |---|---|---|---|
 | Keep manual place entry only | Lowest platform and backend risk | Does not fulfill turning social saves into ready map data | Retain only as fallback |
-| TikTok-only first release | Fastest compliant automation | Leaves Instagram users with no guided flow | Use as rollout slice, not final MVP |
+| TikTok-only first release | Smaller platform surface | Leaves Instagram users with no guided flow | Rejected; the same bounded adapter supports both |
+| On-device public-page fetching | Distributes traffic and compute | Browser CORS, parser updates trapped in old app versions, device/IP policy risk | Reject; keep the patchable adapter server-side |
 | Fully on-device with `MKLocalSearch` | No backend or external key | Weak text interpretation/control, inconsistent evaluation, no secure optional providers | Useful prototype, not target architecture |
 | Apple-only resolver | Native correction and fewer vendors | Coverage/ranking uncertainty and provider lock-in | Benchmark as fallback |
 | Google primary + Apple manual correction | Strong broad matching plus native escape hatch | Server key, billing, attribution, retention compliance | Recommended pending benchmark/approval |
@@ -530,5 +537,5 @@ must provide one verification row per requirement/failure case, including:
 - SwiftData relaunch/offline tests;
 - provider contract and failure mapping tests;
 - candidate top-three evaluation;
-- confirmation-before-map integration tests;
+- exact-address promotion and confirmation-before-map integration tests;
 - deterministic density fixtures and accessible map behavior.
