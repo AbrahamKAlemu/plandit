@@ -26,12 +26,14 @@ services:
         value: https://bkjepupqdwkraajyewyy.supabase.co
       - key: DATABASE_URL
         sync: false # Supabase session-pooler URI with ?sslmode=require
-      - key: ENSEMBLEDATA_ENABLED
+      - key: SOCIAL_PAGE_EXTRACTION_ENABLED
         value: "1"
+      - key: ENSEMBLEDATA_ENABLED
+        value: "0"
       - key: ENSEMBLEDATA_API_TOKEN
         sync: false
       - key: SOCIAL_EVIDENCE_THROTTLE_RATE
-        value: 30/day
+        value: 100/day
       - key: METRICS_API_KEY
         generateValue: true # GET /api/metrics/ key for the course staff; copy it from the dashboard
       - key: SUPABASE_SERVICE_ROLE_KEY

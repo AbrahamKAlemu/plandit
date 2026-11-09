@@ -27,6 +27,11 @@ from .providers.ensembledata import (
     EnsembleDataError,
     EnsembleDataQuotaExceeded,
 )
+from .providers.public_page import (
+    PublicPageError,
+    PublicPageEvidenceMissing,
+    PublicPageSocialEvidenceClient,
+)
 from .services import resolve_candidates
 from .url_policy import SourceUrlError, parse_supported_source_url
 
@@ -48,11 +53,11 @@ class SocialEvidenceThrottle(BaseThrottle):
             if self.request_limit <= 0:
                 raise ValueError
         except (AttributeError, IndexError, KeyError, TypeError, ValueError) as error:
-            raise ImproperlyConfigured("SOCIAL_EVIDENCE_THROTTLE_RATE must look like '30/day'.") from error
+            raise ImproperlyConfigured("SOCIAL_EVIDENCE_THROTTLE_RATE must look like '100/day'.") from error
         self.retry_after = None
 
     def allow_request(self, request, view):
-        if settings.DEBUG or not settings.ENSEMBLEDATA_ENABLED:
+        if settings.DEBUG or not (settings.SOCIAL_PAGE_EXTRACTION_ENABLED or settings.ENSEMBLEDATA_ENABLED):
             return True
 
         now = timezone.now()
@@ -88,7 +93,7 @@ class IsAuthenticatedOrDebug(BasePermission):
 @permission_classes([IsAuthenticatedOrDebug])
 @throttle_classes([SocialEvidenceThrottle])
 def social_evidence(request: HttpRequest) -> JsonResponse:
-    if not settings.ENSEMBLEDATA_ENABLED:
+    if not (settings.SOCIAL_PAGE_EXTRACTION_ENABLED or settings.ENSEMBLEDATA_ENABLED):
         return _error(
             None,
             "not_found",
@@ -108,23 +113,47 @@ def social_evidence(request: HttpRequest) -> JsonResponse:
     try:
         supported = parse_supported_source_url(source_url)
     except SourceUrlError:
-        return _error(None, "invalid_url", "Use a supported TikTok video URL.", False)
-    if supported.platform != "tiktok":
-        return _error(None, "invalid_url", "Use a supported TikTok video URL.", False)
-    if not settings.ENSEMBLEDATA_API_TOKEN:
         return _error(
             None,
-            "provider_unavailable",
-            "Development provider token is not configured.",
-            True,
-            status=503,
+            "invalid_url",
+            "Use a supported TikTok or Instagram URL.",
+            False,
+        )
+    direct_available = settings.SOCIAL_PAGE_EXTRACTION_ENABLED
+    ensemble_available = (
+        supported.platform == "tiktok" and settings.ENSEMBLEDATA_ENABLED and bool(settings.ENSEMBLEDATA_API_TOKEN)
+    )
+    if not direct_available and not ensemble_available:
+        if supported.platform == "tiktok" and settings.ENSEMBLEDATA_ENABLED:
+            return _error(
+                None,
+                "provider_unavailable",
+                "Development provider token is not configured.",
+                True,
+                status=503,
+            )
+        return _error(
+            None,
+            "not_found",
+            "Social evidence is disabled for this platform.",
+            False,
+            status=404,
         )
 
-    cache_key = "social-evidence:" + hashlib.sha256(supported.canonical_url.encode()).hexdigest()
+    provider_scope = f"direct-{int(direct_available)}:ensemble-{int(ensemble_available)}"
+    cache_key = f"social-evidence:v3:{provider_scope}:" + hashlib.sha256(supported.canonical_url.encode()).hexdigest()
     response_payload = cache.get(cache_key)
     if response_payload is None:
         try:
-            evidence = EnsembleDataClient(settings.ENSEMBLEDATA_API_TOKEN).evidence_for(supported.canonical_url)
+            evidence = _retrieve_social_evidence(supported)
+        except PublicPageEvidenceMissing:
+            return _error(
+                None,
+                "evidence_unavailable",
+                "The public post did not expose a caption.",
+                False,
+                status=422,
+            )
         except EnsembleDataQuotaExceeded:
             return _error(
                 None,
@@ -133,7 +162,7 @@ def social_evidence(request: HttpRequest) -> JsonResponse:
                 True,
                 status=429,
             )
-        except (EnsembleDataError, SourceUrlError):
+        except (EnsembleDataError, PublicPageError, SourceUrlError):
             return _error(
                 None,
                 "provider_unavailable",
@@ -157,6 +186,22 @@ def social_evidence(request: HttpRequest) -> JsonResponse:
     response = JsonResponse(response_payload)
     response["Cache-Control"] = "no-store"
     return response
+
+
+def _retrieve_social_evidence(supported):
+    direct_error = None
+    if settings.SOCIAL_PAGE_EXTRACTION_ENABLED:
+        try:
+            return PublicPageSocialEvidenceClient().evidence_for(supported.canonical_url)
+        except PublicPageError as error:
+            direct_error = error
+
+    if supported.platform == "tiktok" and settings.ENSEMBLEDATA_ENABLED and settings.ENSEMBLEDATA_API_TOKEN:
+        return EnsembleDataClient(settings.ENSEMBLEDATA_API_TOKEN).evidence_for(supported.canonical_url)
+
+    if direct_error:
+        raise direct_error
+    raise PublicPageError("No evidence provider supports this URL")
 
 
 @csrf_exempt
