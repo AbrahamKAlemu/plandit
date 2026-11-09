@@ -7,7 +7,7 @@ those links do not become structured places that can be mapped, compared, or tur
 The current iOS scaffold accepts shared links but assigns random sample places and loses everything
 on relaunch.
 
-This feature turns a social URL or user-provided video into a confirmed place name and location.
+This feature turns a social URL or user-provided video into a trusted place name and location.
 URLs remain the lowest-friction first attempt. When permitted metadata is insufficient, the user can
 provide the video, a screenshot, or typed clues without Plandit downloading social media. Confirmed
 saves can later create a personal density layer that shows where the student's own interests
@@ -18,7 +18,8 @@ cluster. The layer is not a public trending map or a feed for unrelated places.
 Plandit remains a planner, not a discovery feed:
 
 - Input: places the user explicitly shares or pastes.
-- Transformation: extract clues, resolve candidate places, and ask the user to confirm.
+- Transformation: extract clues, resolve candidate places, and confirm unless one exact-address
+  result meets the automatic-save gate.
 - Output: a trustworthy personal map and structured saves that can later feed budget-, time-, and
   distance-aware planning.
 
@@ -31,13 +32,17 @@ discovery-oriented product thesis before the personal save flow is proven.
 1. The user shares or pastes a TikTok or Instagram Reel URL; alternatively, they share or select a
    video file they are authorized to provide.
 2. Plandit validates and canonicalizes the URL and immediately creates a local saved-source record.
-3. Plandit first uses permitted URL/share metadata. If that evidence is insufficient, it offers
-   typed text, a screenshot, or a video file processed temporarily on-device.
+3. A kill-switched Django adapter fetches only the exact public URL the user shared and extracts
+   TikTok hydration captions or Instagram Open Graph descriptions. If that evidence is
+   insufficient, Plandit offers typed text, a screenshot, or a video file processed temporarily
+   on-device.
 4. On-device Vision OCR samples video frames and on-device Speech recognition transcribes audio
    when supported. The user can review the resulting evidence; the media is not retained.
 5. A contract-first Django service on Railway turns approved evidence into place-search queries and
    returns ranked candidates from an approved place-provider adapter.
-6. The user confirms, changes, or manually searches for the correct place name and location.
+6. One unique candidate may save automatically only when its street number, street name, and state
+   match the one complete address in the evidence. Every other result requires confirmation,
+   correction, or manual search.
 7. The confirmed result shows its saved age, source, address, distance/travel estimate from the
    user's chosen location, known availability/cost context, and an immediate Add to Today action.
 8. The confirmed save persists locally with its source URL and provider place ID.
@@ -49,17 +54,17 @@ discovery-oriented product thesis before the personal save flow is proven.
 | ID | Requirement |
 |---|---|
 | SPE-1 | Accept a supported TikTok or Instagram URL from the share extension or paste flow and deduplicate exact canonical source URLs. |
-| SPE-2 | Validate and canonicalize URLs without scraping pages or following unsafe redirects. |
-| SPE-3 | For TikTok, use documented oEmbed metadata as extraction evidence and preserve normal source attribution. |
-| SPE-4 | For Instagram, retain the URL as a source reference and use only text explicitly supplied through the share operation. When that is insufficient, ask for typed/pasted text, a screenshot, or a user-provided video; do not scrape Instagram pages or use Instagram oEmbed metadata as extraction input. |
+| SPE-2 | Validate and canonicalize URLs before fetching only the exact user-shared public post page; validate every bounded redirect and never crawl feeds, profiles, related posts, or arbitrary hosts. |
+| SPE-3 | For TikTok, extract the creator caption from the public post's hydration payload, retain oEmbed as a metadata fallback, and preserve normal source attribution. |
+| SPE-4 | For Instagram, extract the public Reel/post Open Graph description. When it is absent, ask for typed/pasted text, a screenshot, or a user-provided video; do not download media or inspect unrelated posts. |
 | SPE-5 | Run screenshot and user-provided video evidence extraction on-device. Sample video frames for Vision OCR and transcribe audio on-device when supported; show the extracted evidence for correction/removal before place matching and provide typed/manual fallback when recognition is unavailable. |
 | SPE-6 | Return up to three ranked place candidates with name, category, neighborhood/address, and confidence/evidence; always provide manual search. |
-| SPE-7 | Do not create a mapped save until the user explicitly confirms a place. |
+| SPE-7 | Create a mapped save automatically only for one candidate corroborated by the single complete caption address's street number, street-name token, and state. Require explicit confirmation for every other result. |
 | SPE-8 | Persist source, extraction state, confirmation state, provider place ID, and allowed place fields locally so saves survive relaunch. |
 | SPE-9 | Show individual saved-place pins at close zoom and discrete emerald density zones at wider zoom, calculated only from confirmed personal saves. |
 | SPE-10 | Tapping a density zone frames or filters the confirmed saves represented by that zone rather than opening unrelated recommendations. |
 | SPE-11 | Failed, unavailable, ambiguous, or deleted-source states remain understandable and recoverable without losing user-entered evidence. |
-| SPE-12 | Never download arbitrary social video/audio, crawl feeds, call undocumented platform endpoints, or expose provider credentials in the app. |
+| SPE-12 | Never download arbitrary social video/audio, crawl feeds/profiles, call private platform APIs, bypass access controls, or expose provider credentials in the app. Keep exact-post HTML fetching behind a server kill switch and rate limit. |
 | SPE-13 | Provide deterministic fixtures and a labeled evaluation set that measures URL handling, candidate quality, confirmation, persistence, and density output. |
 | SPE-14 | Keep the normal TikTok share-to-confirmation path below 30 seconds median and two minutes p95, and the normal Instagram screenshot/text-to-confirmation path below two minutes p95, excluding time the user leaves the app; manual place research is a fallback, not the expected happy path. |
 | SPE-15 | After confirmation, show saved age, original source access, full address, distance or travel-time estimate with its selected origin and mode, reliable open/closed/hours or event-expiry context, cost context, and Add to Today. When trustworthy monetary data exists, show an amount or range and its basis, such as per person, admission, or typical item; price symbols alone do not satisfy the requirement. Label unavailable data as unknown rather than implying a complete cost or current availability. |
@@ -67,7 +72,7 @@ discovery-oriented product thesis before the personal save flow is proven.
 | SPE-17 | Keep link intake, evidence correction, candidate confirmation, manual place search/save, the personal map, and local saved data available without a trial or paywall; when an external service is disabled, unavailable, or over quota, explain the limitation and retain a manual completion path. |
 | SPE-18 | Display when operational status, hours, event expiry, and monetary context were last checked. Refresh fields that exceed the approved provider-specific stale threshold before presenting them as current; if refresh fails, retain place identity but show the affected fields as unknown or stale. |
 | SPE-19 | Treat user-provided video as temporary evidence: validate type/size/duration, process it outside the share extension, avoid permanent media storage, delete staged copies after evidence extraction or cancellation, and never upload the media in this MVP. |
-| SPE-20 | Optimize the first functional milestone for one outcome: from a supported URL or user-provided video, return up to three candidate place names and locations, allow manual correction, and persist a user-confirmed place. Density and enriched cost/availability presentation must not block proving this core path. |
+| SPE-20 | Optimize the first functional milestone for one outcome: from a supported URL or user-provided video, return up to three candidate place names and locations, allow manual correction, and persist either a strictly corroborated exact-address match or a user-confirmed place. Density and enriched cost/availability presentation must not block proving this core path. |
 
 ## User-visible states
 
@@ -78,8 +83,8 @@ discovery-oriented product thesis before the personal save flow is proven.
 | Needs details | URL metadata was insufficient | Add text, screenshot, or video |
 | Reading video | User-provided media is being processed on-device | Wait or cancel |
 | Finding places | Corrected text is being matched | Wait |
-| Confirm place | One to three candidates need a decision | Confirm, search, or reject |
-| Saved | Confirmed place is persisted and mapped | Add to a plan |
+| Confirm place | One to three non-exact or ambiguous candidates need a decision | Confirm, search, or reject |
+| Saved | Exact-address auto-match or confirmed place is persisted and mapped | Add to a plan |
 | Could not map | No reliable candidate or source unavailable | Retry, add details, or keep as an unmapped reference |
 
 ## Density behavior
@@ -99,11 +104,12 @@ discovery-oriented product thesis before the personal save flow is proven.
 ### Included
 
 - Explicit share/paste ingestion.
-- TikTok oEmbed metadata.
-- Instagram share text plus typed-text, screenshot/OCR, or user-provided-video fallback.
+- Exact-post TikTok hydration caption and Instagram Open Graph description behind a server kill
+  switch, with no media download.
+- TikTok oEmbed and shared text plus typed-text, screenshot/OCR, or user-provided-video fallback.
 - User-provided video frame OCR and on-device audio transcription with temporary-media cleanup.
 - Contract-first Django extraction and place-provider API backed by PostgreSQL.
-- Mandatory place confirmation and manual correction.
+- Strict exact-address automatic save; confirmation and manual correction for every weaker result.
 - SwiftData local-first persistence.
 - Personal confirmed-save pins and discrete density zones.
 - Recent-save density windows and visible save age.
@@ -127,7 +133,8 @@ discovery-oriented product thesis before the personal save flow is proven.
 
 ### Prohibited
 
-- Instagram/TikTok page scraping, headless browsing, undocumented APIs, or downloader services.
+- Feed/profile crawling, headless browsing, private platform APIs, access-control bypasses, or
+  downloader services.
 - Downloading raw social video/audio from shared URLs.
 - Retaining or uploading a user-provided video after local evidence extraction.
 - Pinning a low-confidence match without confirmation.
@@ -136,7 +143,8 @@ discovery-oriented product thesis before the personal save flow is proven.
 
 ## Success and quality gates
 
-- 100% of mapped saves have explicit user confirmation.
+- 100% of mapped saves have either explicit user confirmation or one unique candidate that passes
+  the complete-address corroboration gate.
 - 100% of unsupported/unsafe URLs fail without a backend fetch to the destination.
 - Candidate evaluation target: at least 90% top-three recall on the approved labeled dataset before
   replacing the scaffold.
@@ -179,7 +187,7 @@ the full group-planning job is complete.
 
 Use staged capability flags even if the first implementation is local:
 
-1. TikTok URL -> caption -> candidate confirmation.
+1. TikTok/Instagram URL -> public caption -> exact-address auto-save or candidate confirmation.
 2. Local persistence and close-zoom pins.
 3. Instagram text/screenshot evidence.
 4. Personal density zones.
@@ -195,12 +203,12 @@ small consented evaluation dataset before live provider credentials are enabled.
 | Personal or community map? | Personal saves first. | Proves the core saved-interest job without accounts, moderation, privacy aggregation, or discovery-feed drift. |
 | Link ingestion? | Explicit share/paste only. | Consent-based, reliable, and compatible with platform restrictions. |
 | Density signal? | Confirmed mapped saves. | Avoids false precision and unconfirmed extraction noise. |
-| Ambiguous matches? | Confirm before mapping. | Trust is more important than apparent automation. |
+| Ambiguous matches? | Confirm before mapping; only one exact-address-corroborated candidate may auto-save. | Trust is more important than apparent automation while avoiding unnecessary taps for decisive evidence. |
 | Density visual? | Discrete emerald size/opacity levels. | Fits the current no-gradient visual system. |
-| Instagram fallback? | Text or optional screenshot with on-device OCR. | Instagram oEmbed cannot legally be used as extraction input. |
+| Instagram fallback? | Public Open Graph description, then text or optional screenshot with on-device OCR. | The owner approved exact-post caption fetching; missing/blocked metadata still needs a consent-based fallback. |
 | Video input? | URL first; user-selected/shared video as an optional fallback. | Preserves the easiest path while allowing stronger evidence without Plandit downloading social media. |
 | Video processing? | On-device only for the MVP. | Avoids media upload/retention, limits storage to short-lived staging, and keeps the cloud contract text-only. |
-| Third-party social scrapers? | Do not integrate Apify or another scraper into the approved core; preserve a provider interface only. | Apify can return useful captions/transcripts, but platform-policy, media-download, third-party actor, and dataset-retention risks require separate legal/privacy approval before even an internal spike. |
+| Third-party social scrapers? | Use the in-house exact-post caption adapter first; keep Ensemble Data disabled as an optional TikTok failure fallback. | This removes routine provider cost and media handling while preserving a controlled escape hatch. Platform-policy and reliability risks remain explicit. |
 | Persistence? | Local-first SwiftData. | Works without accounts and makes personal saves durable. |
 | Backend framework? | Django modular monolith with PostgreSQL, deployed on Railway. | Gives the team one API/data/admin boundary and fits provider integration, evaluation, and future operational tooling without introducing Supabase as a second control plane. |
 | Analytics platform? | Keep analytics out of this feature; PostHog Cloud is the selected future candidate. | The extraction MVP needs a strict coarse-event allowlist first, and no analytics SDK is necessary to prove the save-to-map flow. |
@@ -210,4 +218,9 @@ small consented evaluation dataset before live provider credentials are enabled.
 
 ## Approval
 
-Status: **Pending consolidated dossier approval.**
+Status: **Approved for the iOS-only direct-caption slice on November 8, 2026.**
+
+The owner approved TikTok/Instagram exact-post caption fetching and confidence-based map population.
+Android is out of scope for this release. The approval does not authorize feed/profile crawling,
+media downloading, access-control bypasses, or enabling the server kill switch without deployment
+review.

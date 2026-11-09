@@ -12,6 +12,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
     var savedAt: Date
     var status: ExtractionStatus
     var place: Place?
+    var placeProviderID: String?
     var estimatedCost: Double?
     /// The user's own price for this place. Wins over `estimatedCost` and the typical price.
     var userCost: Double?
@@ -30,6 +31,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         case savedAt
         case status
         case place
+        case placeProviderID
         case estimatedCost
         case userCost
         case tags
@@ -48,6 +50,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         savedAt: Date,
         status: ExtractionStatus,
         place: Place? = nil,
+        placeProviderID: String? = nil,
         estimatedCost: Double? = nil,
         userCost: Double? = nil,
         tags: [String] = [],
@@ -64,6 +67,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         self.savedAt = savedAt
         self.status = status
         self.place = place
+        self.placeProviderID = placeProviderID
         self.estimatedCost = estimatedCost
         self.userCost = userCost
         self.tags = tags
@@ -83,6 +87,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         savedAt = try container.decode(Date.self, forKey: .savedAt)
         status = try container.decode(ExtractionStatus.self, forKey: .status)
         place = try container.decodeIfPresent(Place.self, forKey: .place)
+        placeProviderID = try container.decodeIfPresent(String.self, forKey: .placeProviderID)
         estimatedCost = try container.decodeIfPresent(Double.self, forKey: .estimatedCost)
         userCost = try container.decodeIfPresent(Double.self, forKey: .userCost)
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
@@ -102,6 +107,7 @@ struct SavedPost: Identifiable, Hashable, Codable {
         try container.encode(savedAt, forKey: .savedAt)
         try container.encode(status, forKey: .status)
         try container.encodeIfPresent(place, forKey: .place)
+        try container.encodeIfPresent(placeProviderID, forKey: .placeProviderID)
         try container.encodeIfPresent(estimatedCost, forKey: .estimatedCost)
         try container.encodeIfPresent(userCost, forKey: .userCost)
         try container.encode(tags, forKey: .tags)
@@ -160,11 +166,21 @@ extension SavedPost {
     var isMappable: Bool { place != nil && (status == .ready || status == .needsReview) }
 
     mutating func apply(_ result: ExtractionResult) {
+        canonicalURL = result.canonicalURL ?? canonicalURL
         creatorHandle = result.creatorHandle ?? creatorHandle
         caption = result.caption ?? caption
         thumbnailURL = result.thumbnailURL ?? thumbnailURL
-        candidates = result.candidates
         failureMessage = nil
-        status = result.candidates.isEmpty ? .needsEvidence : .needsConfirmation
+        if let candidateID = result.autoConfirmedCandidateID,
+           let candidate = result.candidates.first(where: { $0.id == candidateID }) {
+            place = candidate.place
+            placeProviderID = candidate.id
+            estimatedCost = candidate.estimatedCost
+            candidates = []
+            status = .ready
+        } else {
+            candidates = result.candidates
+            status = result.candidates.isEmpty ? .needsEvidence : .needsConfirmation
+        }
     }
 }

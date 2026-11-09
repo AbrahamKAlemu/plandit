@@ -2,7 +2,7 @@ import uuid
 from unittest.mock import patch
 
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -12,10 +12,15 @@ from resolution.providers.ensembledata import (
     EnsembleDataQuotaExceeded,
     SocialEvidence,
 )
+from resolution.providers.public_page import (
+    PublicPageEvidenceMissing,
+    PublicPageSocialEvidence,
+)
 
 
 @override_settings(
     DEBUG=True,
+    SOCIAL_PAGE_EXTRACTION_ENABLED=False,
     ENSEMBLEDATA_ENABLED=True,
     ENSEMBLEDATA_API_TOKEN="1234567890abcdef",
 )
@@ -112,3 +117,91 @@ class SocialEvidenceApiTests(TestCase):
             SocialEvidenceThrottleState.objects.get(user=self.profile).request_count,
             1,
         )
+
+
+@override_settings(
+    DEBUG=True,
+    SOCIAL_PAGE_EXTRACTION_ENABLED=True,
+    ENSEMBLEDATA_ENABLED=False,
+)
+class DirectSocialEvidenceApiTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+        self.api_client = APIClient()
+
+    def post(self, source_url):
+        return self.api_client.post(
+            reverse("social-evidence"),
+            data={"sourceUrl": source_url},
+            format="json",
+        )
+
+    @patch("resolution.views.PublicPageSocialEvidenceClient")
+    def test_returns_direct_tiktok_caption(self, client_type):
+        client_type.return_value.evidence_for.return_value = PublicPageSocialEvidence(
+            canonical_url="https://www.tiktok.com/@creator/video/123",
+            caption="Kings of Kobe 650 W 42nd St, New York, NY 10036",
+        )
+
+        response = self.post("https://www.tiktok.com/t/short-code")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["combinedText"],
+            "Kings of Kobe 650 W 42nd St, New York, NY 10036",
+        )
+
+    @patch("resolution.views.PublicPageSocialEvidenceClient")
+    def test_returns_direct_instagram_caption(self, client_type):
+        client_type.return_value.evidence_for.return_value = PublicPageSocialEvidence(
+            canonical_url="https://www.instagram.com/reel/DdFUQjZJ0fc",
+            caption="Yop City 2324 Arthur Ave, Bronx, NY 10458",
+        )
+
+        response = self.post("https://www.instagram.com/reel/DdFUQjZJ0fc/?tracking=value")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["combinedText"],
+            "Yop City 2324 Arthur Ave, Bronx, NY 10458",
+        )
+
+    @patch("resolution.views.PublicPageSocialEvidenceClient")
+    def test_reports_missing_caption_as_non_retryable(self, client_type):
+        client_type.return_value.evidence_for.side_effect = PublicPageEvidenceMissing()
+
+        response = self.post("https://www.instagram.com/reel/ABC")
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["code"], "evidence_unavailable")
+        self.assertFalse(response.json()["error"]["retryable"])
+
+    @patch("resolution.views.EnsembleDataClient")
+    @patch("resolution.views.PublicPageSocialEvidenceClient")
+    def test_direct_cache_is_not_used_after_kill_switch_is_disabled(
+        self,
+        direct_client_type,
+        ensemble_client_type,
+    ):
+        direct_client_type.return_value.evidence_for.return_value = PublicPageSocialEvidence(
+            canonical_url="https://www.tiktok.com/@creator/video/123",
+            caption="Direct caption",
+        )
+        ensemble_client_type.return_value.evidence_for.return_value = SocialEvidence(
+            canonical_url="https://www.tiktok.com/@creator/video/123",
+            caption="Fallback caption",
+            transcript=None,
+            transcript_language=None,
+        )
+        source_url = "https://www.tiktok.com/@creator/video/123"
+
+        self.assertEqual(self.post(source_url).json()["caption"], "Direct caption")
+        with self.settings(
+            SOCIAL_PAGE_EXTRACTION_ENABLED=False,
+            ENSEMBLEDATA_ENABLED=True,
+            ENSEMBLEDATA_API_TOKEN="1234567890abcdef",
+        ):
+            response = self.post(source_url)
+
+        self.assertEqual(response.json()["caption"], "Fallback caption")
+        ensemble_client_type.return_value.evidence_for.assert_called_once()

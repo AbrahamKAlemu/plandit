@@ -217,6 +217,155 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
     }
 
+    @MainActor func testInstagramEvidenceRequestUsesBackend() throws {
+        let endpoint = URL(string: "https://api.plandit.example/v1/social-evidence")!
+        let request = try XCTUnwrap(DevelopmentSocialEvidenceClient.request(
+            for: URL(string: "https://www.instagram.com/reel/DdFUQjZJ0fc/")!,
+            endpoint: endpoint,
+            accessToken: "test-access-token"
+        ))
+
+        XCTAssertEqual(request.url, endpoint)
+        XCTAssertEqual(request.httpMethod, "POST")
+    }
+
+    @MainActor func testExactAddressProducesAutoConfirmableCandidate() async throws {
+        let candidate = PlaceCandidate(
+            id: "mapkit:kings-of-kobe",
+            place: Place(
+                name: "Kings of Kobe",
+                category: .food,
+                neighborhood: "Hell's Kitchen",
+                address: "650 W 42nd St, New York, NY 10036",
+                latitude: 40.7616,
+                longitude: -73.9971
+            ),
+            confidence: .medium,
+            reason: "Apple Maps matched the caption or approved text"
+        )
+        let evidence = "Kings of Kobe 📍650 W 42nd St, New York, NY 10036"
+        let extractor = FixturePlaceExtractor(
+            metadataProvider: StubMetadataProvider(
+                metadata: SocialMetadata(
+                    title: nil,
+                    authorHandle: "@creator",
+                    thumbnailURL: nil,
+                    searchEvidence: evidence
+                )
+            ),
+            placeSearcher: StubPlaceSearcher(candidates: [candidate])
+        )
+
+        let result = try await extractor.extract(
+            from: URL(string: "https://www.tiktok.com/@creator/video/123")!,
+            sharedText: nil
+        )
+
+        XCTAssertEqual(result.autoConfirmedCandidateID, candidate.id)
+    }
+
+    @MainActor func testSameNumberAndStateOnDifferentStreetRequiresConfirmation() async throws {
+        let candidate = PlaceCandidate(
+            id: "mapkit:wrong-street",
+            place: Place(
+                name: "Wrong Place",
+                category: .food,
+                neighborhood: "SoMa",
+                address: "123 Mission St, San Francisco, CA 94105",
+                latitude: 37.7898,
+                longitude: -122.3974
+            ),
+            confidence: .medium,
+            reason: "Apple Maps matched the caption or approved text"
+        )
+        let extractor = FixturePlaceExtractor(
+            metadataProvider: StubMetadataProvider(
+                metadata: SocialMetadata(
+                    title: nil,
+                    authorHandle: nil,
+                    thumbnailURL: nil,
+                    searchEvidence: "Try it at 123 Market St, San Francisco, CA 94105"
+                )
+            ),
+            placeSearcher: StubPlaceSearcher(candidates: [candidate])
+        )
+
+        let result = try await extractor.extract(
+            from: URL(string: "https://www.tiktok.com/@creator/video/123")!,
+            sharedText: nil
+        )
+
+        XCTAssertNil(result.autoConfirmedCandidateID)
+    }
+
+    @MainActor func testOppositeStreetDirectionRequiresConfirmation() async throws {
+        let candidate = PlaceCandidate(
+            id: "mapkit:east-42nd",
+            place: Place(
+                name: "Wrong Direction",
+                category: .food,
+                neighborhood: "Midtown",
+                address: "650 E 42nd St, New York, NY 10017",
+                latitude: 40.7488,
+                longitude: -73.9691
+            ),
+            confidence: .medium,
+            reason: "Apple Maps matched the caption or approved text"
+        )
+        let extractor = FixturePlaceExtractor(
+            metadataProvider: StubMetadataProvider(
+                metadata: SocialMetadata(
+                    title: nil,
+                    authorHandle: nil,
+                    thumbnailURL: nil,
+                    searchEvidence: "Try it at 650 W 42nd St, New York, NY 10036"
+                )
+            ),
+            placeSearcher: StubPlaceSearcher(candidates: [candidate])
+        )
+
+        let result = try await extractor.extract(
+            from: URL(string: "https://www.tiktok.com/@creator/video/123")!,
+            sharedText: nil
+        )
+
+        XCTAssertNil(result.autoConfirmedCandidateID)
+    }
+
+    @MainActor func testAmbiguousAddressCandidatesStillNeedConfirmation() async throws {
+        let first = PlaceCandidate(
+            id: "mapkit:first",
+            place: SampleData.levain,
+            confidence: .medium,
+            reason: "Apple Maps matched the caption or approved text"
+        )
+        let second = PlaceCandidate(
+            id: "mapkit:second",
+            place: SampleData.losTacos,
+            confidence: .medium,
+            reason: "Apple Maps matched the caption or approved text"
+        )
+        let evidence = "Try this place at 650 W 42nd St, New York, NY 10036"
+        let extractor = FixturePlaceExtractor(
+            metadataProvider: StubMetadataProvider(
+                metadata: SocialMetadata(
+                    title: nil,
+                    authorHandle: nil,
+                    thumbnailURL: nil,
+                    searchEvidence: evidence
+                )
+            ),
+            placeSearcher: StubPlaceSearcher(candidates: [first, second])
+        )
+
+        let result = try await extractor.extract(
+            from: URL(string: "https://www.tiktok.com/@creator/video/123")!,
+            sharedText: nil
+        )
+
+        XCTAssertNil(result.autoConfirmedCandidateID)
+    }
+
     @MainActor func testDevelopmentEvidenceClientRecognizesDailyLimit() {
         let data = Data(
             """
@@ -239,6 +388,24 @@ final class FixturePlaceExtractorTests: XCTestCase {
         )
 
         XCTAssertEqual(queries.first, "Joe's Pizza foodtok")
+    }
+
+    @MainActor func testQueryBuilderAssociatesPinnedVenueWithLaterAddress() {
+        let evidence = """
+        13K likes, 103 comments - reserve.nyc on March 19, 2025: "📍OREGANO
+
+        The food at this cozy Italian restaurant in Williamsburg was a 10/10.
+        I recommend everyone check them out! @oreganobrooklyn
+
+        📍102 Berry St
+        Brooklyn, NY 11249
+        """
+
+        XCTAssertTrue(
+            PlaceQueryBuilder.queries(from: evidence).contains(
+                "OREGANO 102 Berry St Brooklyn, NY 11249"
+            )
+        )
     }
 
     @MainActor func testQueryBuilderExtractsPlaceAfterCheckOut() {

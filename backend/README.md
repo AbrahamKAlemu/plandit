@@ -113,7 +113,7 @@ Required environment in production:
 | `CORS_ALLOWED_ORIGINS` | `https://plandit.app,https://www.plandit.app` |
 | `ENSEMBLEDATA_ENABLED` | `1` to enable social evidence extraction; `0` is the kill switch |
 | `ENSEMBLEDATA_API_TOKEN` | server-side provider token; never put this in the iOS build |
-| `SOCIAL_EVIDENCE_THROTTLE_RATE` | authenticated per-user limit, default `30/day` |
+| `SOCIAL_EVIDENCE_THROTTLE_RATE` | authenticated per-user limit, default `100/day` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (Project Settings → API keys, secret); used only to delete auth users on `DELETE /api/me/`. Without it, account deletion removes Plandit data only |
 | `METRICS_API_KEY` | shared secret for `GET /api/metrics/` (course staff). Empty turns the endpoint off. The Render blueprint generates one |
 
@@ -130,7 +130,7 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 |---|---|---|
 | GET | `/api/health/` | `{"status":"ok"}` after a database ping |
 | POST | `/api/waitlist/` | `{"email","source"}` → `201` stored, `200` already there. 10/min per IP |
-| POST | `/v1/social-evidence` | authenticated TikTok caption/transcript evidence; 30/day per user by default |
+| POST | `/v1/social-evidence` | authenticated TikTok/Instagram caption evidence; 100/day per user by default |
 | GET, PATCH | `/api/me/` | profile: `name`, `school`, `home_base`, `default_budget`, `travel_modes` |
 | DELETE | `/api/me/` | delete the account: the Supabase auth user (Admin API) and then every Plandit row. `204`; `502` and nothing deleted if Supabase fails, so the app can retry. A tombstone keeps the still-valid token from re-creating the profile (`401 Account deleted.`) |
 | GET | `/api/me/stats/` | `plans_completed`, `neighborhoods_visited`, `miles_walked`, `average_spend`, `plans_under_budget`, `streak_weeks` |

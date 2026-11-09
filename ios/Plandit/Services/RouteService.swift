@@ -13,7 +13,7 @@ struct RouteInfo: Equatable {
 }
 
 /// Apple Maps routes, behind a protocol so tests don't hit the network.
-protocol RouteProviding {
+protocol RouteProviding: Sendable {
     func route(_ mode: TravelMode, from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) async -> RouteInfo?
 }
 

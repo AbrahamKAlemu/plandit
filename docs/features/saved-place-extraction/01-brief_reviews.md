@@ -56,3 +56,18 @@ User approval: "Perfect lets fo with Django + PostgreSQL"
 
 Grace and Andre must re-evaluate the amended requirements. Their prior `must_fix` findings remain
 blocking until both return with no unresolved `must_fix`.
+
+## Persona review round 3 — iOS direct-caption slice
+
+| Persona | Verdict | Score | Blocking finding | Disposition |
+|---|---|---:|---|---|
+| Sofia | Approve | 9/10 | None | No change required. |
+| Amara | Approve | 8/10 | None | Group sharing remains a separate feature. |
+| Grace | Approve | 8/10 | None | Transit-inclusive plan cost remains downstream planning work. |
+| Marcus | Reject | 3/10 | Add a no-saves, nearby/open-now path with time and dietary constraints. | Not added: this contradicts the planner-not-discovery guardrail and the owner-approved focused extraction scope. A separate owner decision is required, so the persona gate remains blocked. |
+| Andre | Approve with conditions | 5/10 | Show source-post/event recency and expiry before presenting a place for Today. | Not implemented in this slice. This remains a valid shipping blocker for time-sensitive posts. |
+
+This round evaluated the November 8, 2026 direct TikTok/Instagram caption and strict auto-pin
+amendment. The implementation may continue under its recorded owner approval, but the brief is not
+persona-cleared for shipping while the Marcus and Andre findings remain unresolved or explicitly
+overridden by the product owner.
