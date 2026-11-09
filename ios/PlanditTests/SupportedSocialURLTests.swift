@@ -34,6 +34,8 @@ final class SupportedSocialURLTests: XCTestCase {
 
     @MainActor func testRejectsUnsupportedAndDeceptiveHosts() {
         XCTAssertThrowsError(try SupportedSocialURL(URL(string: "https://tiktok.com.example.com/@a/video/123")!))
+        XCTAssertThrowsError(try SupportedSocialURL(URL(string: "https://attacker.tiktok.com/@a/video/123")!))
+        XCTAssertThrowsError(try SupportedSocialURL(URL(string: "https://attacker.instagram.com/reel/ABC")!))
         XCTAssertThrowsError(try SupportedSocialURL(URL(string: "https://example.com/reel/ABC")!))
         XCTAssertThrowsError(try SupportedSocialURL(URL(string: "http://www.tiktok.com/@a/video/123")!))
     }

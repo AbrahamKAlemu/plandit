@@ -394,7 +394,17 @@ final class PlanditStore {
     @discardableResult
     func save(url: URL, sharedText: String? = nil) throws -> UUID {
         let supported = try SupportedSocialURL(url)
-        if let existing = saved.first(where: { $0.canonicalURL == supported.canonicalURL }) {
+        if let index = saved.firstIndex(where: { $0.canonicalURL == supported.canonicalURL }) {
+            let existing = saved[index]
+            guard existing.status == .failed || existing.status == .needsEvidence else {
+                return existing.id
+            }
+            var updated = saved
+            updated[index].status = .processing
+            updated[index].failureMessage = nil
+            try persistSaved(updated)
+            saved = updated
+            startExtraction(existing.id)
             return existing.id
         }
         let post = SavedPost(
@@ -437,6 +447,7 @@ final class PlanditStore {
         guard let candidate = post(id: postID)?.candidates.first(where: { $0.id == candidateID }) else { return false }
         let confirmed = updateAndPersist(postID) { post in
             post.place = candidate.place
+            post.placeProviderID = candidate.id
             post.estimatedCost = candidate.estimatedCost
             post.status = .ready
             post.candidates = []
@@ -521,7 +532,10 @@ final class PlanditStore {
         guard let post = post(id: id) else { return }
         do {
             let result = try await extractor.extract(from: post.url, sharedText: post.caption)
-            updateAndPersist(id) { $0.apply(result) }
+            let updated = applyExtractionResult(result, to: id)
+            if updated, result.autoConfirmedCandidateID != nil {
+                events?(.placeSaved)
+            }
         } catch let error as DevelopmentSocialEvidenceError {
             updateAndPersist(id) {
                 $0.status = .needsEvidence
@@ -532,6 +546,41 @@ final class PlanditStore {
                 $0.status = .failed
                 $0.failureMessage = "We couldn't read this source. Add details or try again."
             }
+        }
+    }
+
+    @discardableResult
+    private func applyExtractionResult(_ result: ExtractionResult, to id: UUID) -> Bool {
+        guard let index = saved.firstIndex(where: { $0.id == id }) else { return false }
+        var updated = saved
+        updated[index].apply(result)
+        if let canonicalURL = result.canonicalURL {
+            if updated.contains(where: {
+                $0.id != id && $0.canonicalURL == canonicalURL && $0.isMappable
+            }) {
+                updated.removeAll { $0.id == id }
+                do {
+                    try persistSaved(updated)
+                    saved = updated
+                    return false
+                } catch {
+                    savedErrorMessage = "We couldn't save that change. Try again."
+                    return false
+                }
+            }
+            updated.removeAll {
+                $0.id != id && $0.canonicalURL == canonicalURL
+            }
+        }
+        do {
+            try persistSaved(updated)
+            saved = updated
+            return true
+        } catch {
+            savedErrorMessage = "We couldn't save that change. Try again."
+            saved[index].status = .failed
+            saved[index].failureMessage = "This change wasn't saved. Try again."
+            return false
         }
     }
 
@@ -561,11 +610,14 @@ final class PlanditStore {
         defer { inFlight.remove(postID) }
         do {
             let result = try await extractor.resolve(evidence: text, platform: post.platform)
-            updateAndPersist(postID) {
+            let updated = updateAndPersist(postID) {
                 $0.apply(result)
                 if result.candidates.isEmpty {
                     $0.failureMessage = noCandidatesMessage
                 }
+            }
+            if updated, result.autoConfirmedCandidateID != nil {
+                events?(.placeSaved)
             }
         } catch {
             updateAndPersist(postID) {

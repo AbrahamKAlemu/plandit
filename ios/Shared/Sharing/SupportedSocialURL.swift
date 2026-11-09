@@ -37,10 +37,10 @@ struct SupportedSocialURL: Hashable, Codable {
         }
 
         let platform: SourcePlatform
-        if Self.isHost(host, under: "tiktok.com") {
+        if ["tiktok.com", "www.tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com"].contains(host) {
             platform = .tiktok
             try Self.validateTikTok(path: url.path, host: host)
-        } else if Self.isHost(host, under: "instagram.com") {
+        } else if ["instagram.com", "www.instagram.com"].contains(host) {
             platform = .instagram
             try Self.validateInstagram(path: url.path)
         } else {
@@ -62,10 +62,6 @@ struct SupportedSocialURL: Hashable, Codable {
         self.originalURL = url
         self.canonicalURL = canonicalURL
         self.platform = platform
-    }
-
-    private static func isHost(_ host: String, under root: String) -> Bool {
-        host == root || host.hasSuffix(".\(root)")
     }
 
     private static func validateTikTok(path: String, host: String) throws {
