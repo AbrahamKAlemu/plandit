@@ -8,7 +8,8 @@ final class PlanFlowTests: XCTestCase {
 
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large"] + extra
+        // A fixed start time, so places aren't closed when the tests run at night.
+        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-planStart", "11:00"] + extra
         app.launch()
         return app
     }
