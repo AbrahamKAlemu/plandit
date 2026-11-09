@@ -9,7 +9,7 @@ import XCTest
         func resolve(evidence: String, platform: SourcePlatform) async throws -> ExtractionResult { ExtractionResult(candidates: []) }
     }
 
-    private final class SlowExtractor: PlaceExtracting {
+    private final class SlowExtractor: PlaceExtracting, @unchecked Sendable {
         var calls = 0
         let delay: Duration
 

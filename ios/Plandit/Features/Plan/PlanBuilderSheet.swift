@@ -9,11 +9,11 @@ struct PlanBuilderSheet: View {
     /// Picked post ids, in the order they were picked.
     @State private var picked: [UUID] = []
     @State private var mode: PlanditStore.PlanMode = .replace
-    @State private var start = PlanBuilderSheet.nextQuarterHour()
+    @State private var start = PlanBuilderSheet.defaultStart()
     @State private var budget: Double = 60
     /// "Free until": off means the day can run late.
     @State private var hasEnd = false
-    @State private var end = PlanBuilderSheet.nextQuarterHour().addingTimeInterval(4 * 3600)
+    @State private var end = PlanBuilderSheet.defaultStart().addingTimeInterval(4 * 3600)
     @State private var didSetUp = false
     @State private var built = 0
 
@@ -193,7 +193,7 @@ struct PlanBuilderSheet: View {
     }
 
     private func spent(_ outcome: DayPlanner.Outcome) -> Double {
-        (mode == .add ? store.lockedCost : 0) + outcome.cost
+        (mode == .add ? store.lockedCost : 0) + outcome.cost + store.today.extras.total
     }
 
     private func setUp() {
@@ -217,6 +217,20 @@ struct PlanBuilderSheet: View {
         }
         built += 1
         router.finishPlanning()
+    }
+
+    /// The next quarter hour. Debug builds launched with `-planStart 11:00` start there instead,
+    /// so UI tests don't depend on the time of day.
+    static func defaultStart(now: Date = .now, calendar: Calendar = .current) -> Date {
+        #if DEBUG
+        if let value = UserDefaults.standard.string(forKey: "planStart") {
+            let parts = value.split(separator: ":").compactMap { Int($0) }
+            if parts.count == 2, let date = calendar.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: now) {
+                return date
+            }
+        }
+        #endif
+        return nextQuarterHour(after: now, calendar: calendar)
     }
 
     /// 10:07 → 10:15, 10:15 → 10:30: always a little ahead of now.
@@ -245,7 +259,7 @@ private struct PickRow: View {
                         .foregroundStyle(.ink)
                         .lineLimit(1)
                     if let place = post.place {
-                        Text([place.category.label, place.neighborhood, post.estimatedCost?.dollarsText].compactMap { $0 }.joined(separator: " · "))
+                        Text([place.category.label, place.neighborhood, priceText].compactMap { $0 }.joined(separator: " · "))
                             .font(.metadata)
                             .foregroundStyle(.inkMuted)
                             .lineLimit(1)
@@ -270,6 +284,14 @@ private struct PickRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isPicked ? .isSelected : [])
         .accessibilityIdentifier("pick-\(post.title)")
+    }
+}
+
+extension PickRow {
+    /// The user's price, the post's, or the usual range: "$8", "Free", "$15–30".
+    var priceText: String? {
+        if let userCost = post.userCost { return userCost.dollarsText }
+        return post.postedPrice?.rangeText
     }
 }
 
@@ -362,7 +384,7 @@ struct PlanPreview: View {
 
     /// "1 subway ride", "2 subway rides", or nil for an all-walking day.
     static func subwayRidesText(_ legs: [TravelLeg]) -> String? {
-        let rides = legs.filter { $0.mode != .walk }.count
+        let rides = legs.filter(\.mode.isTransit).count
         return rides == 0 ? nil : (rides == 1 ? "1 subway ride" : "\(rides) subway rides")
     }
 

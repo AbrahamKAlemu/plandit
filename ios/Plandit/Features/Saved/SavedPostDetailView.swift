@@ -432,6 +432,7 @@ private struct EvidenceEditor: View {
 private struct PlaceSummary: View {
     let post: SavedPost
     let place: Place
+    @State private var isEditingCost = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
@@ -451,12 +452,32 @@ private struct PlaceSummary: View {
             }
 
             VStack(alignment: .leading, spacing: Space.md) {
-                FactRow(icon: .wallet, title: "Estimated cost", value: post.estimatedCost?.dollarsText ?? "Unknown")
+                Button { isEditingCost = true } label: {
+                    HStack {
+                        FactRow(icon: .wallet, title: costTitle, value: costValue)
+                        Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Change what this place costs")
+                .accessibilityIdentifier("post-cost")
                 FactRow(icon: .mapPin, title: "Address", value: place.address)
                 FactRow(icon: .clock, title: "Hours", value: place.hours ?? "Not listed")
             }
             .planditCard()
         }
+        .sheet(isPresented: $isEditingCost) { PostCostSheet(postID: post.id) }
+    }
+
+    private var costTitle: String {
+        post.userCost != nil ? "Your estimate" : (post.estimatedCost != nil ? "Estimated cost" : "Usual cost")
+    }
+
+    /// "$8", or "Usually $15–30 per person" when the post didn't say.
+    private var costValue: String {
+        if let userCost = post.userCost { return userCost.dollarsText }
+        return post.postedPrice?.perPersonText ?? "Unknown"
     }
 }
 

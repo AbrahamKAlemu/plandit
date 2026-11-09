@@ -19,7 +19,7 @@ final class PlanditStore {
     var pastPlans: [PastPlan]
     var visited: [Place]
     var savedErrorMessage: String?
-    /// Real walking geometry per leg, filled in by `loadRoutes()`.
+    /// Real walking or driving geometry per leg, filled in by `loadRoutes()`.
     private(set) var legPaths: [UUID: [CLLocationCoordinate2D]] = [:]
 
     /// Computed from real past plans and visited places; never sample numbers.
@@ -32,7 +32,9 @@ final class PlanditStore {
 
     @ObservationIgnored private let extractor: any PlaceExtracting
     @ObservationIgnored private let videoExtractor: VideoEvidenceExtractor
-    @ObservationIgnored private let routes = RouteService()
+    @ObservationIgnored private let routes: any RouteProviding
+    /// Apple Maps answers by mode and place pair, so a leg's options load once.
+    @ObservationIgnored private var liveRoutes: [String: RouteInfo] = [:]
     @ObservationIgnored private let storage: SnapshotStore?
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
     /// Posts whose extraction or evidence lookup is still running; never started twice.
@@ -49,8 +51,10 @@ final class PlanditStore {
         extractor: any PlaceExtracting = FixturePlaceExtractor(),
         storage: SnapshotStore? = nil,
         videoExtractor: VideoEvidenceExtractor = VideoEvidenceExtractor(),
-        events: ((UsageEvent) -> Void)? = nil
+        events: ((UsageEvent) -> Void)? = nil,
+        routes: any RouteProviding = RouteService()
     ) {
+        self.routes = routes
         self.today = today
         self.saved = saved
         self.profile = profile
@@ -173,7 +177,7 @@ final class PlanditStore {
         today.stops.contains { $0.sourcePostID == post.id }
     }
 
-    /// Walking path if loaded, otherwise a straight line (MapKit has no transit geometry).
+    /// Walking or driving path if loaded, otherwise a straight line (MapKit has no transit geometry).
     func path(for leg: TravelLeg) -> [CLLocationCoordinate2D] {
         if let path = legPaths[leg.id] { return path }
         guard let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return [] }
@@ -183,10 +187,163 @@ final class PlanditStore {
     // MARK: - Routes
 
     func loadRoutes() async {
-        for leg in today.legs where leg.mode == .walk && legPaths[leg.id] == nil {
+        for leg in today.legs where !leg.mode.isTransit && legPaths[leg.id] == nil {
             guard let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { continue }
-            legPaths[leg.id] = await routes.walkingPath(from: from.place.coordinate, to: to.place.coordinate)
+            let path = await liveRoute(leg.mode, from: from.place, to: to.place)?.path
+            // The leg may have changed mode while Apple Maps answered.
+            guard today.legs.first(where: { $0.id == leg.id })?.mode == leg.mode else { continue }
+            legPaths[leg.id] = path ?? [from.place.coordinate, to.place.coordinate]
         }
+    }
+
+    private func liveRoute(_ mode: TravelMode, from: Place, to: Place) async -> RouteInfo? {
+        let key = Self.routeKey(mode, from: from, to: to)
+        if let cached = liveRoutes[key] { return cached }
+        let info = await routes.route(mode, from: from.coordinate, to: to.coordinate)
+        if let info { liveRoutes[key] = info }
+        return info
+    }
+
+    private static func routeKey(_ mode: TravelMode, from: Place, to: Place) -> String {
+        "\(mode.rawValue)|\(from.latitude),\(from.longitude)|\(to.latitude),\(to.longitude)"
+    }
+
+    // MARK: - Getting between stops (walk, subway or drive)
+
+    /// One way to make a trip, with its time and cost. `isLive` when the time came from Apple Maps.
+    struct TravelOption: Identifiable, Equatable {
+        var leg: TravelLeg
+        var isLive: Bool
+        var id: TravelMode { leg.mode }
+    }
+
+    /// Walk, subway and drive for a leg, using Apple Maps times already loaded and estimates otherwise.
+    func travelOptions(forLeg id: UUID) -> [TravelOption] {
+        guard let leg = today.legs.first(where: { $0.id == id }),
+              let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return [] }
+        return TravelMode.choices.map { mode in
+            let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
+            return TravelOption(leg: Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place), isLive: live != nil)
+        }
+    }
+
+    /// Asks Apple Maps for all three ways of making this trip.
+    func loadTravelOptions(forLeg id: UUID) async {
+        guard let leg = today.legs.first(where: { $0.id == id }),
+              let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return }
+        for mode in TravelMode.choices {
+            _ = await liveRoute(mode, from: from.place, to: to.place)
+        }
+    }
+
+    /// The day if this trip were made this way: later stops move with the new travel time.
+    func previewTravel(_ option: TravelOption) -> DayPlan {
+        var plan = today
+        plan.setLeg(option.leg)
+        return plan
+    }
+
+    /// Makes this trip this way and moves the rest of the day to match.
+    func chooseTravel(_ option: TravelOption) {
+        guard today.legs.contains(where: { $0.id == option.leg.id }) else { return }
+        today.setLeg(option.leg)
+        legPaths[option.leg.id] = nil
+        persist()
+        Task { await loadRoutes() }
+    }
+
+    /// Every trip still ahead goes this way: "Drive everywhere", "Take the subway".
+    func chooseTravelForRestOfDay(_ mode: TravelMode) {
+        for leg in today.legs where today.state(of: leg) != .completed {
+            guard let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { continue }
+            let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
+            today.setLeg(Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place))
+            legPaths[leg.id] = nil
+        }
+        persist()
+        Task { await loadRoutes() }
+    }
+
+    /// A leg by `mode` with the same id, so the map and timeline keep their place.
+    private static func leg(_ mode: TravelMode, live: RouteInfo?, replacing leg: TravelLeg, from: Place, to: Place) -> TravelLeg {
+        let miles = live?.miles ?? TravelLeg.streetMiles(from: from, to: to)
+        var new = TravelLeg.estimate(mode, miles: miles, fromStopID: leg.fromStopID, toStopID: leg.toStopID)
+        // Apple Maps' driving time doesn't include waiting for a taxi or rideshare.
+        if let live { new.minutes = live.minutes + (mode == .drive ? TravelLeg.pickupMinutes : 0) }
+        new.id = leg.id
+        new.isChosen = true
+        return new
+    }
+
+    /// Directions for the trip into this stop go by the way that trip is planned.
+    func travelMode(into stopID: UUID) -> TravelMode {
+        today.legs.first { $0.toStopID == stopID }?.mode ?? .walk
+    }
+
+    // MARK: - Costs
+
+    /// The reference price for a stop: what its post said, or what this kind of place usually costs.
+    func priceGuide(for stop: PlanStop) -> PriceGuide {
+        post(id: stop.sourcePostID)?.postedPrice ?? .typical(stop.place.category)
+    }
+
+    /// The user's own number for this stop. Replaces any items they listed.
+    func setCost(_ amount: Double, forStop id: UUID) {
+        guard let index = stopIndex(id: id) else { return }
+        today.stops[index].estimatedCost = max(0, amount)
+        today.stops[index].costItems = []
+        today.stops[index].costIsCustom = true
+        persist()
+    }
+
+    /// What the user will pay for here, item by item. The stop's cost becomes their total;
+    /// removing the last item goes back to the estimate.
+    func setCostItems(_ items: [CostItem], forStop id: UUID) {
+        guard let index = stopIndex(id: id) else { return }
+        if items.isEmpty {
+            resetCost(forStop: id)
+            return
+        }
+        today.stops[index].costItems = items
+        today.stops[index].estimatedCost = items.total
+        today.stops[index].costIsCustom = true
+        persist()
+    }
+
+    /// Back to the user's price for the saved place, the post's, or the typical price.
+    func resetCost(forStop id: UUID) {
+        guard let index = stopIndex(id: id) else { return }
+        let stop = today.stops[index]
+        today.stops[index].estimatedCost = post(id: stop.sourcePostID)?.plannedCost ?? priceGuide(for: stop).estimate
+        today.stops[index].costItems = []
+        today.stops[index].costIsCustom = false
+        persist()
+    }
+
+    /// The user's price for a saved place, used whenever it's planned. nil goes back to the post's or typical price.
+    /// Stops already planned from it follow, unless the user set that stop's cost separately.
+    @discardableResult
+    func setUserCost(_ amount: Double?, forPost id: UUID) -> Bool {
+        guard updateAndPersist(id, mutation: { $0.userCost = amount.map { max(0, $0) } }) else { return false }
+        guard let post = post(id: id), let cost = post.plannedCost else { return true }
+        var changed = false
+        for index in today.stops.indices where today.stops[index].sourcePostID == id && !today.stops[index].costIsCustom {
+            today.stops[index].estimatedCost = cost
+            changed = true
+        }
+        if changed { persist() }
+        return true
+    }
+
+    func setBudget(_ amount: Double) {
+        today.budget = max(0, amount)
+        persist()
+    }
+
+    /// Costs for the day that aren't one stop: snacks, a ride home.
+    func setExtras(_ items: [CostItem]) {
+        today.extras = items
+        persist()
     }
 
     // MARK: - Day rollover
@@ -464,7 +621,7 @@ final class PlanditStore {
             place: place,
             start: start,
             durationMinutes: 60,
-            estimatedCost: post.estimatedCost ?? 0,
+            estimatedCost: post.plannedCost ?? 0,
             note: "Added from your saved \(post.platform.displayName) post.",
             sourcePostID: post.id,
             status: .upcoming
@@ -558,8 +715,17 @@ final class PlanditStore {
         case .add:
             let locked = lockedStops
             let lockedIDs = Set(locked.map(\.id))
+            let chosen = today.legs.filter(\.isChosen)
             today.stops = locked + outcome.stops
             today.legs = today.legs.filter { lockedIDs.contains($0.fromStopID) && lockedIDs.contains($0.toStopID) } + outcome.legs
+            // Trips the user picked a way for stay that way when the same two stops are still next to each other.
+            for leg in today.legs {
+                if let pick = chosen.first(where: { $0.fromStopID == leg.fromStopID && $0.toStopID == leg.toStopID }), pick.mode != leg.mode {
+                    var kept = pick
+                    kept.id = leg.id
+                    today.setLeg(kept)
+                }
+            }
         }
         today.budget = budget
         if mode == .replace || lockedStops.isEmpty {
@@ -587,7 +753,7 @@ final class PlanditStore {
         let picked = postIDs.filter { seen.insert($0).inserted }.compactMap { post(id: $0) }.compactMap(PlanCandidate.init(post:))
         switch mode {
         case .replace:
-            return DayPlanner.Request(candidates: picked, start: start, budget: budget)
+            return DayPlanner.Request(candidates: picked, start: start, budget: budget, alreadySpent: today.extras.total)
         case .add:
             let locked = lockedStops
             let lockedIDs = Set(locked.map(\.id))
@@ -601,7 +767,7 @@ final class PlanditStore {
                 start: locked.last?.end ?? start,
                 budget: budget,
                 anchor: locked.last,
-                alreadySpent: locked.reduce(0) { $0 + $1.estimatedCost } + lockedLegCost
+                alreadySpent: locked.reduce(0) { $0 + $1.estimatedCost } + lockedLegCost + today.extras.total
             )
         }
     }

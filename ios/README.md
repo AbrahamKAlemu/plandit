@@ -6,7 +6,7 @@ The app copies Find My's layout. A full-screen Manhattan map sits behind a sheet
 
 | Tab | Sheet | Map |
 | --- | --- | --- |
-| **Today** | The Plandit day: summary (time, budget, walking), directions to the next stop, and the stop-by-stop timeline. Tap a stop to open its details. | Numbered stops and the route. Walking legs are solid lines, transit legs are dotted. The active leg is emerald. |
+| **Today** | The Plandit day: summary (time, budget, walking), directions to the next stop, and the stop-by-stop timeline. Tap a stop to open its details. | Numbered stops and the route. Walking legs are solid lines, transit legs are dotted, driving legs are dashed (walking and driving follow real streets). The active leg is emerald. |
 | **Saved** | Posts shared from TikTok, Instagram or the web, with their extraction status, category filters, and a "paste a link" sheet. | One pin per mapped saved place. |
 | **Profile** | Profile, stats, recent plans, preferences (placeholders for now). | Dots for places from past plans. |
 
@@ -58,7 +58,7 @@ Plandit/            App target
     Saved/          Saved list, post detail, add-link sheet
     Profile/        Profile and stats
   Models/           Place, DayPlan, SavedPost, UserProfile, SampleData (mock)
-  Services/         PlanditStore (state), RouteService (MapKit walking paths), PlaceExtractor
+  Services/         PlanditStore (state), RouteService (Apple Maps walk/transit/drive times and paths), PlaceExtractor
 PlanditShare/       Share extension: accepts a URL or text containing a link, queues it in the App Group
 Shared/             Code and assets compiled into both targets
   DesignSystem/     Color tokens, Manrope type scale, spacing, Lucide Icon, BrandArt, button styles
@@ -88,6 +88,8 @@ Asset sources:
 
 - **Share → Plandit → app:** when the app comes back to the foreground it drains the share inbox, switches to Saved, and opens the new post so you can watch it get mapped. Pasting a link does the same.
 - **+ → Plan a day:** the emerald + in the tab bar (on every tab) opens the planner. Pick saved places (each shows when it was saved), set a start time, an optional "Free until" and a budget, and a live preview shows the order, times, cost and anything left out (closed, over budget, or past the end of the day). "Add to today" keeps stops that are done or underway and re-orders the rest with the new picks; "Start over" replaces the day. The logic lives in `Services/DayPlanner.swift`; `backend/plandit/plans/planner.py` follows the same rules. Launch with `-openPlanner YES` to start in the planner.
+- **Getting there:** every trip still ahead on Today has a **Change** button. It opens walk / subway / drive with Apple Maps times (estimates offline), cost, and arrival time; picking one moves later stops by the difference (evening spots still wait for 8 PM) and warns if you'd arrive after a place closes. Drive is a taxi or rideshare (about $4 + $3.50/mi, $10 minimum, plus 5 minutes for pickup). "Directions in Maps" opens Apple Maps in that mode, including real subway lines. The logic is `DayPlan.setLeg` and the "Getting between stops" part of `PlanditStore`.
+- **Budget:** tap the money number on Today. Every stop shows its price and where it came from: the saved post's price, or a typical NYC range for its category (`Models/Pricing.swift`) when the post didn't say. Users can type their own number, list items that add up, add day-level "Other costs", and change the budget. A saved place's own price (set on its detail screen) is used whenever it's planned. Custom prices survive re-planning, and extras count against the budget in the planner.
 - **Saved → Today:** "Add to today's plan" appends the stop, confirms in place, and offers "View today's plan". Long-press a saved post for the same actions.
 - **Moving through the day:** on a stop, "I'm here" makes it the current stop (earlier stops become done); "Done here" finishes it and makes the next one current. The timeline rail, map route and pins follow. Long-press a timeline row for the same actions. When every stop is done, Today shows a completion card.
 - **New day:** a plan belongs to one date. On the first launch of a new day the old plan is filed under Recent plans and Today starts empty with the default budget.
@@ -99,7 +101,7 @@ Asset sources:
 - **Extraction:** TikTok links use the authenticated Django evidence endpoint when production
   configuration is present, then search MapKit for matching places. Instagram still depends on
   shared text or manually attached media; broader provider support is not built.
-- **Planner:** The + planner orders stops by least travel (every order up to 7 stops, a fast search above that), keeps visits inside closing times read from `hours` ("Open until 9 PM"), and stays on budget including subway fares. Nightlife waits for 8 PM (or is left out if the day ends earlier), and "Free until" caps the day. It doesn't know other opening times yet, and travel times are still the straight-line estimate. The long-press "Add to today's plan" still just appends.
+- **Planner:** The + planner orders stops by least travel (every order up to 7 stops, a fast search above that), keeps visits inside closing times read from `hours` ("Open until 9 PM"), and stays on budget including subway fares. Nightlife waits for 8 PM (or is left out if the day ends earlier), and "Free until" caps the day. It doesn't know other opening times yet, and its travel times are still the straight-line estimate (the Getting there sheet uses Apple Maps). It never picks driving by itself. The long-press "Add to today's plan" still just appends.
 - **Transit:** MapKit has no transit geometry, so transit legs are drawn as straight dotted lines. Walking legs use real MapKit walking routes.
 - **Dark mode:** Provisional dark tokens are documented in `docs/features/dark-mode/`. The canonical
   style guide remains unchanged until the design owners approve those tokens.

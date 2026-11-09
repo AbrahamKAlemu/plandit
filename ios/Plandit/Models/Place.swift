@@ -15,10 +15,16 @@ struct Place: Identifiable, Hashable, Codable, Sendable {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
-    /// Hands off to Apple Maps for turn-by-turn walking directions.
-    func openDirections() {
-        MKMapItem.plandit(at: coordinate, name: name)
-            .openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
+    /// Hands off to Apple Maps for turn-by-turn directions by walking, transit or car.
+    /// With `from`, the route starts at that place instead of where the user is.
+    func openDirections(by mode: TravelMode = .walk, from origin: Place? = nil) {
+        let destination = MKMapItem.plandit(at: coordinate, name: name)
+        let options = [MKLaunchOptionsDirectionsModeKey: mode.mapsLaunchMode]
+        if let origin {
+            MKMapItem.openMaps(with: [.plandit(at: origin.coordinate, name: origin.name), destination], launchOptions: options)
+        } else {
+            destination.openInMaps(launchOptions: options)
+        }
     }
 }
 

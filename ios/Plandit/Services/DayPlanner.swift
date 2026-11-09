@@ -10,6 +10,9 @@ struct PlanCandidate: Identifiable, Hashable {
     var durationMinutes: Int
     var sourcePostID: UUID?
     var note: String?
+    /// Carried through re-planning so a cost the user set stays theirs.
+    var costItems: [CostItem] = []
+    var costIsCustom = false
 
     init(id: UUID = UUID(), place: Place, cost: Double, durationMinutes: Int? = nil, sourcePostID: UUID? = nil, note: String? = nil) {
         self.id = id
@@ -25,7 +28,7 @@ struct PlanCandidate: Identifiable, Hashable {
         guard post.isMappable, let place = post.place else { return nil }
         self.init(
             place: place,
-            cost: post.estimatedCost ?? 0,
+            cost: post.plannedCost ?? 0,
             sourcePostID: post.id,
             note: "Added from your saved \(post.platform.displayName) post."
         )
@@ -35,6 +38,8 @@ struct PlanCandidate: Identifiable, Hashable {
     init(stop: PlanStop) {
         self.init(id: stop.id, place: stop.place, cost: stop.estimatedCost, durationMinutes: stop.durationMinutes,
                   sourcePostID: stop.sourcePostID, note: stop.note)
+        costItems = stop.costItems
+        costIsCustom = stop.costIsCustom
     }
 }
 
@@ -413,7 +418,9 @@ private struct Problem {
                 estimatedCost: candidate.cost,
                 note: note,
                 sourcePostID: candidate.sourcePostID,
-                status: .upcoming
+                status: .upcoming,
+                costItems: candidate.costItems,
+                costIsCustom: candidate.costIsCustom
             )
         }
         let planLegs = order.indices.compactMap { leg(into: $0, of: order) }

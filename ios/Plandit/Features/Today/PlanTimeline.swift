@@ -4,6 +4,8 @@ import SwiftUI
 struct PlanTimeline: View {
     let plan: DayPlan
     @Environment(PlanditStore.self) private var store
+    /// The trip whose walk / subway / drive options are open.
+    @State private var choosingLeg: StopRef?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,11 +21,21 @@ struct PlanTimeline: View {
                 .transition(.opacity.combined(with: .move(edge: .leading)))
 
                 if let leg {
-                    TravelLegRow(leg: leg, state: plan.state(of: leg))
-                        .transition(.opacity)
+                    let state = plan.state(of: leg)
+                    Button {
+                        choosingLeg = StopRef(id: leg.id)
+                    } label: {
+                        TravelLegRow(leg: leg, state: state)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(state == .completed)
+                    .accessibilityHint(state == .completed ? "" : "Choose walk, subway or drive")
+                    .accessibilityIdentifier("leg-\(index + 1)")
+                    .transition(.opacity)
                 }
             }
         }
+        .sheet(item: $choosingLeg) { TravelOptionsSheet(legID: $0.id) }
     }
 }
 
@@ -110,7 +122,7 @@ private struct TravelLegRow: View {
 
     var body: some View {
         HStack(spacing: Space.sm) {
-            RailSegment(color: state.color, isDotted: leg.mode != .walk)
+            RailSegment(color: state.color, dash: leg.mode.dash)
                 .frame(width: 28)
             HStack(spacing: Space.xs) {
                 Icon(leg.mode.icon, size: 16)
@@ -120,21 +132,32 @@ private struct TravelLegRow: View {
             .foregroundStyle(state == .active ? Color.ink : Color.inkMuted)
             .padding(.vertical, Space.sm)
             Spacer(minLength: 0)
+            if state != .completed {
+                // Looks like a control: the trip can be changed.
+                Text("Change")
+                    .font(.label)
+                    .foregroundStyle(.ink)
+                    .padding(.horizontal, Space.sm)
+                    .frame(minHeight: 32)
+                    .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(Color.border))
+            }
         }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .fixedSize(horizontal: false, vertical: true)
         .animation(.snappy(duration: 0.3), value: state)
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Solid rail for walking, dotted for transit (mirrors the map's route lines).
+/// Solid rail for walking, dotted for transit, dashed for driving (mirrors the map's route lines).
 private struct RailSegment: View {
     let color: Color
-    let isDotted: Bool
+    let dash: [CGFloat]
 
     var body: some View {
         VerticalLine()
-            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: isDotted ? [1, 6] : []))
+            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dash.map { $0 * 0.7 }))
             .frame(width: 2)
             .frame(maxHeight: .infinity)
     }
