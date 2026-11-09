@@ -72,8 +72,12 @@ final class MapAndBudgetFlowTests: XCTestCase {
         XCTAssertTrue(name.waitForExistence(timeout: 2))
         name.tap()
         name.typeText("Snacks")
+        // Close the keyboard first: the sheet shifts while it's open, and a second tap can miss.
+        app.buttons["keyboard-done"].tap()
         let amount = app.textFields["item-amount"].firstMatch
+        scrollTo(amount, in: app)
         amount.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 2))
         amount.typeText("8")
 
         XCTAssertTrue(app.staticTexts["$50 of $60"].waitForExistence(timeout: 3))
