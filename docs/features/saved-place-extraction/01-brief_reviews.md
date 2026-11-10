@@ -71,3 +71,7 @@ This round evaluated the November 8, 2026 direct TikTok/Instagram caption and st
 amendment. The implementation may continue under its recorded owner approval, but the brief is not
 persona-cleared for shipping while the Marcus and Andre findings remain unresolved or explicitly
 overridden by the product owner.
+
+**Override (Abraham Kebede Alemu, product owner, 2026-11-09):** both findings overridden to ship this
+slice to TestFlight. Neither was fixed. Marcus's request goes against the planner-not-discovery
+guardrail. Andre's is a real gap for time-sensitive posts and stays open as a follow-up.

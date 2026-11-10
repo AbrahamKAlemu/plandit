@@ -45,6 +45,9 @@ cat > "$OUT/ExportOptions.plist" <<PLIST
 PLIST
 
 echo "→ Uploading to App Store Connect…"
-xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/ExportOptions.plist" \
-  -exportPath "$OUT/export" -allowProvisioningUpdates "${AUTH[@]}" | grep -E "error:|EXPORT|Upload" || true
+if ! xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/ExportOptions.plist" \
+  -exportPath "$OUT/export" -allowProvisioningUpdates "${AUTH[@]}" | grep -E "error:|EXPORT|Upload"; then
+  echo "upload failed: nothing reached App Store Connect"
+  exit 1
+fi
 echo "Done. Apple processes the build for 10–30 minutes, then it appears under TestFlight."

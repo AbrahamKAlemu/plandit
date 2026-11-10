@@ -66,6 +66,12 @@ nearby and on budget, shown on a map.
   - Class metrics: `GET https://plandit-api.onrender.com/api/metrics/?days=30` with header
     `X-Metrics-Key` (value in the Render service's environment). "Real user" = built a plan with
     at least one stop.
+  - Foundation's URL behavior changes between iOS versions: `appending(path:)` doubles a trailing
+    slash on iOS 18, and the API answers 404. The iPhone 17 Pro test command only covers iOS 26, so
+    run the tests on an iOS 18 simulator too before a TestFlight upload. There, about 23 unit tests
+    crash when a `@MainActor` object is freed ("pointer being freed was not allocated"): a bug in
+    iOS 18's Swift runtime when non-async code runs inside a task-local scope, which XCTest sets up.
+    Check that only those crashes fail, not assertions.
 
 ## Team
 | Person | Owns |
