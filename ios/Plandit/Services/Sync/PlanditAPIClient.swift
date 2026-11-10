@@ -28,7 +28,11 @@ nonisolated struct PlanditAPIClient: Sendable {
     }
 
     func url(for path: String) -> URL {
-        baseURL.appending(path: path)
+        // Not `appending(path:)`: on iOS 18 it doubles a trailing slash ("snapshot//"), and the API
+        // answers 404 to that.
+        var base = baseURL.absoluteString
+        if !base.hasSuffix("/") { base += "/" }
+        return URL(string: base + path) ?? baseURL.appending(path: path)
     }
 
     /// Throws `AuthError.accountDeleted` when the API says the account is gone (after telling the

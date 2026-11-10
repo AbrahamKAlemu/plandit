@@ -28,7 +28,7 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Plandit uses your location to start today's route from where you are.</string>
+	<string>Plandit shows where you are on the map, next to your plan's stops. Your location stays on your iPhone.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Plandit can transcribe a video on this device to identify the place you want to save.</string>
 	<key>PlanditAPIBaseURL</key>
