@@ -19,6 +19,7 @@
 		16C25BA5E1ED63C809EDFB8D /* PlanFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B182A9731DBE43D727F7699 /* PlanFlowTests.swift */; };
 		176FF646B17789C7EFD80CE3 /* UsageEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B314F90C6E01A56854999A /* UsageEventTests.swift */; };
 		17A9388798B6B0A1D7CDBD85 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */; };
+		19144717FA2E9613E9B52C96 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E1B7DEC00D2D93091E423F2C /* PrivacyInfo.xcprivacy */; };
 		1D1F4CF206B4F980B4C10322 /* PlanBuildingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B51020694775E70488C05BD /* PlanBuildingTests.swift */; };
 		21C86443C2E879AAD9235B55 /* AccountSeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BABB5689EA4AB301FAB2F08 /* AccountSeedTests.swift */; };
 		2274E9DBCED5F3E48D64D0A4 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83DB9DA4AF78C40241259AEE /* SettingsScreen.swift */; };
@@ -50,6 +51,7 @@
 		5D824D7142CA2510CA13B630 /* MapPins.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E71E938405EB27C0E59A78 /* MapPins.swift */; };
 		5DFC02CFD35AD7BF726BBAE7 /* StopTimeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C55D01DF203BA000D57AA263 /* StopTimeSheet.swift */; };
 		5ED62F82212F7CA320DA7DF6 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1C596E2ABCB67CA282FECB5 /* SharedAssets.xcassets */; };
+		6350623DF9FDA26C328F7139 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 52CA16854FC3E070D22C7C3D /* PrivacyInfo.xcprivacy */; };
 		6355BA14AD5CD7D21C3DA9A1 /* DayPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01179677A217C998F2303294 /* DayPlannerTests.swift */; };
 		64D3FAA53F2A3C9A0036975A /* WelcomeFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47AC59B4BB383A03DDC1BF5A /* WelcomeFlowTests.swift */; };
 		69089531C79E2B10ADF91871 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */; };
@@ -187,6 +189,7 @@
 		4E14D92B44EE48F44F09115E /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
 		4F8B33EE15876B22FF476D62 /* Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigation.swift; sourceTree = "<group>"; };
 		504C8B8EFDAB37DFE6540FA9 /* PlanBuilderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanBuilderSheet.swift; sourceTree = "<group>"; };
+		52CA16854FC3E070D22C7C3D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		59A277942AF5DD87C0431CAB /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Manrope-Bold.ttf"; sourceTree = "<group>"; };
 		5B182A9731DBE43D727F7699 /* PlanFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanFlowTests.swift; sourceTree = "<group>"; };
@@ -246,6 +249,7 @@
 		DC9522645F592BE457D9E1E5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		DCCE2C042090764A16B12587 /* PlanditStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditStore.swift; sourceTree = "<group>"; };
 		DF8A47F0B3B897F2AF699F74 /* PlanditAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditAPIClient.swift; sourceTree = "<group>"; };
+		E1B7DEC00D2D93091E423F2C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E59E8E23998E8DD242E27519 /* RouteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteService.swift; sourceTree = "<group>"; };
 		E617A3E3996B4A8A800A2725 /* PlanditStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditStoreTests.swift; sourceTree = "<group>"; };
 		E792BAD6BC55F331429035C8 /* StopTimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopTimeTests.swift; sourceTree = "<group>"; };
@@ -268,6 +272,7 @@
 				EF3C828DEB21FBE95CE5194C /* Assets.xcassets */,
 				0EF3468CD44E66B543361516 /* Info.plist */,
 				CB7417D650900FF52CF7ACC1 /* Plandit.entitlements */,
+				52CA16854FC3E070D22C7C3D /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -435,6 +440,7 @@
 			children = (
 				D7DF7345CB5D1CCD4457BC00 /* Info.plist */,
 				C9BC2C401705F9081A799477 /* PlanditShare.entitlements */,
+				E1B7DEC00D2D93091E423F2C /* PrivacyInfo.xcprivacy */,
 				7A0D8D86876DB353253B402A /* ShareView.swift */,
 				A07FD7895C86BA6F5455CC13 /* ShareViewController.swift */,
 			);
@@ -700,6 +706,7 @@
 				90A8EB2E306C22D3E6E1B6FF /* Manrope-Regular.ttf in Resources */,
 				29D266F7F036D1FBEC16D21E /* Manrope-SemiBold.ttf in Resources */,
 				69089531C79E2B10ADF91871 /* OFL.txt in Resources */,
+				6350623DF9FDA26C328F7139 /* PrivacyInfo.xcprivacy in Resources */,
 				5ED62F82212F7CA320DA7DF6 /* SharedAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -714,6 +721,7 @@
 				CF41404254105771AFA6C382 /* Manrope-Regular.ttf in Resources */,
 				2D417D237FD6C80013CE559B /* Manrope-SemiBold.ttf in Resources */,
 				17A9388798B6B0A1D7CDBD85 /* OFL.txt in Resources */,
+				19144717FA2E9613E9B52C96 /* PrivacyInfo.xcprivacy in Resources */,
 				BC64924336B1466F03EA36D3 /* SharedAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1033,7 +1041,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1114,7 +1122,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
