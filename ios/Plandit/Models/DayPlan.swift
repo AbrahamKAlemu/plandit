@@ -331,6 +331,40 @@ extension DayPlan {
               let first = stops.firstIndex(where: { $0.id == new.toStopID }), first > 0 else { return }
         let delta = TimeInterval((new.minutes - legs[legIndex].minutes) * 60)
         legs[legIndex] = new
+        shiftStops(from: first, by: delta, calendar: calendar)
+    }
+
+    /// The earliest an upcoming stop can start: once the stop before it has ended and the trip there is made.
+    func earliestStart(ofStop id: UUID) -> Date? {
+        guard let index = stops.firstIndex(where: { $0.id == id }), index > 0 else { return nil }
+        let previous = stops[index - 1]
+        return previous.end.addingTimeInterval(TimeInterval((leg(after: previous)?.minutes ?? 0) * 60))
+    }
+
+    /// The user changes when a stop starts and how long they stay. A stop underway keeps its start;
+    /// a stop already done doesn't change. With `moveLaterStops`, the stops after it move by the same
+    /// amount; without, they only move when they'd overlap.
+    mutating func setTime(
+        ofStop id: UUID, start requested: Date, durationMinutes: Int,
+        moveLaterStops: Bool = true, calendar: Calendar = .current
+    ) {
+        guard let index = stops.firstIndex(where: { $0.id == id }), stops[index].status != .done else { return }
+        let oldEnd = stops[index].end
+        if stops[index].status == .upcoming {
+            // Their choice wins over the planner's rules (like 8 PM for nightlife), but stops can't overlap.
+            stops[index].start = max(requested, earliestStart(ofStop: id) ?? requested)
+        }
+        stops[index].durationMinutes = max(Self.shortestStay, durationMinutes)
+        let delta = moveLaterStops ? stops[index].end.timeIntervalSince(oldEnd) : 0
+        shiftStops(from: index + 1, by: delta, calendar: calendar)
+    }
+
+    static let shortestStay = 15
+
+    /// Moves upcoming stops from `first` on by `delta`. A stop never starts before the one ahead of it
+    /// has ended and the trip is made; evening spots still start at 8 PM or later.
+    private mutating func shiftStops(from first: Int, by delta: TimeInterval, calendar: Calendar) {
+        guard first > 0 else { return }
         for index in first..<stops.count where stops[index].status == .upcoming {
             let previous = stops[index - 1]
             let travel = TimeInterval((leg(after: previous)?.minutes ?? 0) * 60)

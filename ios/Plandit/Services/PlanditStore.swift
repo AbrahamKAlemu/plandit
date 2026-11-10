@@ -252,6 +252,18 @@ final class PlanditStore {
         Task { await loadRoutes() }
     }
 
+    /// What the day would look like with this stop's time changed, before saving it.
+    func previewTime(ofStop id: UUID, start: Date, durationMinutes: Int, moveLaterStops: Bool) -> DayPlan {
+        var plan = today
+        plan.setTime(ofStop: id, start: start, durationMinutes: durationMinutes, moveLaterStops: moveLaterStops)
+        return plan
+    }
+
+    func setTime(ofStop id: UUID, start: Date, durationMinutes: Int, moveLaterStops: Bool) {
+        today.setTime(ofStop: id, start: start, durationMinutes: durationMinutes, moveLaterStops: moveLaterStops)
+        persist()
+    }
+
     /// Every trip still ahead goes this way: "Drive everywhere", "Take the subway".
     func chooseTravelForRestOfDay(_ mode: TravelMode) {
         for leg in today.legs where today.state(of: leg) != .completed {

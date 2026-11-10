@@ -5,6 +5,7 @@ struct StopDetailView: View {
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var isEditingCost = false
+    @State private var isEditingTime = false
     @State private var choosingLeg: StopRef?
 
     var body: some View {
@@ -24,7 +25,17 @@ struct StopDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: Space.md) {
-                        FactRow(icon: .clock, title: "When", value: "\(stop.start.shortTime)–\(stop.end.shortTime) · \(stop.durationMinutes.durationText)")
+                        Button { isEditingTime = true } label: {
+                            HStack {
+                                FactRow(icon: .clock, title: "When", value: "\(stop.start.shortTime)–\(stop.end.shortTime) · \(stop.durationMinutes.durationText)")
+                                if stop.status != .done { Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted) }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(stop.status == .done)
+                        .accessibilityHint("Change when you go and how long you stay")
+                        .accessibilityIdentifier("stop-time")
                         Button { isEditingCost = true } label: {
                             HStack {
                                 FactRow(icon: .wallet, title: stop.costIsCustom ? "Your estimate" : "Estimated cost", value: costValue(stop))
@@ -96,6 +107,7 @@ struct StopDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sensoryFeedback(.impact(weight: .light), trigger: stop.status)
             .sheet(isPresented: $isEditingCost) { StopCostSheet(stopID: stop.id) }
+            .sheet(isPresented: $isEditingTime) { StopTimeSheet(stopID: stop.id) }
             .sheet(item: $choosingLeg) { TravelOptionsSheet(legID: $0.id) }
         } else {
             ContentUnavailableView("Stop removed", image: "Icons/route", description: Text("This stop is no longer in today's plan."))

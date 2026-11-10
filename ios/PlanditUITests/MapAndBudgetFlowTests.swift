@@ -83,6 +83,30 @@ final class MapAndBudgetFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["$50 of $60"].waitForExistence(timeout: 3))
     }
 
+    @MainActor func testChangingAStopsTimeAfterPlanning() {
+        let app = launch()
+        let stop = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch
+        XCTAssertTrue(stop.waitForExistence(timeout: 5))
+        scrollTo(stop, in: app)
+        stop.tap()
+
+        let when = app.buttons["stop-time"]
+        XCTAssertTrue(when.waitForExistence(timeout: 3))
+        XCTAssertTrue(when.label.contains("45 min"))
+        when.tap()
+
+        XCTAssertTrue(app.navigationBars["Time"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["time-duration-value"].label, "45 min")
+        XCTAssertTrue(app.switches["time-move-later"].exists, "later stops can move with it")
+        app.steppers.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Increment'")).firstMatch.tap()
+        XCTAssertEqual(app.staticTexts["time-duration-value"].label, "1 hr")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '→'")).firstMatch.exists, "shows which stops move")
+        app.buttons["time-save"].tap()
+
+        XCTAssertTrue(app.navigationBars["Time"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["stop-time"].label.contains("1 hr"))
+    }
+
     @MainActor func testChangingAStopsCost() {
         let app = launch()
         let stop = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch
