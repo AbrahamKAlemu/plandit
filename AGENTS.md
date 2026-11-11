@@ -86,6 +86,10 @@ nearby and on budget, shown on a map.
     logs a warning.
   - GitGuardian scans every PR and flags realistic-looking fake tokens in tests. Use obviously
     fake values such as `fake-apple-code-for-tests`.
+  - The app ships for iPhone and iPad: XcodeGen's application preset sets
+    `TARGETED_DEVICE_FAMILY` to "1,2" on each target, overriding the "1" in `ios/project.yml`. So
+    every App Store version needs iPad 13" screenshots too. To make it iPhone-only, set it on the
+    targets themselves, then upload a new build.
   - Xcode 27 can't download iOS 18 simulator runtimes. For the iOS 18 run above, use a device or
     an older Xcode.
   - `ios/scripts/testflight.sh` uploads with the Apple Account signed in to Xcode. If the upload
