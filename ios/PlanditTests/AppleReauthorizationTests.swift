@@ -101,7 +101,7 @@ import XCTest
 
     func testAnAppleAccountSendsTheFreshAuthorizationCode() async throws {
         let transport = deleteTransport()
-        let reauthorizer = FakeAppleReauthorizer(.code("c1a2b3.0.rrtx.fresh-code"))
+        let reauthorizer = FakeAppleReauthorizer(.code("fake-apple-code-for-tests"))
         let (account, store) = await signedInAccount(appleUser, reauthorizer: reauthorizer, transport: transport)
 
         await account.deleteAccount()
@@ -109,7 +109,7 @@ import XCTest
         XCTAssertEqual(reauthorizer.calls, 1)
         let deletes = transport.requests("DELETE", pathContaining: "api/me/")
         XCTAssertEqual(deletes.count, 1)
-        XCTAssertEqual(body(of: deletes[0]), ["apple_authorization_code": "c1a2b3.0.rrtx.fresh-code"])
+        XCTAssertEqual(body(of: deletes[0]), ["apple_authorization_code": "fake-apple-code-for-tests"])
         XCTAssertEqual(deletes[0].value(forHTTPHeaderField: "Content-Type"), "application/json")
         XCTAssertEqual(account.state, .signedOut)
         XCTAssertNil(account.errorMessage)
@@ -168,7 +168,7 @@ import XCTest
 
     func testAnEmailAccountWithAppleLinkedIsAskedForACode() async throws {
         let transport = deleteTransport()
-        let reauthorizer = FakeAppleReauthorizer(.code("c1a2b3.0.rrtx.fresh-code"))
+        let reauthorizer = FakeAppleReauthorizer(.code("fake-apple-code-for-tests"))
         let linked = AuthUser(id: "user-1", email: "sofia@example.edu", fullName: "Sofia", provider: "email", providers: ["email", "apple"])
         let (account, _) = await signedInAccount(linked, reauthorizer: reauthorizer, transport: transport)
 
@@ -177,7 +177,7 @@ import XCTest
         XCTAssertEqual(reauthorizer.calls, 1)
         let deletes = transport.requests("DELETE", pathContaining: "api/me/")
         XCTAssertEqual(deletes.count, 1)
-        XCTAssertEqual(body(of: deletes[0]), ["apple_authorization_code": "c1a2b3.0.rrtx.fresh-code"])
+        XCTAssertEqual(body(of: deletes[0]), ["apple_authorization_code": "fake-apple-code-for-tests"])
         XCTAssertEqual(account.state, .signedOut)
     }
 
@@ -200,7 +200,7 @@ import XCTest
 
     func testAServerFailureAfterTheAppleSheetKeepsThePersonSignedIn() async throws {
         let transport = FakeTransport { _ in (502, TestJSON.object(["detail": "Could not delete the sign-in account."])) }
-        let reauthorizer = FakeAppleReauthorizer(.code("c1a2b3.0.rrtx.fresh-code"))
+        let reauthorizer = FakeAppleReauthorizer(.code("fake-apple-code-for-tests"))
         let (account, store) = await signedInAccount(appleUser, reauthorizer: reauthorizer, transport: transport)
 
         await account.deleteAccount()
@@ -215,7 +215,7 @@ import XCTest
     /// linked Apple identity in the client's session but not in `state`.
     func testALinkedAppleIdentityFromTheRefreshedSessionIsAskedForACode() async throws {
         let transport = deleteTransport()
-        let reauthorizer = FakeAppleReauthorizer(.code("c1a2b3.0.rrtx.fresh-code"))
+        let reauthorizer = FakeAppleReauthorizer(.code("fake-apple-code-for-tests"))
         let refreshed = AuthUser(id: "user-1", email: "sofia@example.edu", fullName: "Sofia", provider: "email", providers: ["email", "apple"])
         let account = launchedAccount(emailUser, storedSessionUser: refreshed, reauthorizer: reauthorizer, transport: transport)
         XCTAssertNil(emailUser.providers)
@@ -225,7 +225,7 @@ import XCTest
         XCTAssertEqual(reauthorizer.calls, 1)
         let deletes = transport.requests("DELETE", pathContaining: "api/me/")
         XCTAssertEqual(deletes.count, 1)
-        XCTAssertEqual(body(of: deletes[0]), ["apple_authorization_code": "c1a2b3.0.rrtx.fresh-code"])
+        XCTAssertEqual(body(of: deletes[0]), ["apple_authorization_code": "fake-apple-code-for-tests"])
         XCTAssertEqual(account.state, .signedOut)
         XCTAssertNil(account.errorMessage)
     }
@@ -344,13 +344,13 @@ import XCTest
     func testDeleteAccountSendsTheCodeAsJSONOnlyWhenThereIsOne() async throws {
         let transport = FakeTransport { _ in (204, Data()) }
 
-        try await api(transport).deleteAccount(appleAuthorizationCode: "c1a2b3.0.rrtx.fresh-code")
+        try await api(transport).deleteAccount(appleAuthorizationCode: "fake-apple-code-for-tests")
         try await api(transport).deleteAccount(appleAuthorizationCode: nil)
         try await api(transport).deleteAccount()
 
         let requests = transport.requests("DELETE", pathContaining: "api/me/")
         XCTAssertEqual(requests.count, 3)
-        XCTAssertEqual(body(of: requests[0]), ["apple_authorization_code": "c1a2b3.0.rrtx.fresh-code"])
+        XCTAssertEqual(body(of: requests[0]), ["apple_authorization_code": "fake-apple-code-for-tests"])
         XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Content-Type"), "application/json")
         for request in requests.dropFirst() {
             XCTAssertNil(request.httpBody)
