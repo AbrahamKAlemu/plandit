@@ -8,7 +8,21 @@ paths:
   /api/me/:
     delete:
       operationId: deleteAccount
-      summary: Delete the caller's account (Supabase auth user, then every Plandit row)
+      summary: Delete the caller's account (Supabase auth user, then Sign in with Apple tokens, then every Plandit row)
+      requestBody:
+        required: false
+        description: |
+          Sent by Apple accounts: a fresh Sign in with Apple authorization code the app just obtained.
+          The server exchanges it and revokes the tokens (App Store guideline 5.1.1(v)). Best effort: a
+          revocation failure is logged and the deletion still completes. No body for email accounts.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apple_authorization_code:
+                  type: string
+                  maxLength: 1024
       responses:
         "204":
           description: Account deleted

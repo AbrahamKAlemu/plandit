@@ -7,12 +7,19 @@ from django.conf import settings
 from django.db import connection, transaction
 from django.utils import timezone
 from rest_framework import permissions, status
-from rest_framework.exceptions import AuthenticationFailed, NotFound, ParseError, PermissionDenied, ValidationError
+from rest_framework.exceptions import (
+    AuthenticationFailed,
+    NotFound,
+    ParseError,
+    PermissionDenied,
+    UnsupportedMediaType,
+    ValidationError,
+)
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from . import supabase_admin
+from . import apple_signin, supabase_admin
 from .metrics import DEFAULT_DAYS, MAX_DAYS, MIN_DAYS, compute_metrics, iso_utc
 from .models import ActivityEvent, ActivityEventName, AppSnapshot, DeletedAccount, Profile
 from .serializers import ActivityEventSerializer, ProfileSerializer
@@ -61,15 +68,23 @@ class MeView(APIView):
 
     def delete(self, request):
         """Delete the account: the Supabase auth user first (so a failure leaves everything in
-        place and the app can retry), then the Profile, which cascades to all of its data.
+        place and the app can retry), then the person's Sign in with Apple tokens (best effort),
+        then the Profile, which cascades to all of its data.
 
         When Supabase confirmed the deletion a DeletedAccount tombstone is written in the same
         transaction, so the access token (valid until it expires) cannot re-create the profile.
         Without a service key the auth user still exists, so no tombstone: that person can sign
-        in again and gets a fresh, empty account."""
+        in again and gets a fresh, empty account.
+
+        The optional JSON body `{"apple_authorization_code": "..."}` comes from an Apple account:
+        the app asks Apple for a fresh code right before deleting. App Store guideline 5.1.1(v)
+        wants those tokens revoked; a revocation failure is logged and the deletion completes,
+        because the person asked for it and can also remove Plandit under their Apple ID."""
         profile = request.user
+        apple_code = apple_signin.usable_code(self._body_field(request, "apple_authorization_code"))
         if not supabase_admin.is_configured():
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is not configured; deleting only Plandit data for %s", profile.id)
+            self._revoke_apple_tokens(profile.id, apple_code)
             with transaction.atomic():
                 self._lock(profile.pk).delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -81,6 +96,7 @@ class MeView(APIView):
                 {"detail": "Could not delete the sign-in account. Try again in a moment."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+        self._revoke_apple_tokens(profile.id, apple_code)
         with transaction.atomic():
             # Same row lock as PATCH, so a concurrent PATCH either finishes first or sees no row.
             locked = self._lock(profile.pk)
@@ -95,6 +111,33 @@ class MeView(APIView):
         if locked is None:
             raise AuthenticationFailed("Account deleted.")
         return locked
+
+    @staticmethod
+    def _body_field(request, name: str):
+        """One field of an optional JSON object body. Old app builds send no body; a body that is
+        not JSON, not an object or not a JSON content type counts as no value, because the
+        deletion must still go ahead."""
+        try:
+            body = request.data
+        except (ParseError, UnsupportedMediaType):
+            return None
+        return body.get(name) if isinstance(body, dict) else None
+
+    @staticmethod
+    def _revoke_apple_tokens(profile_id, code: str | None) -> None:
+        """Best effort, after Supabase confirmed and before the rows go. Logs the outcome only."""
+        if code is None:
+            logger.warning("No Apple authorization code for %s; Apple tokens not revoked", profile_id)
+            return
+        if not apple_signin.is_configured():
+            logger.warning("APPLE_SIGNIN_* settings are not configured; Apple tokens not revoked for %s", profile_id)
+            return
+        try:
+            revoked = apple_signin.revoke_authorization_code(code)
+        except apple_signin.AppleSignInError as exc:
+            logger.warning("Apple token revocation failed for %s: %s", profile_id, exc)
+            return
+        logger.info("Apple %s revoked for %s", revoked, profile_id)
 
 
 class StatsView(APIView):

@@ -115,6 +115,7 @@ Required environment in production:
 | `ENSEMBLEDATA_API_TOKEN` | server-side provider token; never put this in the iOS build |
 | `SOCIAL_EVIDENCE_THROTTLE_RATE` | authenticated per-user limit, default `100/day` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (Project Settings → API keys, secret); used only to delete auth users on `DELETE /api/me/`. Without it, account deletion removes Plandit data only |
+| `APPLE_TEAM_ID`, `APPLE_SIGNIN_KEY_ID`, `APPLE_SIGNIN_PRIVATE_KEY` | Sign in with Apple token revocation on `DELETE /api/me/` (App Store guideline 5.1.1(v)): the team ID (`9A6H44778K`), the Key ID of a Sign in with Apple key, and that key's `.p8` contents (literal `\n` escapes accepted). `APPLE_CLIENT_ID` defaults to `com.plandit.app`. Without them, deletion still completes and the revocation is skipped with a warning |
 | `METRICS_API_KEY` | shared secret for `GET /api/metrics/` (course staff). Empty turns the endpoint off. The Render blueprint generates one |
 
 Point `api.plandit.app` at the host, then set `endpoint: "https://api.plandit.app/api/waitlist/"`
@@ -132,7 +133,7 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | POST | `/api/waitlist/` | `{"email","source"}` → `201` stored, `200` already there. 10/min per IP |
 | POST | `/v1/social-evidence` | authenticated TikTok/Instagram caption evidence; 100/day per user by default |
 | GET, PATCH | `/api/me/` | profile: `name`, `school`, `home_base`, `default_budget`, `travel_modes` |
-| DELETE | `/api/me/` | delete the account: the Supabase auth user (Admin API) and then every Plandit row. `204`; `502` and nothing deleted if Supabase fails, so the app can retry. A tombstone keeps the still-valid token from re-creating the profile (`401 Account deleted.`) |
+| DELETE | `/api/me/` | delete the account: the Supabase auth user (Admin API), then the person's Sign in with Apple tokens, then every Plandit row. Optional body `{"apple_authorization_code": "..."}` from Apple accounts; the server exchanges it and revokes the tokens (best effort: a failure is logged, the deletion still completes). `204`; `502` and nothing deleted if Supabase fails, so the app can retry. A tombstone keeps the still-valid token from re-creating the profile (`401 Account deleted.`) |
 | GET | `/api/me/stats/` | `plans_completed`, `neighborhoods_visited`, `miles_walked`, `average_spend`, `plans_under_budget`, `streak_weeks` |
 | GET | `/api/me/snapshot/` | the app's whole local store for this account: `{"version", "updated_at", "data"}`; `data` is the iOS `StoreSnapshot` exactly as sent (camelCase). `404` until the first PUT |
 | PUT | `/api/me/snapshot/` | `{"data": {...}}` → `{"version", "updated_at"}`; last writer wins, `version` starts at 1. `data` must be an object under 1,000,000 bytes (`413`). Mirrors `data.profile` into `/api/me/` and marks the account activated when a plan has stops |

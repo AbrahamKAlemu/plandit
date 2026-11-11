@@ -38,5 +38,11 @@ services:
         generateValue: true # GET /api/metrics/ key for the course staff; copy it from the dashboard
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false # Supabase -> Project Settings -> API keys (secret); account deletion
+      - key: APPLE_TEAM_ID
+        value: 9A6H44778K # Sign in with Apple token revocation on account deletion (not secret)
+      - key: APPLE_SIGNIN_KEY_ID
+        sync: false # Apple Developer -> Keys -> the "Plandit Sign in with Apple" key's Key ID
+      - key: APPLE_SIGNIN_PRIVATE_KEY
+        sync: false # that key's .p8 file contents; never committed
       - key: WEB_CONCURRENCY
         value: "2"
