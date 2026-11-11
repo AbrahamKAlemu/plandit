@@ -78,6 +78,7 @@
 		90210A97112312A6C39ABA44 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F524D5A387C25013DA2CB37 /* Typography.swift */; };
 		90A8EB2E306C22D3E6E1B6FF /* Manrope-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D70C41725CF5E3CC2016BBEB /* Manrope-Regular.ttf */; };
 		9E222E9367AED92EC41D0118 /* VideoEvidenceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7191C0F5D85E96A38F7A0440 /* VideoEvidenceExtractor.swift */; };
+		A6BB9139C67A0E2420BFF6C0 /* AppleReauthorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AE0AC7A49D7795EB817D6F /* AppleReauthorizer.swift */; };
 		A6CC10B3F75C6F24FC7B8455 /* PlanBuilderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504C8B8EFDAB37DFE6540FA9 /* PlanBuilderSheet.swift */; };
 		ABD059E5D3DD7CD3A542FC0B /* SavedPostPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E1A27E0B63AAEF95B99BF2 /* SavedPostPersistence.swift */; };
 		AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA42EFDFC3C4B3021E413BFE /* SampleData.swift */; };
@@ -105,6 +106,7 @@
 		D2A118CC181CB4CBCC01E532 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A277942AF5DD87C0431CAB /* Appearance.swift */; };
 		D2D73E736BE4B5B5D77E9A7A /* Manrope-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */; };
 		D7AB055DD6DB90EA79CEE8EF /* MapAndBudgetFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89843ADA0498BA38B8D5F770 /* MapAndBudgetFlowTests.swift */; };
+		D892E7DD21A2EE1CD484FD0C /* AppleReauthorizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B69D681D36152876FB4DBC /* AppleReauthorizationTests.swift */; };
 		DA97CF6593862918B2B338DD /* SavedSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5582CBA0325676E717C2215 /* SavedSheet.swift */; };
 		DB5B30AA8B4F3B1FAA596D8B /* ProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8896624B417A22D10DD3E7E5 /* ProfileSheet.swift */; };
 		DB9611683E78C7C273CB67AB /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57CF7ECA1069F68EE86C3CF /* Colors.swift */; };
@@ -168,6 +170,7 @@
 		102217595F30C34F573E6453 /* Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Layout.swift; sourceTree = "<group>"; };
 		130BEB57FE12B63F0783900B /* TodaySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodaySheet.swift; sourceTree = "<group>"; };
 		1386614723DD9841864693A2 /* UserStatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStatsTests.swift; sourceTree = "<group>"; };
+		14B69D681D36152876FB4DBC /* AppleReauthorizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleReauthorizationTests.swift; sourceTree = "<group>"; };
 		15AC2801DC9EA6D58175224D /* AddLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddLinkSheet.swift; sourceTree = "<group>"; };
 		160549CC57FCC01975FCA572 /* AuthCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCopy.swift; sourceTree = "<group>"; };
 		1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
@@ -225,6 +228,7 @@
 		AC13355B43D3344040BFB958 /* SupportedSocialURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedSocialURLTests.swift; sourceTree = "<group>"; };
 		ACFD703776492C3DC31EC893 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		AE40C070496070B7A32DECE6 /* PlanditShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PlanditShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1AE0AC7A49D7795EB817D6F /* AppleReauthorizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleReauthorizer.swift; sourceTree = "<group>"; };
 		C237CB292F0F86FA6CE814A9 /* DayPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayPlanner.swift; sourceTree = "<group>"; };
 		C343DED8648F131B64A81DBF /* SavedPostPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPostPersistenceTests.swift; sourceTree = "<group>"; };
 		C5582CBA0325676E717C2215 /* SavedSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedSheet.swift; sourceTree = "<group>"; };
@@ -452,6 +456,7 @@
 			children = (
 				7BABB5689EA4AB301FAB2F08 /* AccountSeedTests.swift */,
 				FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */,
+				14B69D681D36152876FB4DBC /* AppleReauthorizationTests.swift */,
 				7D997BE1AB6170A790A113C5 /* AuthClientTests.swift */,
 				01179677A217C998F2303294 /* DayPlannerTests.swift */,
 				3444AD7F0B88CFB1A89EF022 /* FixturePlaceExtractorTests.swift */,
@@ -534,6 +539,7 @@
 			children = (
 				02478BB0AE325B5DE3547770 /* AccountModel.swift */,
 				D787644F1F40A8B667C8C374 /* AppleNonce.swift */,
+				B1AE0AC7A49D7795EB817D6F /* AppleReauthorizer.swift */,
 				6A50233F438C1A78F9ED4A48 /* SupabaseAuthClient.swift */,
 			);
 			path = Auth;
@@ -740,6 +746,7 @@
 				D2A118CC181CB4CBCC01E532 /* Appearance.swift in Sources */,
 				283E80DF9A999A7EE15E76FC /* AppearanceMode.swift in Sources */,
 				2430ECB25FF21C26D5EFDD79 /* AppleNonce.swift in Sources */,
+				A6BB9139C67A0E2420BFF6C0 /* AppleReauthorizer.swift in Sources */,
 				B448D962B55510A097269DAC /* AuthCopy.swift in Sources */,
 				72AEDB2B129F99302B53F0FB /* AuthFlowView.swift in Sources */,
 				32CDA229B854413D1ADBEAD1 /* AuthenticatedAPI.swift in Sources */,
@@ -803,6 +810,7 @@
 			files = (
 				21C86443C2E879AAD9235B55 /* AccountSeedTests.swift in Sources */,
 				8E61BE6EE8287A0B7DA2611F /* AppearanceModeTests.swift in Sources */,
+				D892E7DD21A2EE1CD484FD0C /* AppleReauthorizationTests.swift in Sources */,
 				C9052CDC52DC65B58D05C66E /* AuthClientTests.swift in Sources */,
 				6355BA14AD5CD7D21C3DA9A1 /* DayPlannerTests.swift in Sources */,
 				D2288FC955C909921C509417 /* FakeTransport.swift in Sources */,

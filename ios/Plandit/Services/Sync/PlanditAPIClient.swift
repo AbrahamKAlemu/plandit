@@ -60,8 +60,14 @@ nonisolated struct PlanditAPIClient: Sendable {
 
     /// `DELETE /api/me/`: 204 when the account and its data are gone. An account the server
     /// already deleted surfaces as `AuthError.accountDeleted`, which callers treat the same way.
-    func deleteAccount() async throws {
-        let (_, http) = try await send("DELETE", path: "api/me/")
+    /// An Apple account passes the fresh authorization code the server revokes Apple's tokens
+    /// with; without one the request has no body.
+    func deleteAccount(appleAuthorizationCode: String? = nil) async throws {
+        var body: Data?
+        if let appleAuthorizationCode {
+            body = try JSONSerialization.data(withJSONObject: ["apple_authorization_code": appleAuthorizationCode])
+        }
+        let (_, http) = try await send("DELETE", path: "api/me/", body: body)
         guard http.statusCode == 204 || http.statusCode == 200 else {
             throw APIError.status(http.statusCode)
         }

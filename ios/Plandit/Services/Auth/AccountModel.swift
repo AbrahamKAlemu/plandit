@@ -26,6 +26,8 @@ final class AccountModel {
     @ObservationIgnored private let apiBaseURL: URL?
     @ObservationIgnored private let client: SupabaseAuthClient?
     @ObservationIgnored private let transport: any HTTPTransport
+    /// Gets a fresh Apple authorization code before an Apple account is deleted.
+    @ObservationIgnored private let appleReauthorizer: any AppleReauthorizing
     /// Runs before the session is dropped: the final sync push.
     @ObservationIgnored var beforeSignOut: (() async -> Void)?
     /// Runs once the server confirmed the account is gone, with the user id.
@@ -35,12 +37,14 @@ final class AccountModel {
         client: SupabaseAuthClient?,
         apiBaseURL: URL?,
         transport: any HTTPTransport = URLSession.shared,
+        appleReauthorizer: any AppleReauthorizing = AppleReauthorizer(),
         state: State = .loading,
         isLocalTestAccount: Bool = false
     ) {
         self.client = client
         self.apiBaseURL = apiBaseURL
         self.transport = transport
+        self.appleReauthorizer = appleReauthorizer
         self.state = state
         self.isLocalTestAccount = isLocalTestAccount
     }
@@ -151,15 +155,28 @@ final class AccountModel {
         finishSignOut()
     }
 
-    /// `DELETE /api/me/`. On 204 the local copy goes too; on any failure the person stays signed in.
+    /// `DELETE /api/me/`. An Apple account first re-authorizes with Apple so the server can revoke
+    /// its tokens: dismissing that sheet deletes nothing and shows nothing. On 204 the local copy
+    /// goes too; on any failure the person stays signed in.
     func deleteAccount() async {
         guard case .signedIn(let user) = state else { return }
         guard let api = api(for: user.id) else { return notConfigured() }
         errorMessage = nil
         isBusy = true
         defer { isBusy = false }
+        var appleAuthorizationCode: String?
+        if user.signedInWithApple {
+            do {
+                appleAuthorizationCode = try await appleReauthorizer.authorizationCode()
+            } catch AppleReauthorizationError.canceled {
+                return
+            } catch {
+                errorMessage = AuthCopy.deleteFailed
+                return
+            }
+        }
         do {
-            try await api.deleteAccount()
+            try await api.deleteAccount(appleAuthorizationCode: appleAuthorizationCode)
             await accountWasDeleted(user.id)
         } catch AuthError.accountDeleted {
             // Already gone on the server: the outcome the person asked for.
