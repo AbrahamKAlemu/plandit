@@ -13,7 +13,9 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-TIMEOUT_SECONDS = 10.0
+# Revocation runs after the deletion is committed, inside the request: keep a slow Apple short so
+# the person's 204 is not held up (and a killed worker loses nothing but the revocation).
+TIMEOUT = httpx.Timeout(4.0, connect=2.0)
 TOKEN_URL = "https://appleid.apple.com/auth/token"
 REVOKE_URL = "https://appleid.apple.com/auth/revoke"
 AUDIENCE = "https://appleid.apple.com"
@@ -38,12 +40,14 @@ def is_configured() -> bool:
 
 def usable_code(value) -> str | None:
     """The `apple_authorization_code` a client sent, or None when there is nothing worth sending
-    to Apple: missing, not a string, blank or implausibly long. Never a validation error, because
-    the person asked to delete their account and revocation is best effort."""
+    to Apple: missing, not a string, blank, implausibly long or not printable ASCII (Apple's codes
+    are ASCII; anything else, such as a lone surrogate, could not even be form-encoded). Never a
+    validation error, because the person asked to delete their account and revocation is best
+    effort."""
     if not isinstance(value, str):
         return None
     code = value.strip()
-    if not code or len(code) > MAX_CODE_LENGTH:
+    if not code or len(code) > MAX_CODE_LENGTH or not (code.isascii() and code.isprintable()):
         return None
     return code
 
@@ -91,7 +95,7 @@ def revoke_authorization_code(code: str) -> str:
 
 def _post(url: str, data: dict[str, str], *, step: str) -> httpx.Response:
     try:
-        response = httpx.post(url, data=data, timeout=TIMEOUT_SECONDS)
+        response = httpx.post(url, data=data, timeout=TIMEOUT)
     except httpx.HTTPError as exc:
         # The exception's own text names the failure (and at most the URL), not the form data.
         raise AppleSignInError(f"Apple {step} request failed: {exc!r}") from exc
