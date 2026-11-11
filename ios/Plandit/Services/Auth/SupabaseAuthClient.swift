@@ -6,10 +6,15 @@ nonisolated struct AuthUser: Codable, Sendable, Equatable {
     var id: String
     var email: String?
     var fullName: String?
-    /// `app_metadata.provider`: "email" or "apple".
+    /// `app_metadata.provider`: the provider the account was created with, "email" or "apple".
     var provider: String?
+    /// `app_metadata.providers`: every linked provider, e.g. ["email", "apple"] for an email
+    /// account that later used Sign in with Apple. Nil for sessions saved by builds before 1.0's
+    /// Apple token revocation (the Keychain JSON has no such key) and decoded as before.
+    var providers: [String]? = nil
 
-    var signedInWithApple: Bool { provider == "apple" }
+    /// True when Apple is linked at all, so deleting the account revokes Apple's tokens.
+    var signedInWithApple: Bool { provider == "apple" || providers?.contains("apple") == true }
 }
 
 nonisolated struct AuthSession: Codable, Sendable, Equatable {
@@ -138,7 +143,8 @@ nonisolated enum SupabaseAuthResponse {
             id: id,
             email: email,
             fullName: name.flatMap { $0.isEmpty ? nil : $0 },
-            provider: app?["provider"] as? String
+            provider: app?["provider"] as? String,
+            providers: app?["providers"] as? [String]
         )
     }
 }

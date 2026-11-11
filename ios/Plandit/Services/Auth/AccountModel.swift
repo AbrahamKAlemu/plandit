@@ -156,8 +156,10 @@ final class AccountModel {
     }
 
     /// `DELETE /api/me/`. An Apple account first re-authorizes with Apple so the server can revoke
-    /// its tokens: dismissing that sheet deletes nothing and shows nothing. On 204 the local copy
-    /// goes too; on any failure the person stays signed in.
+    /// its tokens: dismissing that sheet deletes nothing and shows nothing. If the sheet fails for
+    /// any other reason the account is deleted without a code (in-app deletion must always work;
+    /// revocation is best effort). On 204 the local copy goes too; on any failure of the request
+    /// the person stays signed in.
     func deleteAccount() async {
         guard case .signedIn(let user) = state else { return }
         guard let api = api(for: user.id) else { return notConfigured() }
@@ -171,8 +173,7 @@ final class AccountModel {
             } catch AppleReauthorizationError.canceled {
                 return
             } catch {
-                errorMessage = AuthCopy.deleteFailed
-                return
+                appleAuthorizationCode = nil  // delete anyway; the server logs that it had no code
             }
         }
         do {
