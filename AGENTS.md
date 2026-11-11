@@ -19,7 +19,8 @@ nearby and on budget, shown on a map.
 
 ## How to run it
 - Stack: native iOS app (SwiftUI, iOS 17+) in `ios/`, Django + Django REST Framework API on
-  Supabase Postgres with Supabase Auth in `backend/`, static landing site on Vercel in `website/`.
+  Supabase Postgres with Supabase Auth in `backend/`, static landing site in `website/`. The live
+  site is deployed from a different repo; see "App Store 1.0" under What we learned.
 - iOS install: Xcode 26 or later, plus XcodeGen (`brew install xcodegen`). Run locally:
   `cd ios && xcodegen generate && open Plandit.xcodeproj`, set your signing team for both
   targets, then run the Plandit scheme. Rerun `xcodegen generate` after adding or removing
@@ -72,6 +73,24 @@ nearby and on budget, shown on a map.
     crash when a `@MainActor` object is freed ("pointer being freed was not allocated"): a bug in
     iOS 18's Swift runtime when non-async code runs inside a task-local scope, which XCTest sets up.
     Check that only those crashes fail, not assertions.
+- App Store 1.0 (Nov 2026, docs/app-store/1.0-listing.md,
+  docs/features/accounts-and-metrics/03-apple-token-revocation.md):
+  - plandit.app is served by Vercel from Jaden Hinton's fork, Just-Jaden/plandit_website. That
+    repo adds a blog build step (Sanity). This repo's `website/` is not what's live. A website
+    change also needs a PR on that repo, which Jaden merges. Jaden's Vercel account is on the
+    Hobby plan, which has no team members.
+  - The App Store Privacy Policy and Support URLs are plandit.app/privacy and /support. Keep
+    both pages live, and keep the policy in step with what the app and the site collect.
+  - Deleting an account revokes its Sign in with Apple tokens only when Render has
+    `APPLE_SIGNIN_KEY_ID` and `APPLE_SIGNIN_PRIVATE_KEY`. Without them, deletion still works and
+    logs a warning.
+  - GitGuardian scans every PR and flags realistic-looking fake tokens in tests. Use obviously
+    fake values such as `fake-apple-code-for-tests`.
+  - Xcode 27 can't download iOS 18 simulator runtimes. For the iOS 18 run above, use a device or
+    an older Xcode.
+  - `ios/scripts/testflight.sh` uploads with the Apple Account signed in to Xcode. If the upload
+    fails with "Failed to Use Accounts", sign in again in Xcode → Settings → Accounts. Then rerun
+    only the `xcodebuild -exportArchive` step on the archive the script already made.
 
 ## Team
 | Person | Owns |
