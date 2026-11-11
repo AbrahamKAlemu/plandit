@@ -1,6 +1,6 @@
 # Revoke Sign in with Apple tokens on account deletion (Whetstone)
 
-Status: spec, awaiting Abraham's approval. Branch `feature/apple-token-revocation`.
+Status: approved by Abraham on 2026-11-10. Branch `feature/apple-token-revocation`.
 
 ## Problem
 
@@ -93,6 +93,30 @@ identity unlinking (the Supabase user is deleted anyway).
    (paste the file contents), `APPLE_TEAM_ID` = `9A6H44778K`. Never commit the `.p8`.
 3. Merge (backend auto-deploys; safe before the key exists, it just skips). The iOS change ships
    in the 1.0 build.
+
+## Build notes (decided during the build, 2026-11-10)
+
+- **Body handling.** `apple_authorization_code` that is missing, not a string, blank or longer than
+  1024 characters counts as no code (a warning, then deletion as today), never a 400. The same
+  for a body that is not JSON or not a JSON object: the person asked to delete, and revocation is
+  best effort. `backend/plandit/core/apple_signin.py: usable_code`, `views.py: MeView._body_field`.
+- **No service key.** When `SUPABASE_SERVICE_ROLE_KEY` is empty the view still attempts the Apple
+  revocation (after its existing warning, before the rows go); the rest of that path is unchanged
+  (no tombstone).
+- **Log lines.** "No Apple authorization code for <id>" is a warning for every delete without a
+  body, including email accounts (the server does not look at the provider). Success is one
+  `INFO` line naming the token type (`refresh_token` or `access_token`); failures are one warning
+  with the step and the HTTP status or the httpx error class. Nothing else is logged.
+- **Settings.** `backend/.env.example` lists the three new variables. The literal `\n` to newline
+  conversion happens in `settings.py` (tested by loading `settings.py` afresh).
+- **iOS.** `AppleReauthorizer` is the default `appleReauthorizer` argument of `AccountModel.init`;
+  it refuses a second sheet while one is up (throws `failed`). `isBusy` stays true while the Apple
+  sheet is showing. `PlanditAPIClient.deleteAccount(appleAuthorizationCode:)` defaults to `nil`
+  so the existing call sites and tests compile unchanged. New tests in
+  `ios/PlanditTests/AppleReauthorizationTests.swift`.
+- **Test environment.** This machine has only the iOS 27.2 simulator runtime and had no
+  "iPhone 17 Pro" device, so one was created (`xcrun simctl create`). The iOS 18 run in the
+  verification table could not be done here: no iOS 18 runtime is installed.
 
 ## Review
 
