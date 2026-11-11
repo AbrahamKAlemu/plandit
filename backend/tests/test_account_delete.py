@@ -870,3 +870,22 @@ def test_a_code_that_is_not_printable_ascii_counts_as_no_code(
     assert_all_data_gone(populated)
     assert DeletedAccount.objects.filter(id=populated).exists()
     assert any("No Apple authorization code" in message for message in warnings_logged(caplog))
+
+
+@pytest.mark.django_db(transaction=True)
+def test_an_exception_from_apple_after_a_real_commit_still_answers_204(
+    auth_client, populated, service_key, fake_delete, apple_configured, apple_key, fake_post, caplog
+):
+    """A real commit (no test transaction): the on_commit revocation runs inside the request, so
+    an exception there must be caught before the 204 goes out, and its message never logged."""
+    fake_delete(200)
+    fake = fake_post(token=RuntimeError(f"boom {APPLE_CODE} {REFRESH_TOKEN}"))
+    with caplog.at_level("INFO"):
+        assert delete_with_code(auth_client).status_code == 204
+    assert_all_data_gone(populated)
+    assert DeletedAccount.objects.filter(id=populated).exists()
+    assert len(fake.calls) == 1
+    warnings = warnings_logged(caplog)
+    assert len(warnings) == 1 and "unexpected RuntimeError" in warnings[0]
+    assert_only_the_type_is_logged(caplog, "RuntimeError", ["boom"])
+    assert_no_secrets_logged(caplog, fake, apple_key[0])

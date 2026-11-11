@@ -29,13 +29,33 @@ import XCTest
         }
     }
 
+    /// Holds the sheet up until the test answers it. A second request while it is up fails, as the
+    /// system sheet does.
+    @MainActor private final class SuspendingAppleReauthorizer: AppleReauthorizing {
+        private(set) var calls = 0
+        private var pending: CheckedContinuation<String, Error>?
+
+        var isShowingSheet: Bool { pending != nil }
+
+        func authorizationCode() async throws -> String {
+            calls += 1
+            guard pending == nil else { throw AppleReauthorizationError.failed }
+            return try await withCheckedThrowingContinuation { pending = $0 }
+        }
+
+        func answer(throwing error: Error) {
+            pending?.resume(throwing: error)
+            pending = nil
+        }
+    }
+
     private let appleUser = AuthUser(id: "user-1", email: nil, fullName: nil, provider: "apple")
     private let emailUser = AuthUser(id: "user-1", email: "sofia@example.edu", fullName: "Sofia", provider: "email")
 
     /// The app's wiring: a signed-in client with a valid session, the fake sheet, one transport.
     private func signedInAccount(
         _ user: AuthUser,
-        reauthorizer: FakeAppleReauthorizer,
+        reauthorizer: any AppleReauthorizing,
         transport: FakeTransport
     ) async -> (AccountModel, InMemoryAuthSessionStore) {
         let session = AuthSession(accessToken: "valid", refreshToken: "refresh-1", expiresAt: Date().addingTimeInterval(3600), user: user)
@@ -47,6 +67,24 @@ import XCTest
         await account.start()
         XCTAssertEqual(account.state, .signedIn(user))
         return (account, store)
+    }
+
+    /// `state` as set at launch from `launchUser`, while the client's session holds `storedUser`, as
+    /// a token refresh since launch would have saved it.
+    private func launchedAccount(
+        _ launchUser: AuthUser,
+        storedSessionUser storedUser: AuthUser,
+        reauthorizer: FakeAppleReauthorizer,
+        transport: FakeTransport
+    ) -> AccountModel {
+        let session = AuthSession(accessToken: "valid", refreshToken: "refresh-2", expiresAt: Date().addingTimeInterval(3600), user: storedUser)
+        let client = SupabaseAuthClient(
+            configuration: TestJSON.configuration, transport: transport, sessionStore: InMemoryAuthSessionStore(session: session)
+        )
+        return AccountModel(
+            client: client, apiBaseURL: TestJSON.configuration.apiBaseURL, transport: transport, appleReauthorizer: reauthorizer,
+            state: .signedIn(launchUser)
+        )
     }
 
     private func deleteTransport() -> FakeTransport {
@@ -170,6 +208,71 @@ import XCTest
         XCTAssertEqual(transport.requests("DELETE", pathContaining: "api/me/").count, 1)
         XCTAssertEqual(account.state, .signedIn(appleUser))
         XCTAssertEqual(account.errorMessage, AuthCopy.deleteFailed)
+        XCTAssertNotNil(store.load())
+    }
+
+    /// A session stored by an older build has no `providers`; a refresh since launch recorded the
+    /// linked Apple identity in the client's session but not in `state`.
+    func testALinkedAppleIdentityFromTheRefreshedSessionIsAskedForACode() async throws {
+        let transport = deleteTransport()
+        let reauthorizer = FakeAppleReauthorizer(.code("c1a2b3.0.rrtx.fresh-code"))
+        let refreshed = AuthUser(id: "user-1", email: "sofia@example.edu", fullName: "Sofia", provider: "email", providers: ["email", "apple"])
+        let account = launchedAccount(emailUser, storedSessionUser: refreshed, reauthorizer: reauthorizer, transport: transport)
+        XCTAssertNil(emailUser.providers)
+
+        await account.deleteAccount()
+
+        XCTAssertEqual(reauthorizer.calls, 1)
+        let deletes = transport.requests("DELETE", pathContaining: "api/me/")
+        XCTAssertEqual(deletes.count, 1)
+        XCTAssertEqual(body(of: deletes[0]), ["apple_authorization_code": "c1a2b3.0.rrtx.fresh-code"])
+        XCTAssertEqual(account.state, .signedOut)
+        XCTAssertNil(account.errorMessage)
+    }
+
+    /// The client's session is someone else's: its Apple identity says nothing about this account.
+    /// (No DELETE goes out either: the client won't hand this account a token for another one.)
+    func testAnotherAccountsStoredSessionDoesNotShowTheAppleSheet() async throws {
+        let transport = deleteTransport()
+        let reauthorizer = FakeAppleReauthorizer(.code("never used"))
+        let other = AuthUser(id: "user-2", email: nil, fullName: nil, provider: "apple", providers: ["apple"])
+        let account = launchedAccount(emailUser, storedSessionUser: other, reauthorizer: reauthorizer, transport: transport)
+
+        await account.deleteAccount()
+
+        XCTAssertEqual(reauthorizer.calls, 0)
+        XCTAssertTrue(transport.requests.isEmpty, "nothing sent")
+        XCTAssertEqual(account.state, .signedIn(emailUser))
+        XCTAssertEqual(account.errorMessage, AuthCopy.message(for: .accountMismatch, email: emailUser.email))
+        XCTAssertFalse(account.isBusy)
+    }
+
+    func testASecondDeleteWhileTheAppleSheetIsUpIsIgnored() async throws {
+        let transport = deleteTransport()
+        let reauthorizer = SuspendingAppleReauthorizer()
+        let (account, store) = await signedInAccount(appleUser, reauthorizer: reauthorizer, transport: transport)
+
+        let first = Task { await account.deleteAccount() }
+        for _ in 0..<1_000 where !reauthorizer.isShowingSheet {
+            await Task.yield()
+        }
+        XCTAssertTrue(reauthorizer.isShowingSheet)
+        XCTAssertTrue(account.isBusy)
+
+        await account.deleteAccount()
+
+        XCTAssertEqual(reauthorizer.calls, 1, "the second delete never asked for the sheet")
+        XCTAssertTrue(transport.requests.isEmpty, "the second delete sent nothing")
+        XCTAssertTrue(account.isBusy, "the first delete is still running")
+
+        reauthorizer.answer(throwing: AppleReauthorizationError.canceled)
+        await first.value
+
+        XCTAssertEqual(reauthorizer.calls, 1)
+        XCTAssertTrue(transport.requests.isEmpty, "canceling the visible sheet deleted nothing")
+        XCTAssertEqual(account.state, .signedIn(appleUser))
+        XCTAssertNil(account.errorMessage)
+        XCTAssertFalse(account.isBusy)
         XCTAssertNotNil(store.load())
     }
 

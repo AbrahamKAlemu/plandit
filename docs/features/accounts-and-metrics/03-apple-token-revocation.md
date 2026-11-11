@@ -145,6 +145,12 @@ identity unlinking (the Supabase user is deleted anyway).
   - *Linked identities* (`AuthUser.providers`). Reason: an email account that later used Sign in
     with Apple has `provider == "email"` but Apple tokens to revoke; `providers` is optional so
     sessions already in the Keychain still decode.
+  - *Delete is ignored while one is already running* (`AccountModel.deleteAccount`). Reason: a
+    second tap while the Apple sheet is up made the sheet fail, which deleted the account without
+    a code even if the person then canceled the sheet they could see.
+  - *The Apple check also reads the refreshed session* (`AccountModel.usesSignInWithApple`).
+    Reason: a session stored by an older build has no `providers`; once a refresh records them,
+    an email account with Apple linked still gets the sheet.
 - **Test environment.** This machine has only the iOS 27.2 simulator runtime and had no
   "iPhone 17 Pro" device, so one was created (`xcrun simctl create`). The iOS 18 run in the
   verification table could not be done here: no iOS 18 runtime is installed.

@@ -161,13 +161,13 @@ final class AccountModel {
     /// revocation is best effort). On 204 the local copy goes too; on any failure of the request
     /// the person stays signed in.
     func deleteAccount() async {
-        guard case .signedIn(let user) = state else { return }
+        guard !isBusy, case .signedIn(let user) = state else { return }
         guard let api = api(for: user.id) else { return notConfigured() }
         errorMessage = nil
         isBusy = true
         defer { isBusy = false }
         var appleAuthorizationCode: String?
-        if user.signedInWithApple {
+        if await usesSignInWithApple(user) {
             do {
                 appleAuthorizationCode = try await appleReauthorizer.authorizationCode()
             } catch AppleReauthorizationError.canceled {
@@ -208,6 +208,14 @@ final class AccountModel {
 
     private func notConfigured() {
         errorMessage = AuthCopy.notConfigured
+    }
+
+    /// `state` is set at launch or sign-in; a session refreshed since then can know about a linked
+    /// Apple identity that a session stored by an older build didn't record.
+    private func usesSignInWithApple(_ user: AuthUser) async -> Bool {
+        if user.signedInWithApple { return true }
+        guard let stored = await client?.currentUser, stored.id == user.id else { return false }
+        return stored.signedInWithApple
     }
 
     private func finishSignOut() {
