@@ -26,6 +26,8 @@ final class AccountModel {
     @ObservationIgnored private let apiBaseURL: URL?
     @ObservationIgnored private let client: SupabaseAuthClient?
     @ObservationIgnored private let transport: any HTTPTransport
+    /// Gets a fresh Apple authorization code before an Apple account is deleted.
+    @ObservationIgnored private let appleReauthorizer: any AppleReauthorizing
     /// Runs before the session is dropped: the final sync push.
     @ObservationIgnored var beforeSignOut: (() async -> Void)?
     /// Runs once the server confirmed the account is gone, with the user id.
@@ -35,12 +37,14 @@ final class AccountModel {
         client: SupabaseAuthClient?,
         apiBaseURL: URL?,
         transport: any HTTPTransport = URLSession.shared,
+        appleReauthorizer: any AppleReauthorizing = AppleReauthorizer(),
         state: State = .loading,
         isLocalTestAccount: Bool = false
     ) {
         self.client = client
         self.apiBaseURL = apiBaseURL
         self.transport = transport
+        self.appleReauthorizer = appleReauthorizer
         self.state = state
         self.isLocalTestAccount = isLocalTestAccount
     }
@@ -151,15 +155,29 @@ final class AccountModel {
         finishSignOut()
     }
 
-    /// `DELETE /api/me/`. On 204 the local copy goes too; on any failure the person stays signed in.
+    /// `DELETE /api/me/`. An Apple account first re-authorizes with Apple so the server can revoke
+    /// its tokens: dismissing that sheet deletes nothing and shows nothing. If the sheet fails for
+    /// any other reason the account is deleted without a code (in-app deletion must always work;
+    /// revocation is best effort). On 204 the local copy goes too; on any failure of the request
+    /// the person stays signed in.
     func deleteAccount() async {
-        guard case .signedIn(let user) = state else { return }
+        guard !isBusy, case .signedIn(let user) = state else { return }
         guard let api = api(for: user.id) else { return notConfigured() }
         errorMessage = nil
         isBusy = true
         defer { isBusy = false }
+        var appleAuthorizationCode: String?
+        if await usesSignInWithApple(user) {
+            do {
+                appleAuthorizationCode = try await appleReauthorizer.authorizationCode()
+            } catch AppleReauthorizationError.canceled {
+                return
+            } catch {
+                appleAuthorizationCode = nil  // delete anyway; the server logs that it had no code
+            }
+        }
         do {
-            try await api.deleteAccount()
+            try await api.deleteAccount(appleAuthorizationCode: appleAuthorizationCode)
             await accountWasDeleted(user.id)
         } catch AuthError.accountDeleted {
             // Already gone on the server: the outcome the person asked for.
@@ -190,6 +208,14 @@ final class AccountModel {
 
     private func notConfigured() {
         errorMessage = AuthCopy.notConfigured
+    }
+
+    /// `state` is set at launch or sign-in; a session refreshed since then can know about a linked
+    /// Apple identity that a session stored by an older build didn't record.
+    private func usesSignInWithApple(_ user: AuthUser) async -> Bool {
+        if user.signedInWithApple { return true }
+        guard let stored = await client?.currentUser, stored.id == user.id else { return false }
+        return stored.signedInWithApple
     }
 
     private func finishSignOut() {

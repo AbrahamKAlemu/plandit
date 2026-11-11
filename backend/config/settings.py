@@ -137,6 +137,13 @@ SUPABASE_JWT_AUDIENCE = "authenticated"
 SUPABASE_JWT_ISSUER = f"{SUPABASE_URL}/auth/v1" if SUPABASE_URL else None
 # Service-role key for the Supabase Admin API (account deletion). Server-side only, never in the app.
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY")
+# Sign in with Apple's REST API: revoking the person's Apple tokens on DELETE /api/me/. Server-side
+# only. The private key is the `.p8` file's contents; a value pasted with literal `\n` escapes
+# (one-line environment editors) is accepted too. Empty settings skip the revocation with a warning.
+APPLE_TEAM_ID = env("APPLE_TEAM_ID")
+APPLE_CLIENT_ID = env("APPLE_CLIENT_ID", "com.plandit.app")
+APPLE_SIGNIN_KEY_ID = env("APPLE_SIGNIN_KEY_ID")
+APPLE_SIGNIN_PRIVATE_KEY = env("APPLE_SIGNIN_PRIVATE_KEY").replace("\\n", "\n")
 # Shared secret for GET /api/metrics/ (aggregate usage for the course staff). Empty turns it off.
 METRICS_API_KEY = env("METRICS_API_KEY")
 
