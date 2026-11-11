@@ -276,3 +276,28 @@ h1 em, h2 em { color: var(--green-dark); font-style: normal; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .reveal { opacity: 1; transform: none; }
 }
+
+/* Legal pages (/terms, /privacy, /support): brought over from the Plandit main repo
+   (website/styles.css). Only these pages use these classes; one readable column
+   under the fixed header. */
+.legal-nav { display: flex; gap: 24px; }
+.legal-nav a { font-size: 14px; font-weight: 700; text-decoration: none; }
+.legal-nav a:hover { color: var(--green-dark); }
+.legal { max-width: 760px; padding: 130px 0 90px; }
+.legal h1 { font-size: clamp(40px, 6vw, 60px); line-height: 1; letter-spacing: -.05em; }
+.legal-meta { margin-top: 14px; color: var(--muted); font-size: 14px; font-weight: 600; }
+.legal-lede { margin-top: 28px; font-size: 18px; line-height: 1.65; }
+.legal-toc { margin-top: 32px; padding: 22px 26px; background: var(--cream); border: 1px solid var(--line); border-radius: 18px; }
+.legal-toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; font-size: 15px; }
+.legal-toc li { margin: 4px 0; break-inside: avoid; }
+.legal section { margin-top: 44px; scroll-margin-top: 100px; }
+.legal h2 { font-size: 24px; letter-spacing: -.03em; }
+.legal section p, .legal section ul { margin-top: 14px; }
+.legal ul { padding-left: 22px; }
+.legal li { margin: 8px 0; }
+.legal a { color: var(--green-dark); text-underline-offset: 3px; }
+@media (max-width: 760px) {
+  .legal { padding-top: 110px; }
+  .legal-toc ol { columns: 1; }
+}
+.legal-toc li:first-child { margin-top: 0; }
