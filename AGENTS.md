@@ -95,6 +95,18 @@ nearby and on budget, shown on a map.
   - `ios/scripts/testflight.sh` uploads with the Apple Account signed in to Xcode. If the upload
     fails with "Failed to Use Accounts", sign in again in Xcode → Settings → Accounts. Then rerun
     only the `xcodebuild -exportArchive` step on the archive the script already made.
+  - 1.0 was rejected under Guideline 2.1 (Information Needed) because the Review Notes were empty.
+    App Review wants Notes that cover purpose, audience, how to use it with demo credentials,
+    external services and regional differences, plus a screen recording from a physical device
+    that starts at launch and shows sign-up, sign-in and account deletion (App Review Information
+    → Attachment, .mp4 or .mov). After editing a submitted version, click "Update Review" on the
+    version page, or "Resubmit to App Review" stays disabled.
+  - The App Review demo account is seeded with 9 saved places (docs/app-store/1.0-listing.md).
+    Don't sign in to it on your own phone: sync is last writer wins, so a plan built there
+    replaces the seed.
+  - TikTok's oEmbed endpoint answers 200 for made-up video IDs, so it can't prove a post exists.
+    The backend's public page reader can: real posts return the video's id and author, fake ones
+    status 10204.
 
 ## Team
 | Person | Owns |
