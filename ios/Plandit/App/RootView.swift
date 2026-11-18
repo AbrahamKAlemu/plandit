@@ -11,6 +11,8 @@ struct RootView: View {
     @State private var camera: MapCameraPosition = .camera(Manhattan.overviewCamera)
     @State private var mapSelection: UUID?
     @State private var viewport = MapViewport()
+    /// The sheet's horizontal extent on screen. On iPad it's a panel narrower than the screen.
+    @State private var sheetColumns: ClosedRange<CGFloat>?
     @State private var location = LocationPermission()
 
     var body: some View {
@@ -21,6 +23,12 @@ struct RootView: View {
         }
         .sheet(isPresented: .constant(true)) {
             SheetContainer()
+                .onGeometryChange(for: ClosedRange<CGFloat>.self) { proxy in
+                    let frame = proxy.frame(in: .global)
+                    return frame.minX.rounded()...frame.maxX.rounded()
+                } action: { columns in
+                    sheetColumns = columns
+                }
                 .environment(store)
                 .environment(router)
                 .environment(\.isSheetCollapsed, detent == SheetDetent.peek)
@@ -37,6 +45,7 @@ struct RootView: View {
             frameMap()
         }
         .onChange(of: detent) { frameMap() }
+        .onChange(of: sheetColumns) { frameMap(animated: false) }
         .onChange(of: store.today.stops.count) {
             if tab == .today { frameMap() }
         }
@@ -92,8 +101,11 @@ struct RootView: View {
 
     private func frameMap(animated: Bool = true) {
         guard viewport.size != .zero else { return }
-        var framing = viewport
-        framing.bottomInset = SheetDetent.coveredHeight(detent, screenHeight: viewport.size.height)
+        // At full height an iPad panel covers the middle of the map, so content goes beside it.
+        let framing = viewport.uncovered(
+            coveredHeight: SheetDetent.coveredHeight(detent, screenHeight: viewport.size.height),
+            fullHeightPanel: detent == .large ? sheetColumns : nil
+        )
 
         let coordinates: [CLLocationCoordinate2D]
         if let focused = focusedCoordinate() {
