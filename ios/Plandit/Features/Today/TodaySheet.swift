@@ -7,7 +7,7 @@ struct TodaySheet: View {
     @Environment(SheetRouter.self) private var router
     @State private var isAddingLink = false
     @State private var isShowingBudget = false
-    @State private var isReordering = false
+    @State private var isEditingPlan = false
 
     var body: some View {
         let plan = store.today
@@ -90,21 +90,22 @@ struct TodaySheet: View {
                             }
                         }
 
-                        if plan.stops.count - plan.firstMovableIndex >= 2 {
+                        if plan.stops.count > plan.firstMovableIndex {
                             HStack {
                                 SectionTitle("Stops")
                                 Spacer()
-                                Button { isReordering = true } label: {
+                                Button { isEditingPlan = true } label: {
                                     HStack(spacing: Space.xxs) {
                                         Icon(.arrowUpDown, size: 16)
-                                        Text("Reorder")
+                                        Text("Edit")
                                     }
                                     .font(.label)
                                     .foregroundStyle(.ink)
                                     .frame(minHeight: 44)
                                     .contentShape(Rectangle())
                                 }
-                                .accessibilityIdentifier("reorder-stops")
+                                .accessibilityHint("Reorder or remove stops")
+                                .accessibilityIdentifier("edit-plan")
                             }
                         }
                         PlanTimeline(plan: plan)
@@ -122,7 +123,7 @@ struct TodaySheet: View {
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
-        .sheet(isPresented: $isReordering) { ReorderStopsSheet() }
+        .sheet(isPresented: $isEditingPlan) { EditPlanSheet() }
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
                 // Same landing as from Saved: watch the new post get mapped.

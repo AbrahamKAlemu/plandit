@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Drag the stops still ahead into a new order. Times update as you drag; nothing changes until Save.
-/// Stops that are done or underway stay where they are.
-struct ReorderStopsSheet: View {
+/// Edit the stops still ahead: drag to reorder, tap the trash can to remove. Times update as you go;
+/// nothing changes until Save, and Save can be undone. Stops that are done or underway stay where they are.
+struct EditPlanSheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var order: [UUID] = []
@@ -28,15 +28,29 @@ struct ReorderStopsSheet: View {
                     ForEach(order, id: \.self) { id in
                         if let index = preview.stops.firstIndex(where: { $0.id == id }) {
                             let stop = preview.stops[index]
-                            row(number: index + 1, stop: stop, was: current.stops.first { $0.id == id }?.start)
-                                .accessibilityIdentifier("reorder-\(stop.place.name)")
+                            HStack(spacing: Space.sm) {
+                                row(number: index + 1, stop: stop, was: current.stops.first { $0.id == id }?.start)
+                                    .accessibilityIdentifier("reorder-\(stop.place.name)")
+                                Spacer(minLength: 0)
+                                Button {
+                                    withAnimation(.snappy) { order.removeAll { $0 == id } }
+                                } label: {
+                                    Icon(.trash, size: 18)
+                                        .foregroundStyle(Color.error)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Remove \(stop.place.name)")
+                                .accessibilityIdentifier("remove-\(stop.place.name)")
+                            }
                         }
                     }
                     .onMove { order.move(fromOffsets: $0, toOffset: $1) }
                 } header: {
                     Text("Still ahead")
                 } footer: {
-                    Text("Drag to change the order. Times update as you go.")
+                    Text(footer(removed: current.stops.count - first - order.count))
                 }
                 let warnings = warnings(current: current, preview: preview)
                 if !warnings.isEmpty {
@@ -48,7 +62,7 @@ struct ReorderStopsSheet: View {
             .environment(\.editMode, .constant(.active))
             .scrollContentBackground(.hidden)
             .background(Color.surface)
-            .navigationTitle("Reorder")
+            .navigationTitle("Edit plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -72,6 +86,12 @@ struct ReorderStopsSheet: View {
         }
     }
 
+    private func footer(removed: Int) -> String {
+        let base = "Drag to change the order, or tap the trash can to remove a stop. Times update as you go."
+        guard removed > 0 else { return base }
+        return base + (removed == 1 ? " 1 stop will be removed; Cancel keeps it." : " \(removed) stops will be removed; Cancel keeps them.")
+    }
+
     private func row(number: Int, stop: PlanStop, was: Date?) -> some View {
         HStack(spacing: Space.sm) {
             StopBadge(number: number, status: stop.status, size: 24)
@@ -90,7 +110,15 @@ struct ReorderStopsSheet: View {
             }
         }
         .frame(minHeight: 44)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.spokenLabel(number: number, stop: stop, was: was))
+    }
+
+    /// "The High Line, stop 3, 2:20 PM, was 1:15 PM". Drag handles and remove buttons read it too.
+    static func spokenLabel(number: Int, stop: PlanStop, was: Date?) -> String {
+        var label = "\(stop.place.name), stop \(number), \(stop.start.shortTime)"
+        if let was, was != stop.start { label += ", was \(was.shortTime)" }
+        return label
     }
 
     private func warnings(current: DayPlan, preview: DayPlan) -> [String] {

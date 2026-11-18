@@ -109,26 +109,26 @@ final class MapAndBudgetFlowTests: XCTestCase {
 
     @MainActor func testReorderingTheStopsAhead() {
         let app = launch()
-        let reorder = app.buttons["reorder-stops"]
+        let reorder = app.buttons["edit-plan"]
         XCTAssertTrue(reorder.waitForExistence(timeout: 5))
         scrollTo(reorder, in: app)
         reorder.tap()
-        XCTAssertTrue(app.navigationBars["Reorder"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Edit plan"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Done or underway"].exists)
 
         // Drag the High Line below Los Tacos.
-        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'was'")).firstMatch.exists,
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS ', was '")).firstMatch.exists,
                        "nothing moves until you drag")
-        let highLine = app.buttons["Reorder Stop 3"]
-        let tacos = app.buttons["Reorder Stop 4"]
+        let highLine = app.buttons["Reorder The High Line"]
+        let tacos = app.buttons["Reorder Los Tacos No. 1"]
         XCTAssertTrue(highLine.waitForExistence(timeout: 3))
         highLine.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.6, thenDragTo: tacos.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.2)))
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'was'")).firstMatch.waitForExistence(timeout: 3),
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS ', was '")).firstMatch.waitForExistence(timeout: 3),
                       "moved stops show their old time")
         app.buttons["reorder-save"].tap()
 
-        XCTAssertTrue(app.navigationBars["Reorder"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Edit plan"].waitForNonExistence(timeout: 3))
         let tacosRow = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch
         let highLineRow = app.buttons.containing(NSPredicate(format: "label CONTAINS 'The High Line'")).firstMatch
         XCTAssertLessThan(tacosRow.frame.minY, highLineRow.frame.minY, "Los Tacos now comes first")
@@ -168,6 +168,46 @@ final class MapAndBudgetFlowTests: XCTestCase {
         let park = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Washington Square Park'")).firstMatch
         XCTAssertTrue(park.label.hasPrefix("Stop 5, Now"), park.label)
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Directions to Joe'")).firstMatch.exists, "directions come back for the next stop")
+    }
+
+    @MainActor func testDoneHereCanBeUndone() {
+        let app = launch()
+        let met = app.buttons.containing(NSPredicate(format: "label CONTAINS 'The Met'")).firstMatch
+        XCTAssertTrue(met.waitForExistence(timeout: 5))
+        scrollTo(met, in: app)
+        met.tap()
+
+        let done = app.buttons["Done here"]
+        XCTAssertTrue(done.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["not-here-yet"].exists, "the stop you're at can go back to planned")
+        done.tap()
+        XCTAssertTrue(app.buttons["not-done-yet"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["undo-message"].label, "The Met is done")
+        app.buttons["undo-button"].tap()
+        XCTAssertTrue(app.buttons["not-here-yet"].waitForExistence(timeout: 3), "back to underway")
+        XCTAssertFalse(app.buttons["undo-button"].exists)
+    }
+
+    @MainActor func testRemovingAStopInEditPlanAndUndoing() {
+        let app = launch()
+        let edit = app.buttons["edit-plan"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        scrollTo(edit, in: app)
+        edit.tap()
+        XCTAssertTrue(app.navigationBars["Edit plan"].waitForExistence(timeout: 3))
+
+        let tacos = app.otherElements["reorder-Los Tacos No. 1"]
+        XCTAssertTrue(tacos.waitForExistence(timeout: 3))
+        app.buttons["remove-Los Tacos No. 1"].tap()
+        XCTAssertFalse(app.otherElements["reorder-Los Tacos No. 1"].exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '1 stop will be removed'")).firstMatch.exists)
+        app.buttons["reorder-save"].tap()
+
+        XCTAssertTrue(app.navigationBars["Edit plan"].waitForNonExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["undo-message"].label, "Removed Los Tacos No. 1")
+        XCTAssertFalse(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch.exists)
+        app.buttons["undo-button"].tap()
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch.waitForExistence(timeout: 3))
     }
 
     @MainActor func testChangingAStopsCost() {

@@ -46,11 +46,24 @@ struct StopActions: View {
     @Environment(PlanditStore.self) private var store
 
     var body: some View {
-        if stop.status != .now {
+        switch stop.status {
+        case .upcoming:
             Button {
                 withAnimation(.snappy) { store.arrive(at: stop.id) }
             } label: {
                 Label("I'm here", image: "Icons/map-pin")
+            }
+        case .now:
+            Button {
+                withAnimation(.snappy) { store.leave(stop.id) }
+            } label: {
+                Label("Not here yet", image: "Icons/undo-2")
+            }
+        case .done:
+            Button {
+                withAnimation(.snappy) { store.arrive(at: stop.id) }
+            } label: {
+                Label("Not done yet", image: "Icons/undo-2")
             }
         }
         if stop.status != .done {
