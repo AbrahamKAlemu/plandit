@@ -25,7 +25,8 @@ struct UserStats: Codable, Equatable {
     /// - neighborhoods explored: distinct non-empty neighborhoods among places in completed plans
     /// - places saved: every saved post
     static func compute(pastPlans: [PastPlan], visited: [Place], placesSaved: Int) -> UserStats {
-        let neighborhoods = Set(visited.map { $0.neighborhood.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        // "Chelsea" and "chelsea " are one neighborhood.
+        let neighborhoods = Set(visited.map { $0.neighborhood.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })
         return UserStats(plansCompleted: pastPlans.count, neighborhoodsExplored: neighborhoods.count, placesSaved: placesSaved)
     }
 }

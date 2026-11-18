@@ -26,6 +26,14 @@ final class UserStatsTests: XCTestCase {
                        "distinct, trimmed, non-empty neighborhoods of visited places")
     }
 
+    @MainActor func testNeighborhoodsMatchWhateverTheirCaseOrSpacing() {
+        let visited = ["Chelsea", "chelsea ", " CHELSEA", "Chelsea\n", "West Village", "west village", "  "].map {
+            Place(name: "Somewhere", category: .food, neighborhood: $0, address: "", latitude: 0, longitude: 0)
+        }
+        let stats = UserStats.compute(pastPlans: [], visited: visited, placesSaved: 0)
+        XCTAssertEqual(stats.neighborhoodsExplored, 2, "Chelsea and West Village, however they're typed; blank doesn't count")
+    }
+
     @MainActor func testStoreStatsCountSavedPosts() {
         let store = PlanditStore.sample()
         XCTAssertEqual(store.stats.placesSaved, store.saved.count)
