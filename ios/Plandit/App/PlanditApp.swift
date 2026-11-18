@@ -33,12 +33,16 @@ struct PlanditApp: App {
     }
 }
 
-/// loading → splash; signed out → welcome; signed in → the account's store, then the app.
+/// loading → splash; signed out → welcome; signed in → the account's store, then the app
+/// (after the first-run tutorial, for a brand-new account).
 private struct AccountGate: View {
     let account: AccountModel
     let appearance: AppearanceSettings
     @Binding var router: SheetRouter
     @Binding var session: AccountSession?
+    /// D-1: decided once when a session opens; finishing the tutorial clears it.
+    @State private var showsTutorial = false
+    private let tutorial = FirstRunTutorial()
 
     var body: some View {
         Group {
@@ -49,7 +53,12 @@ private struct AccountGate: View {
                 AuthFlowView()
             case .signedIn(let user):
                 if let session, session.userID == user.id {
-                    PlanditRoot(store: session.store, sync: session.sync, appearance: appearance, router: router)
+                    if showsTutorial {
+                        TutorialView { finishTutorial(userID: user.id) }
+                            .transition(.opacity)
+                    } else {
+                        PlanditRoot(store: session.store, sync: session.sync, appearance: appearance, router: router)
+                    }
                 } else {
                     SplashScreen()
                         .task(id: user.id) { await open(user) }
@@ -83,10 +92,24 @@ private struct AccountGate: View {
             next.store.flush()
             await next.sync?.finalPush()
         }
-        account.onAccountDeleted = { _ in next.removeLocalData() }
+        let tutorial = tutorial
+        account.onAccountDeleted = { userID in
+            next.removeLocalData()
+            tutorial.forget(userID: userID)
+        }
+        let launch = TutorialLaunchOptions.current
+        if launch.resetsFinished { tutorial.forget(userID: user.id) }
+        // Set with the session, in the same update, so the map never flashes first.
+        showsTutorial = tutorial.shouldShow(userID: user.id, isNewAccount: next.isNewAccount || launch.countsAsNewAccount)
         // A re-bootstrap for the same user must not leave the old session attached to the API.
         session?.tearDown()
         session = next
+    }
+
+    /// Skip, or Continue on the last page: remember it for this account on this phone, then the map.
+    private func finishTutorial(userID: String) {
+        tutorial.recordFinished(userID: userID)
+        withAnimation(.easeInOut(duration: 0.25)) { showsTutorial = false }
     }
 
     private func close() {
@@ -94,6 +117,7 @@ private struct AccountGate: View {
         account.onAccountDeleted = nil
         session?.tearDown()
         session = nil
+        showsTutorial = false
         router = SheetRouter()
     }
 }
