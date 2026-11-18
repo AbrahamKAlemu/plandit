@@ -13,7 +13,7 @@ AGENTS.md before it opens.
 | **D. Saved list** | Category icons, Filter and Sort, slimmer rows with + and Added | D-3–5, PRC-5, W-7, W-9, W-10 | `main` | B (`SavedSheet`); B builds on it |
 | **E. First-run tutorial** | Three pages for brand-new accounts | D-1 | `main` | None |
 | **B. Share and processing** | One-step share for links and videos; clearer finding-the-place flow; post screen fixes | SHR-1–6, PRC-1–4, PRC-6–8, W-11–14 | A, D, and PR #28 merged or rebased onto | PR #28 (`PlanditStore`, `SavedPostDetailView`) |
-| **C. Sheets and Today** | Solid sheet headers; rides instead of "0.0 mi"; Today's times agree | W-15–17 | PR #28 merged | PR #28 (`TodaySheet`) |
+| **C. Sheets and Today** | Solid sheet headers; rides instead of "0.0 mi"; Today's times agree; empty Today fits at half height; stat tiles at large text | W-15–17, part of W-1 | PR #28 merged | PR #28 (`TodaySheet`) |
 
 A, D and E are built at the same time in separate worktrees, each on its own simulator.
 B starts after A and D merge. `ios/Plandit.xcodeproj/project.pbxproj` is generated: on a conflict, take either side
@@ -99,7 +99,7 @@ command. "Shot" means a simulator screenshot compared with the November 18 walkt
 | PRO-2 | No "Coming soon" text anywhere; Notifications gone; recent plan rows show per-person cost, budget mark and amount ("$22 under") when recorded, no chevron, no navigation | UI: search for "Coming soon" across tabs; unit test for row text | A builder | Not started |
 | PRO-3 | Sign out and Delete account call the same `AccountModel` methods; dialog unchanged except Cancel | Existing auth unit tests pass unchanged; UI opens the dialog from Profile (82) | A builder, xhigh reviewer | Not started |
 | PRO-4 | Appearance switches live from Profile | Existing `AppearanceFlowTests`, updated path | A builder | Not started |
-| W-1 | Last element fully above the bar on stop detail, Profile, Today large, empty Today at medium | UI: element `frame.maxY` ≤ bar `frame.minY` after scrolling (16b, 72, 14, 31) | A builder | Not started |
+| W-1 | Last element fully above the bar on stop detail, Profile, Today large, empty Today at medium | UI: element `frame.maxY` ≤ bar `frame.minY` after scrolling (16b, 72, 14, 31). Empty Today at medium, before any swipe: C builder (it's TodaySheet's empty state) | A builder; C builder for empty Today at medium | A part pass (review, Nov 18); C part in progress |
 | W-2 | No longer applies (D-6 drops these numbers) | | | n/a |
 | W-3 | Hint only on Create account | UI on both modes (03) | A builder | Not started |
 | W-4 | iPad Welcome width ≤ 440 pt; Saved and Profile maps show Manhattan | Shots on iPad mini (A2–A4) | A builder | Not started |

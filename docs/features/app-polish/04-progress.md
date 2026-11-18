@@ -8,7 +8,7 @@ added to the brief as D requirements.
 
 ## Attention needed
 
-- Slices B and C overlap Eldad's open PR #28. They start after it merges, or rebase onto it.
+- PR #28 and #29 merged on November 18. A, D and E were built on 413d299 and need merging onto the new main.
 - Two walkthrough findings belong to Eldad's planner work and aren't in scope: the planner put a
   "late lunch" after dinner (walkthrough shot 42; a GitHub issue for Eldad once approved), and
   Today's times disagree by 1 to 3 minutes (W-17 rechecks after #28, or moves to 1.0.2).
@@ -41,9 +41,10 @@ added to the brief as D requirements.
 | Human approval | Done | Abraham, November 18, in chat |
 | Persona round 3 (D rows) | Done | Five approvals; Marcus's must_fix (Skip ends the tutorial) fixed |
 | Build D (Saved list) | Built, reviewed, fixes re-reviewed | `feature/polish-saved-list`; 261 unit tests, targeted UI 16/16. W-9 proved by screenshot 09 (the test only checks the label) |
-| Build A (bar, Profile, logo) | Built; xhigh review running | `feature/polish-bar-profile`, 5 commits; 261 unit tests, UI 30/31 (the reorder test, which also fails on the base) |
+| Build A (bar, Profile, logo) | Built; xhigh review done (no account or data-loss bugs); fixing 7 findings | `feature/polish-bar-profile`, 5 commits; 261 unit tests, UI 30/31 (the reorder test, which also fails on the base) |
 | Build E (tutorial) | Built, reviewed (pass); fixing review findings | `feature/polish-tutorial`; review: interrupted tutorial, pre-account saves, AX5, iPad width, double-tap |
-| Build B, C | Waiting | A and D merged; PR #28 |
+| Build C (sheets and Today) | In progress | `feature/polish-today`, from main e81d1d0 |
+| Build B (share and processing) | Waiting | A and D merged onto main |
 | Reviews and flow walk | Not started | |
 | Release | Not started | |
 
@@ -62,3 +63,5 @@ added to the brief as D requirements.
 | Nov 18 | Slice D reviewed; five findings fixed and re-reviewed. |
 | Nov 18 | Slice E reviewed: D-1 passes. Decided: a tutorial that was started but not finished shows again at the next launch (it ends only with Skip or the last page). |
 | Nov 18 | The team asked for SVG Repo icons instead of the watercolor category pictures. SVG Repo blocked automated downloads, so the same Phosphor duotone icons (MIT) came from Phosphor's own package. Built in slice D (daed2a8). The glossy P stays as the app icon and logo. |
+| Nov 18 | PR #28 and #29 merged; slice C started from main. |
+| Nov 18 | Slice A reviewed at xhigh: account actions safe. Fixing: past-plan rounding, stat alignment and word breaks, Profile map framing, case-insensitive neighborhoods, dead code, README. Empty Today at half height moved to slice C. Recorded, not fixed: a 1.0 phone drops `fares` from synced past plans (last writer wins); the iPad mini zoom on a selected pin. |
