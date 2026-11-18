@@ -70,7 +70,7 @@ struct RootView: View {
             switch tab {
             case .today: if !router.todayPath.isEmpty { router.todayPath = [] }
             case .saved: if !router.savedPath.isEmpty { router.savedPath = [] }
-            case .profile, .settings: break
+            case .profile: break
             }
             return
         }
@@ -102,7 +102,7 @@ struct RootView: View {
             switch tab {
             case .today: coordinates = store.today.stops.map(\.place.coordinate)
             case .saved: coordinates = store.saved.filter(\.isMappable).compactMap { $0.place?.coordinate }
-            case .profile, .settings: coordinates = Manhattan.outline
+            case .profile: coordinates = Manhattan.outline
             }
         }
 
@@ -119,7 +119,7 @@ struct RootView: View {
         switch tab {
         case .today: return store.stop(id: id)?.place.coordinate
         case .saved: return store.post(id: id)?.place?.coordinate
-        case .profile, .settings: return nil
+        case .profile: return nil
         }
     }
 }
@@ -168,11 +168,6 @@ private struct SheetContainer: View {
             case .profile:
                 NavigationStack {
                     ProfileSheet()
-                }
-                .transition(.opacity)
-            case .settings:
-                NavigationStack {
-                    SettingsScreen()
                 }
                 .transition(.opacity)
             }

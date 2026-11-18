@@ -5,6 +5,7 @@ import SwiftUI
 enum Lucide: String {
     case bell, bookmark, bus, car, check, clock, coffee, flame, footprints, house, info, landmark, link, map, martini
     case navigation, play, plus, route, settings, ticket, trees, users, utensils, video, wallet, x
+    case moon
     case calendarDays = "calendar-days"
     case chevronLeft = "chevron-left"
     case chevronRight = "chevron-right"

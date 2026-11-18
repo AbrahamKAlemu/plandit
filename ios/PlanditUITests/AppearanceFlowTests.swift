@@ -36,10 +36,9 @@ final class AppearanceFlowTests: XCTestCase {
         waitForExpectations(timeout: 3)
     }
 
+    /// Profile → Preferences → Appearance (1.0 had it under a Settings tab).
     @MainActor private func openAppearance(in app: XCUIApplication) {
-        let settings = app.buttons["Settings"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 3))
-        settings.tap()
+        XCTAssertTrue(app.buttons["profile-header"].waitForExistence(timeout: 5))
 
         let appearance = app.staticTexts["Appearance"]
         XCTAssertTrue(appearance.waitForExistence(timeout: 3))

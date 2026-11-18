@@ -25,7 +25,7 @@ final class PlanditStore {
     private(set) var undo: PlanUndo?
 
     /// Computed from real past plans and visited places; never sample numbers.
-    var stats: UserStats { UserStats.compute(pastPlans: pastPlans, visited: visited) }
+    var stats: UserStats { UserStats.compute(pastPlans: pastPlans, visited: visited, placesSaved: saved.count) }
 
     /// Called after every successful local write with what was written. The sync coordinator hooks in here.
     @ObservationIgnored var onChange: ((StoreSnapshot) -> Void)?
@@ -375,7 +375,8 @@ final class PlanditStore {
                     stopCount: today.stops.count,
                     cost: today.totalCost,
                     budget: today.budget,
-                    walkingMiles: today.walkingMiles
+                    walkingMiles: today.walkingMiles,
+                    fares: today.faresCost
                 ),
                 at: 0
             )

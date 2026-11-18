@@ -39,7 +39,7 @@ final class PlanFlowTests: XCTestCase {
     }
 
     @MainActor func testPlanIsInTheTabBarOnEveryTab() {
-        for tab in ["today", "saved", "profile", "settings"] {
+        for tab in ["today", "saved", "profile"] {
             let app = launch(["-startTab", tab])
             XCTAssertTrue(app.buttons["plan-button"].waitForExistence(timeout: 5), "missing on \(tab)")
             XCTAssertEqual(app.buttons["plan-button"].label, "Plan a day")

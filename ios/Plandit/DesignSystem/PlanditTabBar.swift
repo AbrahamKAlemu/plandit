@@ -3,7 +3,8 @@ import SwiftUI
 /// Bottom page selector, pinned inside the persistent sheet (like Find My on iOS 26).
 /// Solid surface rather than glass: the style guide rules out glassmorphism.
 /// The selected pill slides between tabs instead of jumping.
-/// The centered emerald Plan button opens the planner; it's an action, not a tab.
+/// Today, Saved, Plan, Profile (D-2). The emerald Plan pill opens the planner; it's an action, not a tab.
+/// Labels shrink rather than clip or wrap at the largest text sizes.
 struct PlanditTabBar: View {
     @Binding var selection: AppTab
     var onPlan: () -> Void = {}
@@ -22,7 +23,10 @@ struct PlanditTabBar: View {
                 } label: {
                     VStack(spacing: Space.xxs) {
                         Icon(tab.icon, size: 22)
-                        Text(tab.title).font(.manrope(.semiBold, size: 13))
+                        Text(tab.title)
+                            .font(.manrope(.semiBold, size: 13))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
                     .foregroundStyle(isSelected ? Color.emeraldDeep : Color.ink)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -72,6 +76,8 @@ private struct PlanButton: View {
                 Icon(.plus, size: 20)
                 Text("Plan")
                     .font(.manrope(.semiBold, size: 13))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             }
             .foregroundStyle(Color.onEmerald)
             .frame(maxWidth: .infinity, minHeight: 52)
