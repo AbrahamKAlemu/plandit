@@ -9,6 +9,7 @@ enum Lucide: String {
     case chevronLeft = "chevron-left"
     case chevronRight = "chevron-right"
     case arrowUpDown = "arrow-up-down"
+    case undo = "undo-2"
     case circleAlert = "circle-alert"
     case circleCheck = "circle-check"
     case clipboardPaste = "clipboard-paste"

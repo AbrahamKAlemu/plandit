@@ -129,7 +129,8 @@ private struct ProgressButtons: View {
 
     var body: some View {
         HStack(spacing: Space.sm) {
-            if stop.status != .now {
+            switch stop.status {
+            case .upcoming:
                 Button {
                     withAnimation(.snappy) { store.arrive(at: stop.id) }
                 } label: {
@@ -139,6 +140,30 @@ private struct ProgressButtons: View {
                     }
                 }
                 .buttonStyle(.secondary)
+                .transition(.opacity)
+            case .now:
+                Button {
+                    withAnimation(.snappy) { store.leave(stop.id) }
+                } label: {
+                    HStack(spacing: Space.xs) {
+                        Icon(.undo, size: 18)
+                        Text("Not here yet")
+                    }
+                }
+                .buttonStyle(.secondary)
+                .accessibilityIdentifier("not-here-yet")
+                .transition(.opacity)
+            case .done:
+                Button {
+                    withAnimation(.snappy) { store.arrive(at: stop.id) }
+                } label: {
+                    HStack(spacing: Space.xs) {
+                        Icon(.undo, size: 18)
+                        Text("Not done yet")
+                    }
+                }
+                .buttonStyle(.secondary)
+                .accessibilityIdentifier("not-done-yet")
                 .transition(.opacity)
             }
             if stop.status != .done {

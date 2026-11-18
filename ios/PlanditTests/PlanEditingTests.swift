@@ -290,4 +290,72 @@ import XCTest
         XCTAssertEqual(TodayPlacementText.trip(plan.legs[2], from: plan.stops[2]), "\(plan.legs[2].minutes.durationText) walk from The High Line")
         XCTAssertEqual(TodayPlacementText.trip(plan.legs[1], from: plan.stops[1]), "35 min subway ride from The Met · $2.90", "fares show")
     }
+
+    // MARK: - Editing and undo
+
+    func testEditingRemovesStopsAndRetimesTheRest() {
+        let plan = cleanDay()
+        let ahead = plan.stops[2...].map(\.id)
+        let result = plan.edited(keeping: [ahead[0], ahead[2], ahead[3]], travel: .walkAndTransit) // no Los Tacos
+        XCTAssertEqual(result.stops.count, 5)
+        XCTAssertFalse(result.stops.contains { $0.place.name == "Los Tacos No. 1" })
+        XCTAssertLessThan(result.stops[3].start, plan.stops[4].start, "Washington Square moves up into the freed time")
+        assertConsistent(result)
+        XCTAssertEqual(plan.edited(keeping: [], travel: .walkAndTransit).stops.count, 2, "everything ahead can go")
+    }
+
+    func testEditingCantTouchStopsDoneOrUnderway() {
+        let plan = cleanDay()
+        let ahead = plan.stops[2...].map(\.id)
+        XCTAssertEqual(plan.edited(keeping: [plan.stops[1].id] + ahead, travel: .walkAndTransit).stops, plan.stops)
+        XCTAssertEqual(plan.edited(keeping: ahead + [ahead[0]], travel: .walkAndTransit).stops, plan.stops, "no duplicates")
+        XCTAssertEqual(plan.edited(keeping: ahead, travel: .walkAndTransit).stops, plan.stops, "unchanged")
+    }
+
+    func testEveryChangeCanBeUndone() {
+        let store = PlanditStore(today: cleanDay(), saved: SampleData.savedPosts, profile: SampleData.profile,
+                                 pastPlans: [], visited: [], storage: nil)
+        let original = store.today.stops
+        let met = original[1]
+
+        store.complete(met.id)
+        XCTAssertEqual(store.undo?.message, "The Met is done")
+        store.undoLastChange()
+        XCTAssertEqual(store.today.stops, original)
+        XCTAssertNil(store.undo)
+
+        store.leave(met.id)
+        XCTAssertEqual(store.today.stops.map(\.status), [.done, .upcoming, .upcoming, .upcoming, .upcoming, .upcoming])
+        store.undoLastChange()
+        XCTAssertEqual(store.today.stops, original)
+
+        store.arrive(at: original[0].id) // "Not done yet" on the pastry shop
+        XCTAssertEqual(store.today.stops.map(\.status), [.now, .upcoming, .upcoming, .upcoming, .upcoming, .upcoming])
+        XCTAssertEqual(store.undo?.message, "The Hungarian Pastry Shop isn't done")
+        store.undoLastChange()
+        XCTAssertEqual(store.today.stops, original)
+
+        store.removeStop(original[3].id)
+        XCTAssertEqual(store.undo?.message, "Removed Los Tacos No. 1")
+        assertConsistent(store.today)
+        store.undoLastChange()
+        XCTAssertEqual(store.today.stops, original)
+        XCTAssertEqual(store.today.legs.count, 5)
+
+        store.reorder([original[2].id, original[4].id, original[5].id])
+        XCTAssertEqual(store.undo?.message, "Removed Los Tacos No. 1")
+        store.undoLastChange()
+        store.reorder([original[2].id, original[5].id])
+        XCTAssertEqual(store.undo?.message, "Removed 2 stops")
+        store.undoLastChange()
+        XCTAssertEqual(store.today.stops, original)
+    }
+
+    func testRemovingAStopNeverLeavesOverlaps() {
+        let store = PlanditStore(today: cleanDay(), saved: SampleData.savedPosts, profile: SampleData.profile,
+                                 pastPlans: [], visited: [], storage: nil)
+        // High Line → Washington Square is a longer trip than High Line → Los Tacos.
+        store.removeStop(store.today.stops[3].id)
+        assertConsistent(store.today)
+    }
 }

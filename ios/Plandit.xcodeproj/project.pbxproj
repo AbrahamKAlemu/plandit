@@ -33,6 +33,7 @@
 		3025C99E05B3AD848B959100 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57CF7ECA1069F68EE86C3CF /* Colors.swift */; };
 		326DFD212CC8E91AFFA148E1 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */; };
 		32CDA229B854413D1ADBEAD1 /* AuthenticatedAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FEADE27D31DC9BE404E8996 /* AuthenticatedAPI.swift */; };
+		349BD6D3AD5F3BE8208CA7E3 /* EditPlanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC00C8FF2931CB371CEF296 /* EditPlanSheet.swift */; };
 		354EE4D3F797500C1AED2F7F /* SyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91F3FCC1CE99D767FB460B1D /* SyncCoordinator.swift */; };
 		370B1BBA5EC3127C8D4155ED /* SyncReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D14F17A6FC87C91B28D1554 /* SyncReviewTests.swift */; };
 		3EBD5EACA826F5A6D6731964 /* SavedPostPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C343DED8648F131B64A81DBF /* SavedPostPersistenceTests.swift */; };
@@ -55,7 +56,6 @@
 		6350623DF9FDA26C328F7139 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 52CA16854FC3E070D22C7C3D /* PrivacyInfo.xcprivacy */; };
 		6355BA14AD5CD7D21C3DA9A1 /* DayPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01179677A217C998F2303294 /* DayPlannerTests.swift */; };
 		64D3FAA53F2A3C9A0036975A /* WelcomeFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47AC59B4BB383A03DDC1BF5A /* WelcomeFlowTests.swift */; };
-		6694DA02A5D9C008F929776E /* ReorderStopsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC3E1B0D675F10C0A0CDA762 /* ReorderStopsSheet.swift */; };
 		69089531C79E2B10ADF91871 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */; };
 		6BF0493BFA3BFAE66BD288B9 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49054A5C535AFD8CFA871269 /* UserProfile.swift */; };
 		6D047D0F105CE4E684E1424C /* StopTimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E792BAD6BC55F331429035C8 /* StopTimeTests.swift */; };
@@ -99,6 +99,7 @@
 		C4BE7A1321A5AFCC6E30816E /* SavedPostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 894E93D2483E91645C6F60E6 /* SavedPostDetailView.swift */; };
 		C61509BBB72504682D435CF3 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9522645F592BE457D9E1E5 /* RootView.swift */; };
 		C683E678685A8C1B489FA2F6 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F524D5A387C25013DA2CB37 /* Typography.swift */; };
+		C84DEDF183C5C9156D114D3C /* UndoBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC163A2DA571246A3967CA6E /* UndoBar.swift */; };
 		C9052CDC52DC65B58D05C66E /* AuthClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D997BE1AB6170A790A113C5 /* AuthClientTests.swift */; };
 		C908066BF19E5B751DF8EE77 /* TodaySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130BEB57FE12B63F0783900B /* TodaySheet.swift */; };
 		CA123F96243E9291C1B3D846 /* MapViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABB71B38BB71279BDBE8730 /* MapViewport.swift */; };
@@ -231,6 +232,7 @@
 		A07FD7895C86BA6F5455CC13 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A1C596E2ABCB67CA282FECB5 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
 		A3964B1CA69E4FB130554B3A /* BudgetSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetSheet.swift; sourceTree = "<group>"; };
+		AAC00C8FF2931CB371CEF296 /* EditPlanSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditPlanSheet.swift; sourceTree = "<group>"; };
 		AC13355B43D3344040BFB958 /* SupportedSocialURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedSocialURLTests.swift; sourceTree = "<group>"; };
 		ACFD703776492C3DC31EC893 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		AE40C070496070B7A32DECE6 /* PlanditShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PlanditShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -256,7 +258,6 @@
 		D7DF7345CB5D1CCD4457BC00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D81018BE6B56BCDCC955FDBF /* AccountSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSession.swift; sourceTree = "<group>"; };
 		DABB71B38BB71279BDBE8730 /* MapViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewport.swift; sourceTree = "<group>"; };
-		DC3E1B0D675F10C0A0CDA762 /* ReorderStopsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReorderStopsSheet.swift; sourceTree = "<group>"; };
 		DC9522645F592BE457D9E1E5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		DCCE2C042090764A16B12587 /* PlanditStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditStore.swift; sourceTree = "<group>"; };
 		DF8A47F0B3B897F2AF699F74 /* PlanditAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditAPIClient.swift; sourceTree = "<group>"; };
@@ -271,6 +272,7 @@
 		F605D0A954D4585097AF91B1 /* PlanTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanTimeline.swift; sourceTree = "<group>"; };
 		F6194CE06CC90504B47F20BF /* DayPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayPlan.swift; sourceTree = "<group>"; };
 		FB333CD79DB125872198E3A4 /* LinkParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkParsing.swift; sourceTree = "<group>"; };
+		FC163A2DA571246A3967CA6E /* UndoBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoBar.swift; sourceTree = "<group>"; };
 		FC68757C556EA2439B90C22F /* AppClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppClock.swift; sourceTree = "<group>"; };
 		FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceModeTests.swift; sourceTree = "<group>"; };
@@ -500,12 +502,13 @@
 			children = (
 				A3964B1CA69E4FB130554B3A /* BudgetSheet.swift */,
 				F358ABB1B4DFC14DB5EBD8AA /* CostSheets.swift */,
+				AAC00C8FF2931CB371CEF296 /* EditPlanSheet.swift */,
 				F605D0A954D4585097AF91B1 /* PlanTimeline.swift */,
-				DC3E1B0D675F10C0A0CDA762 /* ReorderStopsSheet.swift */,
 				900873E088C5FBF07FCF5247 /* StopDetailView.swift */,
 				C55D01DF203BA000D57AA263 /* StopTimeSheet.swift */,
 				130BEB57FE12B63F0783900B /* TodaySheet.swift */,
 				D23D940E83BF19D7F19169F9 /* TravelOptionsSheet.swift */,
+				FC163A2DA571246A3967CA6E /* UndoBar.swift */,
 			);
 			path = Today;
 			sourceTree = "<group>";
@@ -771,6 +774,7 @@
 				B12B69D88FC4D16C3A7F2C41 /* CostSheets.swift in Sources */,
 				4819F8E3BB1F34A98A3453AD /* DayPlan.swift in Sources */,
 				09A75F738C6D899EC0889F1E /* DayPlanner.swift in Sources */,
+				349BD6D3AD5F3BE8208CA7E3 /* EditPlanSheet.swift in Sources */,
 				B18352F1792316B7AD4F7D58 /* EmailAuthScreen.swift in Sources */,
 				05861C0B663D34D33659F9EB /* Formatting.swift in Sources */,
 				4B8A2389CFE52BDAC8B97393 /* Icon.swift in Sources */,
@@ -795,7 +799,6 @@
 				73D48A0AD28104A77B823914 /* Pricing.swift in Sources */,
 				D0042643FC621187A32463D4 /* ProfileEditScreens.swift in Sources */,
 				DB5B30AA8B4F3B1FAA596D8B /* ProfileSheet.swift in Sources */,
-				6694DA02A5D9C008F929776E /* ReorderStopsSheet.swift in Sources */,
 				C61509BBB72504682D435CF3 /* RootView.swift in Sources */,
 				73938BD2A6979E356613CADD /* RouteService.swift in Sources */,
 				AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */,
@@ -813,6 +816,7 @@
 				C908066BF19E5B751DF8EE77 /* TodaySheet.swift in Sources */,
 				51FD667350DBD3FECEB66BA0 /* TravelOptionsSheet.swift in Sources */,
 				90210A97112312A6C39ABA44 /* Typography.swift in Sources */,
+				C84DEDF183C5C9156D114D3C /* UndoBar.swift in Sources */,
 				6BF0493BFA3BFAE66BD288B9 /* UserProfile.swift in Sources */,
 				9E222E9367AED92EC41D0118 /* VideoEvidenceExtractor.swift in Sources */,
 				27EF33B802B5AA5CD6099C2C /* WelcomeScreen.swift in Sources */,

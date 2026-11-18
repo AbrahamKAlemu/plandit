@@ -138,15 +138,38 @@ extension DayPlan {
         var plan = self
         plan.stops = Array(stops[..<first]) + ids.compactMap { id in movable.first { $0.id == id } }
         plan.relinkLegs(travel: travel)
-        for index in first..<plan.stops.count {
+        plan.retimeAhead(from: first, slot: slot, calendar: calendar)
+        return plan
+    }
+
+    /// The stops still ahead, minus any the user took out, in the order given. Same retiming as
+    /// `reordered`. An unchanged list, or ids that aren't all stops still ahead, change nothing.
+    func edited(keeping ids: [UUID], travel: TravelPreference, calendar: Calendar = .current) -> DayPlan {
+        let first = firstMovableIndex
+        let movable = Array(stops[first...])
+        let movableIDs = movable.map(\.id)
+        guard Set(ids).count == ids.count, Set(ids).isSubset(of: Set(movableIDs)), ids != movableIDs,
+              let slot = movable.first?.start else { return self }
+        if ids.count == movable.count { return reordered(ids, travel: travel, calendar: calendar) }
+        var plan = self
+        plan.stops = Array(stops[..<first]) + ids.compactMap { id in movable.first { $0.id == id } }
+        plan.relinkLegs(travel: travel)
+        plan.retimeAhead(from: first, slot: slot, calendar: calendar)
+        return plan
+    }
+
+    /// Stops from `first` on, one after another: the first no earlier than `slot`, each when the one
+    /// before it ends and you get there; evening spots wait for 8 PM.
+    private mutating func retimeAhead(from first: Int, slot: Date, calendar: Calendar) {
+        guard first < stops.count else { return }
+        for index in first..<stops.count {
             var start = index == first ? slot : .distantPast
             if index > 0 {
-                let previous = plan.stops[index - 1]
-                start = max(start, previous.end.addingTimeInterval(TimeInterval((plan.leg(after: previous)?.minutes ?? 0) * 60)))
+                let previous = stops[index - 1]
+                start = max(start, previous.end.addingTimeInterval(TimeInterval((leg(after: previous)?.minutes ?? 0) * 60)))
             }
-            plan.stops[index].start = Self.evening(start, for: plan.stops[index].place, calendar: calendar).roundedUpToFiveMinutes
+            stops[index].start = Self.evening(start, for: stops[index].place, calendar: calendar).roundedUpToFiveMinutes
         }
-        return plan
     }
 
     /// Evening-only places (nightlife) don't start before 8 PM.

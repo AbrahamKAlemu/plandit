@@ -21,6 +21,8 @@ final class PlanditStore {
     var savedErrorMessage: String?
     /// Real walking or driving geometry per leg, filled in by `loadRoutes()`.
     private(set) var legPaths: [UUID: [CLLocationCoordinate2D]] = [:]
+    /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
+    private(set) var undo: PlanUndo?
 
     /// Computed from real past plans and visited places; never sample numbers.
     var stats: UserStats { UserStats.compute(pastPlans: pastPlans, visited: visited) }
@@ -260,6 +262,7 @@ final class PlanditStore {
     }
 
     func setTime(ofStop id: UUID, start: Date, durationMinutes: Int, moveLaterStops: Bool) {
+        if let stop = stop(id: id) { remember("Changed \(stop.place.name)'s time") }
         today.setTime(ofStop: id, start: start, durationMinutes: durationMinutes, moveLaterStops: moveLaterStops)
         persist()
     }
@@ -682,6 +685,7 @@ final class PlanditStore {
     func addToToday(_ postID: UUID) -> UUID? {
         guard let post = post(id: postID), !isInToday(post), let candidate = PlanCandidate(post: post) else { return nil }
         let wasEmpty = today.stops.isEmpty
+        remember("Added \(candidate.place.name)")
         today = today.inserting(candidate, travel: travelPreference, now: AppClock.now).plan
         if wasEmpty { today.title = Self.title(for: today.stops) }
         persist()
@@ -696,44 +700,94 @@ final class PlanditStore {
     }
 
     func markOverdueDone(now: Date = AppClock.now) {
+        let count = today.overdueStops(now: now).count
+        remember(count == 1 ? "Marked 1 stop done" : "Marked \(count) stops done")
         today.markOverdueDone(now: now)
         persist()
     }
 
     func startRestFromNow(now: Date = AppClock.now) {
+        remember("Moved the rest of the day later")
         today.startRestFromNow(now: now)
         persist()
     }
 
-    /// The stops still ahead, in a new order, before saving it.
+    /// The stops still ahead, in a new order and minus any taken out, before saving it.
     func previewReorder(_ ids: [UUID]) -> DayPlan {
-        today.reordered(ids, travel: travelPreference)
+        today.edited(keeping: ids, travel: travelPreference)
     }
 
+    /// Saves the Edit plan sheet: the stops still ahead in this order; any left out are removed.
     func reorder(_ ids: [UUID]) {
-        let plan = today.reordered(ids, travel: travelPreference)
+        let plan = today.edited(keeping: ids, travel: travelPreference)
         guard plan.stops.map(\.id) != today.stops.map(\.id) else { return }
+        let kept = Set(plan.stops.map(\.id))
+        let removed = today.stops.filter { !kept.contains($0.id) }
+        switch removed.count {
+        case 0: remember("Changed the order")
+        case 1: remember("Removed \(removed[0].place.name)")
+        default: remember("Removed \(removed.count) stops")
+        }
         today = plan
         persist()
         Task { await loadRoutes() }
     }
 
     func removeStop(_ id: UUID) {
+        guard let stop = stop(id: id) else { return }
+        remember("Removed \(stop.place.name)")
         today.stops.removeAll { $0.id == id }
         rebuildLegs()
+        // A new trip between the stops either side may be longer; push later stops only if they'd overlap.
+        today.shiftStops(from: today.firstMovableIndex, by: 0, calendar: .current)
         persist()
     }
 
     /// "I'm here": this stop is happening now, everything before it is done, everything after is still planned.
     func arrive(at stopID: UUID) {
         guard let index = stopIndex(id: stopID) else { return }
+        remember(today.stops[index].status == .done ? "\(today.stops[index].place.name) isn't done" : "You're at \(today.stops[index].place.name)")
         setStatuses(doneThrough: index - 1, now: index)
     }
 
     /// "Done here": this stop and everything before it are done; the next stop becomes "now".
     func complete(_ stopID: UUID) {
         guard let index = stopIndex(id: stopID) else { return }
+        remember("\(today.stops[index].place.name) is done")
         setStatuses(doneThrough: index, now: index + 1 < today.stops.count ? index + 1 : nil)
+    }
+
+    /// "Not here yet": back to planned. Stops before it stay done; nothing is underway.
+    func leave(_ stopID: UUID) {
+        guard let index = stopIndex(id: stopID) else { return }
+        remember("Not at \(today.stops[index].place.name) yet")
+        setStatuses(doneThrough: index - 1, now: nil)
+    }
+
+    // MARK: - Undo
+
+    struct PlanUndo: Identifiable {
+        let id = UUID()
+        let message: String
+        let plan: DayPlan
+    }
+
+    /// Call before changing `today`.
+    private func remember(_ message: String) {
+        undo = PlanUndo(message: message, plan: today)
+    }
+
+    /// Puts today's plan back the way it was before the last change.
+    func undoLastChange() {
+        guard let undo else { return }
+        today = undo.plan
+        self.undo = nil
+        persist()
+        Task { await loadRoutes() }
+    }
+
+    func dismissUndo(_ id: UUID) {
+        if undo?.id == id { undo = nil }
     }
 
     private func setStatuses(doneThrough: Int, now: Int?) {
@@ -788,6 +842,7 @@ final class PlanditStore {
     @discardableResult
     func buildPlan(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode, end: Date? = nil) -> DayPlanner.Outcome {
         let outcome = previewPlan(postIDs: postIDs, start: start, budget: budget, mode: mode, end: end)
+        if !outcome.stops.isEmpty { remember(mode == .replace ? "Made a new plan" : "Added to today's plan") }
         switch mode {
         case .replace:
             today.stops = outcome.stops
