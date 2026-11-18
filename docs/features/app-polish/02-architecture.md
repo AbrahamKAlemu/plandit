@@ -66,7 +66,7 @@ starts from `main` after #28 merges, or rebases onto it.
 | Component | Change |
 |---|---|
 | `PlanditTabBar.swift`, `Navigation.swift` | Four items in one bar: Today, Saved, Plan (emerald pill, still `plan-button`), Profile. Replaces the separate-button layout above. |
-| `Features/Saved/SavedSheet.swift` | Category picture row (new `Categories` images in `Resources/Assets.xcassets`), Filter and Sort menus, slimmer `SavedPostRow` with Added / + / status. A pure `SavedListQuery` (category, free only, sort) holds the rules so unit tests cover them. "Others" groups `shopping` and any future category; `PlaceCategory` itself is unchanged. |
+| `Features/Saved/SavedSheet.swift` | Category tile row (Phosphor duotone SVGs, template images, in `Resources/Assets.xcassets/Categories`), Filter and Sort menus, slimmer `SavedPostRow` with Added / + / status. A pure `SavedListQuery` (category, free only, sort) holds the rules so unit tests cover them. "Others" groups `shopping` and any future category; `PlaceCategory` itself is unchanged. |
 | `Models/Pricing.swift` | Read-only use: free means `plannedCost == 0` (user's cost, else the stated or typical price; parks are 0). |
 | `Shared/DesignSystem/Icon.swift`, `SharedAssets.xcassets/Icons` | Adds Lucide `star` and `chevron-down` (same source and license as the other Lucide icons). |
 | `ProfileSheet.swift`, `UserProfile.swift` | D-6 order; skyline image (`profile-skyline`); `UserStats` keeps plans completed, neighborhoods (distinct `visited[].neighborhood`) and places saved, and drops walked, average, under budget and streak. |

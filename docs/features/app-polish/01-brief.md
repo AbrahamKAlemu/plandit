@@ -218,8 +218,11 @@ Bottom bar:
 
 Saved:
 
-- **D-3** Across the top, a row of category pictures (the watercolor images): Food, Coffee,
-  Activity, Outdoors, Nightlife, Culture and Others (shopping and anything else). Only categories
+- **D-3** Across the top, a row of category tiles: Food, Coffee, Activity, Outdoors, Nightlife,
+  Culture and Others (shopping and anything else). Each is an icon in emerald on a pale emerald
+  square, with its name below. The icons are Phosphor duotone (MIT), a set SVG Repo hosts. The
+  team chose them over the watercolor pictures on November 18, because the pictures didn't match
+  the app's look. Only categories
   with at least one saved place appear. Tapping one shows only that category; tapping it again
   shows all.
 - **D-4** Under the pictures, two menus: Filter (All, Free only) and Sort (Newest, Oldest). Free
@@ -291,6 +294,6 @@ No new events. `linkSaved` still fires once per post that stays, including share
 | Where is the place found after a share? | In the app. The share sheet saves instantly and closes; the app finishes. | Nov 18, Abraham |
 | What happens when Plandit isn't sure which place a post means? | Ask the user to pick (unchanged rule). | Nov 18, Abraham |
 | Inline Account section or Settings behind a gear? | Inline, so Delete account is one scroll from Profile. | Nov 18, proposed in this brief |
-| Is the visual style changing? | Only where the team's design feedback says so (D rows): watercolor category pictures, the skyline, the new logo. Colors, type and components stay. | Nov 18, Abraham's feedback document |
+| Is the visual style changing? | Only where the team's design feedback says so (D rows): category icons (Phosphor duotone, from SVG Repo, chosen over the watercolor pictures), the skyline, the new logo. Colors, type and components stay. | Nov 18, Abraham's feedback document |
 | Replace Today with a Home tab of lists? | Not in 1.0.1. Home waits for the lists and the planner-vs-feed decision (1.0.2). | Nov 18, Abraham |
 | Where does Plan sit now? | Third item in a four-item bar, per the design draft (replaces the separate button). | Nov 18, from the feedback document |

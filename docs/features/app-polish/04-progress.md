@@ -18,9 +18,9 @@ added to the brief as D requirements.
   is pushed once the server answers, and `PUT /api/me/snapshot/` doesn't check versions, so it
   can replace the real cloud copy. A Render cold start longer than the 30 s fetch timeout is
   enough. It needs its own issue (not opened yet).
-- `MapAndBudgetFlowTests.testReorderingTheStopsAhead` fails after about 2:30 PM local time: the
-  sample stop is then "Done or underway". It fails on 413d299 too (came in with #27). Slice C
-  fixes it with #28's clock.
+- `MapAndBudgetFlowTests.testReorderingTheStopsAhead` fails on 413d299 too, so none of these
+  slices caused it. Its cause isn't settled: the time of day (the sample stop is "Done or
+  underway" after about 2:30 PM) or how iOS 27.2 labels the reorder control. Slice C looks at it.
 
 ## Documents
 
@@ -41,8 +41,8 @@ added to the brief as D requirements.
 | Human approval | Done | Abraham, November 18, in chat |
 | Persona round 3 (D rows) | Done | Five approvals; Marcus's must_fix (Skip ends the tutorial) fixed |
 | Build D (Saved list) | Built, reviewed, fixes re-reviewed | `feature/polish-saved-list`; 261 unit tests, targeted UI 16/16. W-9 proved by screenshot 09 (the test only checks the label) |
+| Build A (bar, Profile, logo) | Built; xhigh review running | `feature/polish-bar-profile`, 5 commits; 261 unit tests, UI 30/31 (the reorder test, which also fails on the base) |
 | Build E (tutorial) | Built, reviewed (pass); fixing review findings | `feature/polish-tutorial`; review: interrupted tutorial, pre-account saves, AX5, iPad width, double-tap |
-| Build A (bar, Profile, logo) | In progress | `feature/polish-bar-profile` |
 | Build B, C | Waiting | A and D merged; PR #28 |
 | Reviews and flow walk | Not started | |
 | Release | Not started | |
@@ -61,3 +61,4 @@ added to the brief as D requirements.
 | Nov 18 | Persona round 3 on D-1 to D-8: approvals; Marcus's must_fix fixed in D-1; "Added" became "In plan". |
 | Nov 18 | Slice D reviewed; five findings fixed and re-reviewed. |
 | Nov 18 | Slice E reviewed: D-1 passes. Decided: a tutorial that was started but not finished shows again at the next launch (it ends only with Skip or the last page). |
+| Nov 18 | The team asked for SVG Repo icons instead of the watercolor category pictures. SVG Repo blocked automated downloads, so the same Phosphor duotone icons (MIT) came from Phosphor's own package. Built in slice D (daed2a8). The glossy P stays as the app icon and logo. |

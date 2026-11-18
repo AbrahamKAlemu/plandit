@@ -10,7 +10,7 @@ AGENTS.md before it opens.
 | Slice | Outcome | Requirements | Depends on | Conflicts with |
 |---|---|---|---|---|
 | **A. Bar, Profile and logo** | Four-item bar; Profile per the design draft with Appearance and Account; nothing hidden under the bar; auth and iPad fixes; new app icon and logo | NAV-2–4, PRO-2–4, W-1, W-3–6, W-8, D-2, D-6, D-7, D-8 | `main` | None with PR #28 |
-| **D. Saved list** | Category pictures, Filter and Sort, slimmer rows with + and Added | D-3–5, PRC-5, W-7, W-9, W-10 | `main` | B (`SavedSheet`); B builds on it |
+| **D. Saved list** | Category icons, Filter and Sort, slimmer rows with + and Added | D-3–5, PRC-5, W-7, W-9, W-10 | `main` | B (`SavedSheet`); B builds on it |
 | **E. First-run tutorial** | Three pages for brand-new accounts | D-1 | `main` | None |
 | **B. Share and processing** | One-step share for links and videos; clearer finding-the-place flow; post screen fixes | SHR-1–6, PRC-1–4, PRC-6–8, W-11–14 | A, D, and PR #28 merged or rebased onto | PR #28 (`PlanditStore`, `SavedPostDetailView`) |
 | **C. Sheets and Today** | Solid sheet headers; rides instead of "0.0 mi"; Today's times agree | W-15–17 | PR #28 merged | PR #28 (`TodaySheet`) |
