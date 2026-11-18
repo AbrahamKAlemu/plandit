@@ -53,6 +53,35 @@ final class TutorialFlowTests: XCTestCase {
         XCTAssertFalse(relaunched.buttons["tutorial-skip"].exists, "a relaunch never repeats the tutorial")
     }
 
+    @MainActor func testSkipOnTheSecondPageOpensTheMapAndARelaunchDoesNotRepeatIt() {
+        skipsFromPage(2)
+    }
+
+    @MainActor func testSkipOnTheLastPageOpensTheMapAndARelaunchDoesNotRepeatIt() {
+        skipsFromPage(3)
+    }
+
+    /// Continue to `number`, then one tap on Skip closes the whole tutorial for good.
+    @MainActor private func skipsFromPage(_ number: Int) {
+        let app = launch(["-resetTutorial", "-showTutorial"])
+        let continueButton = app.buttons["tutorial-continue"]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 10))
+        for earlier in 1..<number {
+            XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-\(earlier)"]))
+            continueButton.tap()
+        }
+        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-\(number)"]), "on page \(number)")
+
+        app.buttons["tutorial-skip"].tap()
+        XCTAssertTrue(app.buttons["plan-button"].waitForExistence(timeout: 5), "Skip goes straight to the map")
+        XCTAssertFalse(app.buttons["tutorial-skip"].exists)
+
+        app.terminate()
+        let relaunched = launch(["-showTutorial"])
+        XCTAssertTrue(relaunched.buttons["plan-button"].waitForExistence(timeout: 10))
+        XCTAssertFalse(relaunched.buttons["tutorial-skip"].exists, "a relaunch never repeats the tutorial")
+    }
+
     @MainActor func testContinueWalksThroughThreePagesThenOpensTheMap() {
         let app = launch(["-resetTutorial", "-showTutorial"])
         let continueButton = app.buttons["tutorial-continue"]

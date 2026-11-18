@@ -97,10 +97,8 @@ private struct AccountGate: View {
             next.removeLocalData()
             tutorial.forget(userID: userID)
         }
-        let launch = TutorialLaunchOptions.current
-        if launch.resetsFinished { tutorial.forget(userID: user.id) }
         // Set with the session, in the same update, so the map never flashes first.
-        showsTutorial = tutorial.shouldShow(userID: user.id, isNewAccount: next.isNewAccount || launch.countsAsNewAccount)
+        showsTutorial = tutorial.decide(userID: user.id, isNewAccount: next.isNewAccount, launch: .current)
         // A re-bootstrap for the same user must not leave the old session attached to the API.
         session?.tearDown()
         session = next

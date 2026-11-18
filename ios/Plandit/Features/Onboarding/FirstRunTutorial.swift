@@ -17,8 +17,11 @@ struct FirstRunTutorial {
         "plandit.tutorialFinished.\(userID)"
     }
 
-    func shouldShow(userID: String, isNewAccount: Bool) -> Bool {
-        isNewAccount && !hasFinished(userID: userID)
+    /// The gate's whole decision, made once when a session opens: `-resetTutorial` first, then a
+    /// brand-new account (or one `-showTutorial` counts as new) that hasn't finished it here.
+    func decide(userID: String, isNewAccount: Bool, launch: TutorialLaunchOptions) -> Bool {
+        if launch.resetsFinished { forget(userID: userID) }
+        return (isNewAccount || launch.countsAsNewAccount) && !hasFinished(userID: userID)
     }
 
     func hasFinished(userID: String) -> Bool {
