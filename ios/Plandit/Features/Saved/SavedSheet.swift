@@ -74,7 +74,7 @@ struct SavedSheet: View {
                                     add(post)
                                 }
                                 .contextMenu {
-                                    SavedPostActions(post: post)
+                                    SavedPostActions(post: post) { add(post) }
                                 }
                                 .transition(.opacity.combined(with: .move(edge: .leading)))
                                 Hairline()
@@ -100,6 +100,12 @@ struct SavedSheet: View {
         }
         .background(Color.surface)
         .sensoryFeedback(.success, trigger: adds)
+        // Once a selected category's last place is gone, forget the selection for good, so a new
+        // place of that kind doesn't switch the filter back on by itself.
+        .onChange(of: groups.map(\.group)) {
+            query.forgetMissingGroup(in: store.saved)
+        }
+        .onAppear { query.forgetMissingGroup(in: store.saved) }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
@@ -138,6 +144,8 @@ struct SavedSheet: View {
         withAnimation(.snappy) { added = store.addToToday(post.id) }
         if added != nil {
             adds += 1
+            // The + button goes away, so VoiceOver focus has nowhere to land: say what happened.
+            AccessibilityNotification.Announcement("Added to today's plan").post()
         } else {
             router.savedPath = [post.id]
         }
@@ -171,13 +179,14 @@ struct SavedSheet: View {
 /// Context-menu actions for a saved post.
 struct SavedPostActions: View {
     let post: SavedPost
+    /// Adds the place the way the row's + does, with the same haptic and announcement.
+    let onAdd: () -> Void
     @Environment(PlanditStore.self) private var store
 
     var body: some View {
-        if post.isMappable, !store.isInToday(post) {
-            Button {
-                withAnimation(.snappy) { _ = store.addToToday(post.id) }
-            } label: {
+        // Offered exactly when the row shows +, so a needs-review place gets checked first.
+        if SavedRowTrailing(post: post, isInToday: store.isInToday(post)) == .add {
+            Button(action: onAdd) {
                 Label("Add to today's plan", image: "Icons/plus")
             }
         }
