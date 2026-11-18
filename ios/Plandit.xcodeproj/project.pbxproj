@@ -88,6 +88,7 @@
 		B0206DFED4B8F5D6820C4522 /* Manrope-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */; };
 		B12B69D88FC4D16C3A7F2C41 /* CostSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F358ABB1B4DFC14DB5EBD8AA /* CostSheets.swift */; };
 		B18352F1792316B7AD4F7D58 /* EmailAuthScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CDBC891880C9C11C0E9D77 /* EmailAuthScreen.swift */; };
+		B2B015926A06C7644DBADCB0 /* AppClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC68757C556EA2439B90C22F /* AppClock.swift */; };
 		B448D962B55510A097269DAC /* AuthCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 160549CC57FCC01975FCA572 /* AuthCopy.swift */; };
 		B467E165578D4186C2CF53BD /* VideoEvidenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D85A1302B2BD6C3898A030A /* VideoEvidenceTests.swift */; };
 		B519DE4BBAC4B86289A988BD /* AppearanceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD1E7E04067200EB6C8B550 /* AppearanceMode.swift */; };
@@ -270,6 +271,7 @@
 		F605D0A954D4585097AF91B1 /* PlanTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanTimeline.swift; sourceTree = "<group>"; };
 		F6194CE06CC90504B47F20BF /* DayPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayPlan.swift; sourceTree = "<group>"; };
 		FB333CD79DB125872198E3A4 /* LinkParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkParsing.swift; sourceTree = "<group>"; };
+		FC68757C556EA2439B90C22F /* AppClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppClock.swift; sourceTree = "<group>"; };
 		FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		FDDA1ED604FAB38E98696BF3 /* AppearanceModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceModeTests.swift; sourceTree = "<group>"; };
 		FF989FD1B55446132D369CCC /* SupportedSocialURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedSocialURL.swift; sourceTree = "<group>"; };
@@ -569,6 +571,7 @@
 		FF1A6CCAF77A1F49C0A84418 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				FC68757C556EA2439B90C22F /* AppClock.swift */,
 				F6194CE06CC90504B47F20BF /* DayPlan.swift */,
 				ACFD703776492C3DC31EC893 /* Formatting.swift */,
 				2E28CCCF74AAA2AC8972B24A /* Place.swift */,
@@ -752,6 +755,7 @@
 				F80F590103E7CB97970C9FED /* AccountSeed.swift in Sources */,
 				792EA6B3041E89CD7C17D6FE /* AccountSession.swift in Sources */,
 				879882A30F7DDD3D077382B5 /* AddLinkSheet.swift in Sources */,
+				B2B015926A06C7644DBADCB0 /* AppClock.swift in Sources */,
 				D2A118CC181CB4CBCC01E532 /* Appearance.swift in Sources */,
 				283E80DF9A999A7EE15E76FC /* AppearanceMode.swift in Sources */,
 				2430ECB25FF21C26D5EFDD79 /* AppleNonce.swift in Sources */,

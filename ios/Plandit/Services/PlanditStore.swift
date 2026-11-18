@@ -682,12 +682,27 @@ final class PlanditStore {
     func addToToday(_ postID: UUID) -> UUID? {
         guard let post = post(id: postID), !isInToday(post), let candidate = PlanCandidate(post: post) else { return nil }
         let wasEmpty = today.stops.isEmpty
-        today = today.inserting(candidate, travel: travelPreference).plan
+        today = today.inserting(candidate, travel: travelPreference, now: AppClock.now).plan
         if wasEmpty { today.title = Self.title(for: today.stops) }
         persist()
         events?(.planBuilt)
         Task { await loadRoutes() }
         return candidate.id
+    }
+
+    /// Stops whose time is over but aren't marked done (`DayPlan.overdueStops`).
+    func overdueStops(now: Date = AppClock.now) -> [PlanStop] {
+        today.overdueStops(now: now)
+    }
+
+    func markOverdueDone(now: Date = AppClock.now) {
+        today.markOverdueDone(now: now)
+        persist()
+    }
+
+    func startRestFromNow(now: Date = AppClock.now) {
+        today.startRestFromNow(now: now)
+        persist()
     }
 
     /// The stops still ahead, in a new order, before saving it.

@@ -89,6 +89,42 @@ extension DayPlan {
         return Insertion(plan: plan, position: position, lateMinutes: late, newlyLateStops: newlyLate, score: score)
     }
 
+    // MARK: - Catching up with the clock
+
+    /// How long past a stop's planned end before Today asks about it.
+    static let catchUpGraceMinutes = 10
+
+    /// Stops not marked done whose planned time is over. Today asks whether you went or are running behind.
+    func overdueStops(now: Date) -> [PlanStop] {
+        let cutoff = now.addingTimeInterval(-TimeInterval(Self.catchUpGraceMinutes * 60))
+        return stops.filter { $0.status != .done && $0.end <= cutoff }
+    }
+
+    /// "Mark them done": every overdue stop (and anything before it) is done. The next stop is
+    /// underway if its time has started, otherwise still ahead.
+    mutating func markOverdueDone(now: Date) {
+        let overdue = Set(overdueStops(now: now).map(\.id))
+        guard let last = stops.lastIndex(where: { overdue.contains($0.id) }) else { return }
+        for index in stops.indices where index <= last {
+            stops[index].status = .done
+        }
+        if last + 1 < stops.count, stops[last + 1].start <= now {
+            stops[last + 1].status = .now
+        }
+    }
+
+    /// "Start from now": you're running behind, so the rest of the day moves later. A stop underway
+    /// runs until now; otherwise the first overdue stop starts now. Everything after moves by the same amount.
+    mutating func startRestFromNow(now: Date, calendar: Calendar = .current) {
+        guard let first = overdueStops(now: now).first else { return }
+        if first.status == .now {
+            let minutes = Int(now.roundedUpToFiveMinutes.timeIntervalSince(first.start) / 60)
+            setTime(ofStop: first.id, start: first.start, durationMinutes: max(first.durationMinutes, minutes), calendar: calendar)
+        } else {
+            setTime(ofStop: first.id, start: now.roundedUpToFiveMinutes, durationMinutes: first.durationMinutes, calendar: calendar)
+        }
+    }
+
     // MARK: - Reordering
 
     /// The stops still ahead in a new order. They're retimed one after another from when the first

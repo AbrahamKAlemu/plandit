@@ -65,6 +65,8 @@ struct TodaySheet: View {
                     } else {
                         PlanSummary(plan: plan) { isShowingBudget = true }
 
+                        CatchUpCard(plan: plan)
+
                         if plan.isComplete {
                             DayCompleteCard(plan: plan)
                                 .transition(.scale(scale: 0.96).combined(with: .opacity))
@@ -220,5 +222,70 @@ private struct DayCompleteCard: View {
         }
         .planditCard()
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Asks when the clock has passed stops that aren't marked done: did you go, or are you running behind?
+/// Without it, a day nobody updated shows afternoon stops as still ahead at night.
+private struct CatchUpCard: View {
+    let plan: DayPlan
+    @Environment(PlanditStore.self) private var store
+
+    var body: some View {
+        TimelineView(.everyMinute) { _ in
+            let now = AppClock.now
+            let overdue = plan.overdueStops(now: now)
+            if !overdue.isEmpty {
+                card(overdue, now: now)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private func card(_ overdue: [PlanStop], now: Date) -> some View {
+        let onlyUnderway = overdue.count == 1 && overdue[0].status == .now
+        let isToday = Calendar.current.isDate(plan.date, inSameDayAs: now)
+        return VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(alignment: .top, spacing: Space.sm) {
+                Icon(.clock, size: 20).foregroundStyle(.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(onlyUnderway ? "Still at \(overdue[0].place.name)?" : "Running behind?")
+                        .font(.cardHeading)
+                        .foregroundStyle(.ink)
+                    Text(Self.message(overdue, now: now, onlyUnderway: onlyUnderway, isToday: isToday))
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack(spacing: Space.sm) {
+                Button(onlyUnderway ? "Done here" : (overdue.count == 1 ? "Mark it done" : "Mark them done")) {
+                    withAnimation(.snappy) { store.markOverdueDone() }
+                }
+                .buttonStyle(.secondary)
+                .accessibilityIdentifier("catchup-done")
+                if isToday {
+                    Button(onlyUnderway ? "Still here" : "Start from now") {
+                        withAnimation(.snappy) { store.startRestFromNow() }
+                    }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("catchup-later")
+                }
+            }
+        }
+        .planditCard()
+    }
+
+    /// "It's 7:48 PM, past the times planned for The High Line, Los Tacos No. 1 and 2 more."
+    static func message(_ overdue: [PlanStop], now: Date, onlyUnderway: Bool, isToday: Bool) -> String {
+        if onlyUnderway {
+            return "It's \(now.shortTime). It was planned until \(overdue[0].end.shortTime). \"Still here\" moves the rest of the day later."
+        }
+        let names = overdue.map(\.place.name)
+        let listed = names.count <= 3 ? names : Array(names.prefix(2)) + ["\(names.count - 2) more"]
+        let past = "past the times planned for \(listed.formatted(.list(type: .and)))"
+        guard isToday else { return "This day is over, \(past)." }
+        let them = overdue.count == 1 ? "it" : "them"
+        return "It's \(now.shortTime), \(past). Mark \(them) done if you went, or start \(them) from now."
     }
 }

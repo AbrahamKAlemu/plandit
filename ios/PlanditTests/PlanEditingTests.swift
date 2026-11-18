@@ -230,4 +230,63 @@ import XCTest
         XCTAssertEqual(store.today.stops.map(\.id), Array(before[..<2]) + swapped)
         assertConsistent(store.today)
     }
+
+    // MARK: - Catching up with the clock
+
+    func testNothingIsOverdueUntilTenMinutesAfterAStopsTime() {
+        let plan = cleanDay()
+        let metEnds = plan.stops[1].end // the Met is underway
+        XCTAssertTrue(plan.overdueStops(now: plan.stops[1].start).isEmpty)
+        XCTAssertTrue(plan.overdueStops(now: metEnds.addingTimeInterval(9 * 60)).isEmpty)
+        XCTAssertEqual(plan.overdueStops(now: metEnds.addingTimeInterval(10 * 60)).map(\.place.name), ["The Met"])
+    }
+
+    func testMarkingOverdueStopsDoneMakesTheOneStartedNow() {
+        var plan = cleanDay()
+        let now = plan.stops[4].start.addingTimeInterval(5 * 60) // just after Washington Square starts
+        let overdue = plan.overdueStops(now: now).map(\.id)
+        XCTAssertEqual(overdue, plan.stops[1...3].map(\.id))
+        plan.markOverdueDone(now: now)
+        XCTAssertEqual(plan.stops.map(\.status), [.done, .done, .done, .done, .now, .upcoming])
+        XCTAssertTrue(plan.overdueStops(now: now).isEmpty)
+    }
+
+    func testMarkingDoneBeforeTheNextStopStartsLeavesItAhead() {
+        var plan = cleanDay()
+        let now = plan.stops[1].end.addingTimeInterval(11 * 60) // on the way to the High Line
+        plan.markOverdueDone(now: now)
+        XCTAssertEqual(plan.stops.map(\.status), [.done, .done, .upcoming, .upcoming, .upcoming, .upcoming])
+    }
+
+    func testStillHereRunsTheStopUntilNowAndMovesTheRestLater() {
+        var plan = cleanDay()
+        let before = plan.stops
+        let now = before[1].end.addingTimeInterval(17 * 60)
+        let roundedNow = Date(timeIntervalSinceReferenceDate: (now.timeIntervalSinceReferenceDate / 300).rounded(.up) * 300)
+        plan.startRestFromNow(now: now)
+        XCTAssertEqual(plan.stops[1].end, roundedNow, "the Met runs until now")
+        XCTAssertEqual(plan.stops[1].status, .now)
+        let moved = roundedNow.timeIntervalSince(before[1].end)
+        XCTAssertEqual(plan.stops[2].start, before[2].start.addingTimeInterval(moved))
+        XCTAssertEqual(plan.stops[5].start, before[5].start.addingTimeInterval(moved))
+        XCTAssertTrue(plan.overdueStops(now: now).isEmpty)
+    }
+
+    func testStartFromNowMovesTheFirstMissedStopToNow() {
+        var plan = cleanDay()
+        plan.stops[1].status = .done // left the Met, never tapped anything after
+        let before = plan.stops
+        let now = at(16, 3, on: plan)
+        plan.startRestFromNow(now: now)
+        XCTAssertEqual(plan.stops[2].start, at(16, 5, on: plan))
+        let moved = plan.stops[2].start.timeIntervalSince(before[2].start)
+        XCTAssertEqual(plan.stops[5].start, before[5].start.addingTimeInterval(moved))
+        XCTAssertTrue(plan.overdueStops(now: now).isEmpty)
+        assertConsistent(plan)
+    }
+
+    func testTripTextOnThePostScreen() {
+        let plan = cleanDay()
+        XCTAssertEqual(TodayPlacementText.trip(plan.legs[2], from: plan.stops[2]), "\(plan.legs[2].minutes.durationText) walk from The High Line")
+    }
 }

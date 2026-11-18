@@ -8,7 +8,7 @@ final class MapAndBudgetFlowTests: XCTestCase {
 
     @MainActor private func launch() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large"]
+        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "11:00"]
         app.launch()
         return app
     }
@@ -136,7 +136,7 @@ final class MapAndBudgetFlowTests: XCTestCase {
 
     @MainActor func testAddingASavedPlaceSaysWhereItLanded() {
         let app = XCUIApplication()
-        app.launchArguments = ["-skipAuth", "-resetData", "-startTab", "saved", "-startDetent", "large"]
+        app.launchArguments = ["-skipAuth", "-resetData", "-startTab", "saved", "-startDetent", "large", "-clock", "11:00"]
         app.launch()
         let levain = app.staticTexts["Levain Bakery"].firstMatch
         XCTAssertTrue(levain.waitForExistence(timeout: 5))
@@ -147,6 +147,24 @@ final class MapAndBudgetFlowTests: XCTestCase {
         let placement = app.staticTexts["today-placement"]
         XCTAssertTrue(placement.waitForExistence(timeout: 3))
         XCTAssertTrue(placement.label.hasPrefix("Stop "), placement.label)
+        XCTAssertTrue(app.staticTexts["today-placement-trip"].label.contains("from"))
+
+        // Out of today, still saved.
+        app.buttons["remove-from-today"].tap()
+        XCTAssertTrue(app.buttons["Add to today's plan"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor func testRunningBehindCardCatchesUpWithTheClock() {
+        let app = XCUIApplication()
+        // 4 PM: the Met, the High Line and Los Tacos are all past their planned times.
+        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "16:00"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Running behind?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["catchup-later"].exists)
+        app.buttons["catchup-done"].tap()
+        XCTAssertTrue(app.staticTexts["Running behind?"].waitForNonExistence(timeout: 3))
+        let park = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Washington Square Park'")).firstMatch
+        XCTAssertTrue(park.label.hasPrefix("Stop 5, Now"), park.label)
     }
 
     @MainActor func testChangingAStopsCost() {
