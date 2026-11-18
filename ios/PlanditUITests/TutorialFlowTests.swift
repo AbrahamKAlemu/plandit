@@ -18,10 +18,10 @@ final class TutorialFlowTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    @MainActor private func launch(_ arguments: [String]) -> XCUIApplication {
+    @MainActor private func launch(_ arguments: [String], textSize: String? = nil) -> XCUIApplication {
         let environment = ProcessInfo.processInfo.environment
         var display = ["-plandit.appearanceMode", environment["TUTORIAL_APPEARANCE"] ?? "light"]
-        if let size = environment["TUTORIAL_TEXT_SIZE"] {
+        if let size = textSize ?? environment["TUTORIAL_TEXT_SIZE"] {
             display += ["-UIPreferredContentSizeCategoryName", size]
         }
         let app = XCUIApplication()
@@ -125,6 +125,21 @@ final class TutorialFlowTests: XCTestCase {
 
         continueButton.tap()
         XCTAssertTrue(app.buttons["plan-button"].waitForExistence(timeout: 5))
+    }
+
+    /// At the largest accessibility text size the words come first: the drawing steps aside.
+    @MainActor func testAtTheLargestTextSizeTheWordsSitAboveContinue() {
+        let app = launch(["-resetTutorial", "-showTutorial"], textSize: "UICTContentSizeCategoryAccessibilityXXXL")
+        let continueButton = app.buttons["tutorial-continue"]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 10))
+
+        for number in 1...3 {
+            let title = app.staticTexts["tutorial-title-\(number)"]
+            XCTAssertTrue(waitUntilHittable(title), "page \(number)")
+            XCTAssertLessThanOrEqual(title.frame.maxY, continueButton.frame.minY, "page \(number): the whole title is above Continue")
+            XCTAssertLessThan(app.staticTexts["tutorial-subtitle-\(number)"].frame.minY, continueButton.frame.minY, "page \(number): the subtitle starts above it")
+            if number < 3 { continueButton.tap() }
+        }
     }
 
     @MainActor func testSwipeMovesForward() {

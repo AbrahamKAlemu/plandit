@@ -123,14 +123,18 @@ private struct TutorialWordmark: View {
 private struct TutorialPageView: View {
     let page: TutorialPage
     var focusedTitle: AccessibilityFocusState<TutorialPage?>.Binding
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                TutorialIllustration(page: page)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.canvas)
-                Hairline()
+                // At accessibility text sizes the words come first; the drawing is decoration.
+                if !dynamicTypeSize.isAccessibilitySize {
+                    TutorialIllustration(page: page)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.canvas)
+                    Hairline()
+                }
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(page.title)
                         .font(.sectionHeading)
