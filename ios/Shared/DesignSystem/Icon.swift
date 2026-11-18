@@ -8,6 +8,7 @@ enum Lucide: String {
     case calendarDays = "calendar-days"
     case chevronLeft = "chevron-left"
     case chevronRight = "chevron-right"
+    case arrowUpDown = "arrow-up-down"
     case circleAlert = "circle-alert"
     case circleCheck = "circle-check"
     case clipboardPaste = "clipboard-paste"

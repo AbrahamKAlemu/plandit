@@ -7,6 +7,7 @@ struct TodaySheet: View {
     @Environment(SheetRouter.self) private var router
     @State private var isAddingLink = false
     @State private var isShowingBudget = false
+    @State private var isReordering = false
 
     var body: some View {
         let plan = store.today
@@ -80,6 +81,23 @@ struct TodaySheet: View {
                             .transition(.opacity)
                         }
 
+                        if plan.stops.count - plan.firstMovableIndex >= 2 {
+                            HStack {
+                                SectionTitle("Stops")
+                                Spacer()
+                                Button { isReordering = true } label: {
+                                    HStack(spacing: Space.xxs) {
+                                        Icon(.arrowUpDown, size: 16)
+                                        Text("Reorder")
+                                    }
+                                    .font(.label)
+                                    .foregroundStyle(.ink)
+                                    .frame(minHeight: 44)
+                                    .contentShape(Rectangle())
+                                }
+                                .accessibilityIdentifier("reorder-stops")
+                            }
+                        }
                         PlanTimeline(plan: plan)
                     }
                 }
@@ -95,6 +113,7 @@ struct TodaySheet: View {
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
+        .sheet(isPresented: $isReordering) { ReorderStopsSheet() }
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
                 // Same landing as from Saved: watch the new post get mapped.

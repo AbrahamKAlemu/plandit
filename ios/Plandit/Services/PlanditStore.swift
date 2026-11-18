@@ -676,26 +676,31 @@ final class PlanditStore {
 
     // MARK: - Today's plan
 
-    /// Appends a saved place to the end of today. TODO: let the planner re-optimize order, time and budget.
+    /// Fits a saved place into the part of today still ahead, where it's open, adds the least travel
+    /// and moves the fewest stops (`DayPlan.inserting`). Returns the new stop's id.
     @discardableResult
     func addToToday(_ postID: UUID) -> UUID? {
-        guard let post = post(id: postID), let place = post.place, !isInToday(post) else { return nil }
-        let start = (today.stops.last?.end ?? .now).addingTimeInterval(20 * 60)
-        let stop = PlanStop(
-            place: place,
-            start: start,
-            durationMinutes: 60,
-            estimatedCost: post.plannedCost ?? 0,
-            note: "Added from your saved \(post.platform.displayName) post.",
-            sourcePostID: post.id,
-            status: .upcoming
-        )
-        today.stops.append(stop)
-        rebuildLegs()
+        guard let post = post(id: postID), !isInToday(post), let candidate = PlanCandidate(post: post) else { return nil }
+        let wasEmpty = today.stops.isEmpty
+        today = today.inserting(candidate, travel: travelPreference).plan
+        if wasEmpty { today.title = Self.title(for: today.stops) }
         persist()
         events?(.planBuilt)
         Task { await loadRoutes() }
-        return stop.id
+        return candidate.id
+    }
+
+    /// The stops still ahead, in a new order, before saving it.
+    func previewReorder(_ ids: [UUID]) -> DayPlan {
+        today.reordered(ids, travel: travelPreference)
+    }
+
+    func reorder(_ ids: [UUID]) {
+        let plan = today.reordered(ids, travel: travelPreference)
+        guard plan.stops.map(\.id) != today.stops.map(\.id) else { return }
+        today = plan
+        persist()
+        Task { await loadRoutes() }
     }
 
     func removeStop(_ id: UUID) {
@@ -725,10 +730,7 @@ final class PlanditStore {
 
     /// Keeps existing legs between consecutive stops and estimates any new pairs.
     private func rebuildLegs() {
-        let existing = today.legs
-        today.legs = zip(today.stops, today.stops.dropFirst()).map { from, to in
-            existing.first { $0.fromStopID == from.id && $0.toStopID == to.id } ?? .estimate(from: from, to: to, travel: travelPreference)
-        }
+        today.relinkLegs(travel: travelPreference)
     }
 
     // MARK: - Planning (the + button)

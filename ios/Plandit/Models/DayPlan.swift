@@ -363,7 +363,7 @@ extension DayPlan {
 
     /// Moves upcoming stops from `first` on by `delta`. A stop never starts before the one ahead of it
     /// has ended and the trip is made; evening spots still start at 8 PM or later.
-    private mutating func shiftStops(from first: Int, by delta: TimeInterval, calendar: Calendar) {
+    mutating func shiftStops(from first: Int, by delta: TimeInterval, calendar: Calendar) {
         guard first > 0 else { return }
         for index in first..<stops.count where stops[index].status == .upcoming {
             let previous = stops[index - 1]

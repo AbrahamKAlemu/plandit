@@ -48,16 +48,19 @@
 		517394DC5F645B2FC8A9F331 /* Manrope-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 607D379D700BA35A0A7195C5 /* Manrope-Medium.ttf */; };
 		51FD667350DBD3FECEB66BA0 /* TravelOptionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D23D940E83BF19D7F19169F9 /* TravelOptionsSheet.swift */; };
 		530F8011987F0C68715BD833 /* BudgetSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3964B1CA69E4FB130554B3A /* BudgetSheet.swift */; };
+		55C2D0288CE7C95364520F43 /* PlanEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6988A285D9FFB29E8A68A731 /* PlanEditing.swift */; };
 		5D824D7142CA2510CA13B630 /* MapPins.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E71E938405EB27C0E59A78 /* MapPins.swift */; };
 		5DFC02CFD35AD7BF726BBAE7 /* StopTimeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C55D01DF203BA000D57AA263 /* StopTimeSheet.swift */; };
 		5ED62F82212F7CA320DA7DF6 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1C596E2ABCB67CA282FECB5 /* SharedAssets.xcassets */; };
 		6350623DF9FDA26C328F7139 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 52CA16854FC3E070D22C7C3D /* PrivacyInfo.xcprivacy */; };
 		6355BA14AD5CD7D21C3DA9A1 /* DayPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01179677A217C998F2303294 /* DayPlannerTests.swift */; };
 		64D3FAA53F2A3C9A0036975A /* WelcomeFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47AC59B4BB383A03DDC1BF5A /* WelcomeFlowTests.swift */; };
+		6694DA02A5D9C008F929776E /* ReorderStopsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC3E1B0D675F10C0A0CDA762 /* ReorderStopsSheet.swift */; };
 		69089531C79E2B10ADF91871 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = FC93CE5CD9329CF1FF22F9F5 /* OFL.txt */; };
 		6BF0493BFA3BFAE66BD288B9 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49054A5C535AFD8CFA871269 /* UserProfile.swift */; };
 		6D047D0F105CE4E684E1424C /* StopTimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E792BAD6BC55F331429035C8 /* StopTimeTests.swift */; };
 		6DE84FA95FE1D653B6059096 /* SupabaseAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A50233F438C1A78F9ED4A48 /* SupabaseAuthClient.swift */; };
+		6EBB8C74139932A5BEC1D09C /* PlanEditingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02404D4786292EB10D4AB473 /* PlanEditingTests.swift */; };
 		72AEDB2B129F99302B53F0FB /* AuthFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2052F43FDBA0592FCD2338B7 /* AuthFlowView.swift */; };
 		73938BD2A6979E356613CADD /* RouteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59E8E23998E8DD242E27519 /* RouteService.swift */; };
 		73D48A0AD28104A77B823914 /* Pricing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36542D0F2B447885F6543625 /* Pricing.swift */; };
@@ -163,6 +166,7 @@
 
 /* Begin PBXFileReference section */
 		01179677A217C998F2303294 /* DayPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayPlannerTests.swift; sourceTree = "<group>"; };
+		02404D4786292EB10D4AB473 /* PlanEditingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditingTests.swift; sourceTree = "<group>"; };
 		02478BB0AE325B5DE3547770 /* AccountModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountModel.swift; sourceTree = "<group>"; };
 		092CB3E68477D4DBAE321AAC /* PlaceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceExtractor.swift; sourceTree = "<group>"; };
 		0B51020694775E70488C05BD /* PlanBuildingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanBuildingTests.swift; sourceTree = "<group>"; };
@@ -202,6 +206,7 @@
 		6474A7DD8812B6D8B03AE5CF /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		66ADDD9568AE6197BC040C05 /* AppearanceFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceFlowTests.swift; sourceTree = "<group>"; };
 		66E71E938405EB27C0E59A78 /* MapPins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapPins.swift; sourceTree = "<group>"; };
+		6988A285D9FFB29E8A68A731 /* PlanEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditing.swift; sourceTree = "<group>"; };
 		6A50233F438C1A78F9ED4A48 /* SupabaseAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuthClient.swift; sourceTree = "<group>"; };
 		7191C0F5D85E96A38F7A0440 /* VideoEvidenceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEvidenceExtractor.swift; sourceTree = "<group>"; };
 		7A0D8D86876DB353253B402A /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
@@ -250,6 +255,7 @@
 		D7DF7345CB5D1CCD4457BC00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D81018BE6B56BCDCC955FDBF /* AccountSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSession.swift; sourceTree = "<group>"; };
 		DABB71B38BB71279BDBE8730 /* MapViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewport.swift; sourceTree = "<group>"; };
+		DC3E1B0D675F10C0A0CDA762 /* ReorderStopsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReorderStopsSheet.swift; sourceTree = "<group>"; };
 		DC9522645F592BE457D9E1E5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		DCCE2C042090764A16B12587 /* PlanditStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditStore.swift; sourceTree = "<group>"; };
 		DF8A47F0B3B897F2AF699F74 /* PlanditAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditAPIClient.swift; sourceTree = "<group>"; };
@@ -463,6 +469,7 @@
 				C5E8A490C7A15655F2AEABAE /* MapAndBudgetTests.swift */,
 				0B51020694775E70488C05BD /* PlanBuildingTests.swift */,
 				E617A3E3996B4A8A800A2725 /* PlanditStoreTests.swift */,
+				02404D4786292EB10D4AB473 /* PlanEditingTests.swift */,
 				C343DED8648F131B64A81DBF /* SavedPostPersistenceTests.swift */,
 				E792BAD6BC55F331429035C8 /* StopTimeTests.swift */,
 				AC13355B43D3344040BFB958 /* SupportedSocialURLTests.swift */,
@@ -492,6 +499,7 @@
 				A3964B1CA69E4FB130554B3A /* BudgetSheet.swift */,
 				F358ABB1B4DFC14DB5EBD8AA /* CostSheets.swift */,
 				F605D0A954D4585097AF91B1 /* PlanTimeline.swift */,
+				DC3E1B0D675F10C0A0CDA762 /* ReorderStopsSheet.swift */,
 				900873E088C5FBF07FCF5247 /* StopDetailView.swift */,
 				C55D01DF203BA000D57AA263 /* StopTimeSheet.swift */,
 				130BEB57FE12B63F0783900B /* TodaySheet.swift */,
@@ -565,6 +573,7 @@
 				ACFD703776492C3DC31EC893 /* Formatting.swift */,
 				2E28CCCF74AAA2AC8972B24A /* Place.swift */,
 				634837C4E853C6B8E396996B /* PlaceCandidate.swift */,
+				6988A285D9FFB29E8A68A731 /* PlanEditing.swift */,
 				36542D0F2B447885F6543625 /* Pricing.swift */,
 				EA42EFDFC3C4B3021E413BFE /* SampleData.swift */,
 				F4EA2889EFD0ED181368F449 /* SavedPost.swift */,
@@ -772,6 +781,7 @@
 				0FA94B96F53BBCEABF0313D6 /* PlaceCandidate.swift in Sources */,
 				7863B1012507869EE8C85C12 /* PlaceExtractor.swift in Sources */,
 				A6CC10B3F75C6F24FC7B8455 /* PlanBuilderSheet.swift in Sources */,
+				55C2D0288CE7C95364520F43 /* PlanEditing.swift in Sources */,
 				C09E519668C9F27F08946702 /* PlanTimeline.swift in Sources */,
 				F3ECC0B67465D390236E010B /* PlanditAPIClient.swift in Sources */,
 				E72A34A8A8B8ED762ACFEBE4 /* PlanditApp.swift in Sources */,
@@ -781,6 +791,7 @@
 				73D48A0AD28104A77B823914 /* Pricing.swift in Sources */,
 				D0042643FC621187A32463D4 /* ProfileEditScreens.swift in Sources */,
 				DB5B30AA8B4F3B1FAA596D8B /* ProfileSheet.swift in Sources */,
+				6694DA02A5D9C008F929776E /* ReorderStopsSheet.swift in Sources */,
 				C61509BBB72504682D435CF3 /* RootView.swift in Sources */,
 				73938BD2A6979E356613CADD /* RouteService.swift in Sources */,
 				AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */,
@@ -817,6 +828,7 @@
 				4ADD79344CE771A21701EDE7 /* FixturePlaceExtractorTests.swift in Sources */,
 				4D0061A69E96C678883FC15E /* MapAndBudgetTests.swift in Sources */,
 				1D1F4CF206B4F980B4C10322 /* PlanBuildingTests.swift in Sources */,
+				6EBB8C74139932A5BEC1D09C /* PlanEditingTests.swift in Sources */,
 				80B1FC38577F76229B5AA280 /* PlanditStoreTests.swift in Sources */,
 				3EBD5EACA826F5A6D6731964 /* SavedPostPersistenceTests.swift in Sources */,
 				6D047D0F105CE4E684E1424C /* StopTimeTests.swift in Sources */,

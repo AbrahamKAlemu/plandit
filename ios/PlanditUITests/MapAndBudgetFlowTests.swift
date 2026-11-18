@@ -107,6 +107,48 @@ final class MapAndBudgetFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["stop-time"].label.contains("1 hr"))
     }
 
+    @MainActor func testReorderingTheStopsAhead() {
+        let app = launch()
+        let reorder = app.buttons["reorder-stops"]
+        XCTAssertTrue(reorder.waitForExistence(timeout: 5))
+        scrollTo(reorder, in: app)
+        reorder.tap()
+        XCTAssertTrue(app.navigationBars["Reorder"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Done or underway"].exists)
+
+        // Drag the High Line below Los Tacos.
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'was'")).firstMatch.exists,
+                       "nothing moves until you drag")
+        let highLine = app.buttons["Reorder Stop 3"]
+        let tacos = app.buttons["Reorder Stop 4"]
+        XCTAssertTrue(highLine.waitForExistence(timeout: 3))
+        highLine.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.6, thenDragTo: tacos.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.2)))
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'was'")).firstMatch.waitForExistence(timeout: 3),
+                      "moved stops show their old time")
+        app.buttons["reorder-save"].tap()
+
+        XCTAssertTrue(app.navigationBars["Reorder"].waitForNonExistence(timeout: 3))
+        let tacosRow = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch
+        let highLineRow = app.buttons.containing(NSPredicate(format: "label CONTAINS 'The High Line'")).firstMatch
+        XCTAssertLessThan(tacosRow.frame.minY, highLineRow.frame.minY, "Los Tacos now comes first")
+    }
+
+    @MainActor func testAddingASavedPlaceSaysWhereItLanded() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-skipAuth", "-resetData", "-startTab", "saved", "-startDetent", "large"]
+        app.launch()
+        let levain = app.staticTexts["Levain Bakery"].firstMatch
+        XCTAssertTrue(levain.waitForExistence(timeout: 5))
+        levain.tap()
+        let add = app.buttons["Add to today's plan"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        let placement = app.staticTexts["today-placement"]
+        XCTAssertTrue(placement.waitForExistence(timeout: 3))
+        XCTAssertTrue(placement.label.hasPrefix("Stop "), placement.label)
+    }
+
     @MainActor func testChangingAStopsCost() {
         let app = launch()
         let stop = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch
