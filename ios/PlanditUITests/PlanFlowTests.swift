@@ -105,7 +105,7 @@ final class PlanFlowTests: XCTestCase {
     @MainActor func testPlacesShowWhenTheyWereSaved() {
         let app = launch()
         openPlanner(app)
-        XCTAssertTrue(app.buttons["pick-Levain Bakery"].label.contains("Saved yesterday"))
+        XCTAssertTrue(app.buttons["pick-Levain Bakery"].label.contains("Yesterday"))
     }
 
     @MainActor func testBudgetStepperChangesTheBudget() {

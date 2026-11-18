@@ -232,19 +232,24 @@ final class PlanBuildingTests: XCTestCase {
     @MainActor func testSavedAgoText() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        calendar.locale = Locale(identifier: "en_US")
         let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 12))!
-        func text(daysAgo: Int) -> String {
+        func text(daysAgo: Int, hour: Int = 12) -> String {
             var post = SampleData.levainPost
-            post.savedAt = calendar.date(byAdding: .day, value: -daysAgo, to: now)!
+            let day = calendar.date(byAdding: .day, value: -daysAgo, to: now)!
+            post.savedAt = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day)!
             return post.savedAgoText(now: now, calendar: calendar)
         }
-        XCTAssertEqual(text(daysAgo: 0), "Saved today")
-        XCTAssertEqual(text(daysAgo: 1), "Saved yesterday")
-        XCTAssertEqual(text(daysAgo: 3), "Saved 3 days ago")
-        XCTAssertEqual(text(daysAgo: 20), "Saved 2 weeks ago")
-        XCTAssertEqual(text(daysAgo: 95), "Saved 3 months ago")
-        XCTAssertEqual(text(daysAgo: 400), "Saved over a year ago")
-        XCTAssertEqual(text(daysAgo: 800), "Saved 2 years ago")
+        XCTAssertEqual(text(daysAgo: 0), "Today")
+        XCTAssertEqual(text(daysAgo: 0, hour: 0), "Today")
+        XCTAssertEqual(text(daysAgo: 1, hour: 23), "Yesterday", "counts calendar days, not 24-hour spans")
+        XCTAssertEqual(text(daysAgo: 2), "2 days ago")
+        XCTAssertEqual(text(daysAgo: 6), "6 days ago")
+        XCTAssertEqual(text(daysAgo: 7), "Oct 15")
+        XCTAssertEqual(text(daysAgo: 20), "Oct 2")
+        XCTAssertEqual(text(daysAgo: 294), "Jan 1", "same year, no year")
+        XCTAssertEqual(text(daysAgo: 295), "Dec 31, 2025", "an earlier year adds the year")
+        XCTAssertEqual(text(daysAgo: -1), "Today", "a clock that ran ahead still reads Today")
     }
 
     @MainActor func testPlanTitles() {
