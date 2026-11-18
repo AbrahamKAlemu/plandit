@@ -119,8 +119,9 @@ final class MapAndBudgetFlowTests: XCTestCase {
         // Drag the High Line below Los Tacos.
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS ', was '")).firstMatch.exists,
                        "nothing moves until you drag")
-        let highLine = app.buttons["Reorder The High Line"]
-        let tacos = app.buttons["Reorder Los Tacos No. 1"]
+        // The drag handle reads "Reorder " plus the row's label ("The High Line, stop 3, 1:20 PM"), so match the start.
+        let highLine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder The High Line'")).firstMatch
+        let tacos = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder Los Tacos No. 1'")).firstMatch
         XCTAssertTrue(highLine.waitForExistence(timeout: 3))
         highLine.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.6, thenDragTo: tacos.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.2)))
