@@ -100,4 +100,23 @@ final class UserStatsTests: XCTestCase {
         XCTAssertEqual(plan(cost: 60, budget: 60).budgetMark, "On budget")
         XCTAssertNil(plan(cost: 38).budgetMark)
     }
+
+    /// The cost is rounded to whole dollars once, and the text, the mark and the color all come
+    /// from that one number, so the row never contradicts itself at a half dollar.
+    @MainActor func testPastPlanRowAgreesWithItselfAtHalfDollars() {
+        let date = Date.now
+        let cases: [(cost: Double, shown: String, mark: String, over: Bool)] = [
+            (37.50, "$38", "$22 under", false),
+            (60.50, "$61", "$1 over", true),
+            (59.50, "$60", "On budget", false),
+            (60.00, "$60", "On budget", false),
+        ]
+        for c in cases {
+            let row = plan(date, cost: c.cost, budget: 60)
+            XCTAssertEqual(row.summaryText, "\(date.shortDay) · 3 stops · \(c.shown) per person", "cost \(c.cost)")
+            XCTAssertEqual(row.budgetMark, c.mark, "cost \(c.cost)")
+            XCTAssertEqual(row.isOverBudget, c.over, "cost \(c.cost): green only when not over")
+        }
+        XCTAssertFalse(plan(cost: 80).isOverBudget, "no budget recorded, so never marked over")
+    }
 }
