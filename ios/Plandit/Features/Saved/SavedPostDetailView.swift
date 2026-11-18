@@ -104,6 +104,8 @@ struct SavedPostDetailView: View {
                                 .frame(maxWidth: .infinity, minHeight: 48)
                                 .transition(.scale(scale: 0.9).combined(with: .opacity))
 
+                                TodayPlacement(postID: post.id)
+
                                 Button {
                                     router.show(.today)
                                 } label: {
@@ -511,5 +513,49 @@ struct SourceCard: View {
             }
         }
         .planditCard()
+    }
+}
+
+/// Where a saved place landed in today's plan, and anything that needs a look:
+/// "Stop 4 · 2:30–3:15 PM", "Closes at 9 PM", "$5 over today's budget".
+private struct TodayPlacement: View {
+    let postID: UUID
+    @Environment(PlanditStore.self) private var store
+
+    var body: some View {
+        let plan = store.today
+        if let index = plan.stops.firstIndex(where: { $0.sourcePostID == postID }) {
+            let stop = plan.stops[index]
+            VStack(spacing: Space.xxs) {
+                Text("Stop \(index + 1) · \(stop.start.shortTime)–\(stop.end.shortTime)")
+                    .font(.bodyText)
+                    .foregroundStyle(.ink)
+                    .accessibilityIdentifier("today-placement")
+                ForEach(warnings(stop, in: plan), id: \.self) { warning in
+                    Text(warning).font(.metadata).foregroundStyle(Color.error).multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func warnings(_ stop: PlanStop, in plan: DayPlan) -> [String] {
+        var lines: [String] = []
+        if let close = stop.place.closingTime(on: stop.start) {
+            let minutes = Int(close.timeIntervalSince(stop.start) / 60)
+            if minutes <= 0 {
+                lines.append("\(stop.place.name) closes at \(close.shortTime), before you'd get there.")
+            } else if minutes < DayPlanner.minimumStayMinutes {
+                lines.append("\(stop.place.name) closes at \(close.shortTime), so you'd only have \(minutes.durationText) there.")
+            }
+        }
+        let late = plan.stopsArrivingAfterClose().filter { $0.id != stop.id }
+        if !late.isEmpty {
+            lines.append("You'd get to \(late.map(\.place.name).formatted(.list(type: .and))) after closing.")
+        }
+        if plan.remaining < 0 {
+            lines.append("Today is \((-plan.remaining).wholeDollarsText) over budget.")
+        }
+        return lines
     }
 }
