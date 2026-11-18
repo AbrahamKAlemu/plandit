@@ -74,7 +74,7 @@ struct EmailAuthScreen: View {
 
                 AuthTextField(
                     label: AuthCopy.password,
-                    hint: AuthCopy.passwordHint,
+                    hint: mode == .signUp ? AuthCopy.passwordHint : nil,
                     text: $password,
                     isSecure: true,
                     contentType: mode == .signUp ? .newPassword : .password,
