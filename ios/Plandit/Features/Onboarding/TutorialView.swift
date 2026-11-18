@@ -95,11 +95,11 @@ struct TutorialView: View {
         guard let next = page.next else { return onFinish() }
         isTurning = true
         withAnimation(reduceMotion ? nil : .snappy) { page = next }
-        // The paged TabView slides in UIKit, out of reach of an animation's completion, so wait
-        // about as long as the slide. With Reduce Motion there is none, but a quick double tap
+        // The paged TabView slides in UIKit, out of reach of an animation's completion, so hold
+        // for a double tap's length. With Reduce Motion there is no slide, but a quick double tap
         // still mustn't skip a page.
         Task {
-            try? await Task.sleep(for: .milliseconds(450))
+            try? await Task.sleep(for: .milliseconds(300))
             isTurning = false
         }
     }

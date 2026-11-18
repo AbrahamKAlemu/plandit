@@ -35,6 +35,18 @@ final class TutorialFlowTests: XCTestCase {
         return XCTWaiter().wait(for: [hittable], timeout: timeout) == .completed
     }
 
+    /// Waits for a page turn to settle: page `number`'s title on screen, the previous one slid away,
+    /// then past Continue's 300 ms double-tap window, so the next deliberate tap isn't swallowed.
+    @MainActor private func waitForPage(_ number: Int, in app: XCUIApplication) {
+        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-\(number)"], timeout: 10), "page \(number) is on screen")
+        if number > 1 {
+            let previous = app.staticTexts["tutorial-title-\(number - 1)"]
+            let gone = expectation(for: NSPredicate(format: "exists == false OR hittable == false"), evaluatedWith: previous)
+            XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed, "page \(number - 1) has slid away")
+        }
+        Thread.sleep(forTimeInterval: 0.35)
+    }
+
     @MainActor func testSkipOnTheFirstPageOpensTheMapAndARelaunchDoesNotRepeatIt() {
         let app = launch(["-resetTutorial", "-showTutorial"])
         let skip = app.buttons["tutorial-skip"]
@@ -67,10 +79,10 @@ final class TutorialFlowTests: XCTestCase {
         let continueButton = app.buttons["tutorial-continue"]
         XCTAssertTrue(continueButton.waitForExistence(timeout: 10))
         for earlier in 1..<number {
-            XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-\(earlier)"]))
+            waitForPage(earlier, in: app)
             continueButton.tap()
         }
-        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-\(number)"]), "on page \(number)")
+        waitForPage(number, in: app)
 
         app.buttons["tutorial-skip"].tap()
         XCTAssertTrue(app.buttons["plan-button"].waitForExistence(timeout: 5), "Skip goes straight to the map")
@@ -112,7 +124,7 @@ final class TutorialFlowTests: XCTestCase {
         for (index, page) in pages.enumerated() {
             let number = index + 1
             let title = app.staticTexts["tutorial-title-\(number)"]
-            XCTAssertTrue(waitUntilHittable(title), "page \(number) is on screen")
+            waitForPage(number, in: app)
             XCTAssertEqual(title.label, page.0)
             XCTAssertEqual(title.value as? String, "Page \(number) of 3", "VoiceOver hears the page number")
             XCTAssertEqual(app.staticTexts["tutorial-subtitle-\(number)"].label, page.1)
@@ -134,15 +146,15 @@ final class TutorialFlowTests: XCTestCase {
         let app = launch(["-resetTutorial", "-showTutorial"])
         let continueButton = app.buttons["tutorial-continue"]
         XCTAssertTrue(continueButton.waitForExistence(timeout: 10))
-        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-1"]))
+        waitForPage(1, in: app)
 
         continueButton.doubleTap()
-        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-2"]), "page 2, not page 3")
-        XCTAssertFalse(app.staticTexts["tutorial-title-3"].isHittable)
+        waitForPage(2, in: app)
+        XCTAssertFalse(app.staticTexts["tutorial-title-3"].isHittable, "page 2, not page 3")
 
         continueButton.doubleTap()
-        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-3"]), "page 3 is shown, not skipped")
-        XCTAssertFalse(app.buttons["plan-button"].exists, "still in the tutorial")
+        waitForPage(3, in: app)
+        XCTAssertFalse(app.buttons["plan-button"].exists, "page 3 is shown, not skipped")
 
         continueButton.tap()
         XCTAssertTrue(app.buttons["plan-button"].waitForExistence(timeout: 5))
@@ -156,7 +168,7 @@ final class TutorialFlowTests: XCTestCase {
 
         for number in 1...3 {
             let title = app.staticTexts["tutorial-title-\(number)"]
-            XCTAssertTrue(waitUntilHittable(title), "page \(number)")
+            waitForPage(number, in: app)
             XCTAssertLessThanOrEqual(title.frame.maxY, continueButton.frame.minY, "page \(number): the whole title is above Continue")
             XCTAssertLessThan(app.staticTexts["tutorial-subtitle-\(number)"].frame.minY, continueButton.frame.minY, "page \(number): the subtitle starts above it")
             if number < 3 { continueButton.tap() }
@@ -211,7 +223,7 @@ final class TutorialFlowTests: XCTestCase {
         XCTAssertTrue(continueButton.waitForExistence(timeout: 10))
 
         for number in 1...3 {
-            XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-\(number)"]))
+            waitForPage(number, in: app)
             try app.performAccessibilityAudit { issue in
                 // The logo stops growing past the largest standard size, on purpose (TutorialView).
                 let isLogo = issue.auditType == .dynamicType && issue.element?.label == "Plandit"
