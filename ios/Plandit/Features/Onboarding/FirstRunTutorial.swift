@@ -44,7 +44,7 @@ struct FirstRunTutorial {
         defaults.set(true, forKey: Self.finishedKey(for: userID))
     }
 
-    /// Both records, on sign-out, after the account is deleted, and for `-resetTutorial`.
+    /// Both records, after the account is deleted and for `-resetTutorial`. Signing out keeps them.
     func forget(userID: String) {
         defaults.removeObject(forKey: Self.startedKey(for: userID))
         defaults.removeObject(forKey: Self.finishedKey(for: userID))

@@ -106,11 +106,11 @@ private struct AccountGate: View {
         withAnimation(.easeInOut(duration: 0.25)) { showsTutorial = false }
     }
 
-    /// Signed out (by the person, a revoked session, or deleting the account).
+    /// Signed out (by the person, a revoked session, or deleting the account). The tutorial records
+    /// stay, so one cut short by a revoked session still comes back; only deletion forgets them.
     private func close() {
         account.beforeSignOut = nil
         account.onAccountDeleted = nil
-        if let userID = session?.userID { tutorial.forget(userID: userID) }
         session?.tearDown()
         session = nil
         showsTutorial = false

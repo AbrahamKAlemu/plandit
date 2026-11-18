@@ -80,8 +80,10 @@ final class FirstRunTutorialTests: XCTestCase {
         XCTAssertEqual(FirstRunTutorial.startedKey(for: "user-1"), "plandit.tutorialStarted.user-1")
     }
 
-    /// They leave on page 1 to save a place from TikTok and iOS closes Plandit. The next bootstrap
-    /// finds their file, so it is no longer a new account, but the tutorial comes back until finished.
+    /// They leave on page 1 to save a place from TikTok and iOS closes Plandit, or their session is
+    /// revoked on page 2 (sign-out keeps both records; AccountGate.close() is private to a view, so
+    /// `TutorialFlowTests.testSigningOutKeepsTheFinishedRecord` drives it). The next bootstrap finds
+    /// their file, so it is no longer a new account, but the tutorial comes back until finished.
     @MainActor func testAnInterruptedTutorialComesBackUntilFinished() {
         XCTAssertTrue(opens(isNewAccount: true))
 

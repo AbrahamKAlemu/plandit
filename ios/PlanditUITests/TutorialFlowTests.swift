@@ -82,6 +82,27 @@ final class TutorialFlowTests: XCTestCase {
         XCTAssertFalse(relaunched.buttons["tutorial-skip"].exists, "a relaunch never repeats the tutorial")
     }
 
+    /// Signing out keeps the record, so "never shown again" doesn't hang on anything else. Only
+    /// deleting the account forgets it.
+    @MainActor func testSigningOutKeepsTheFinishedRecord() {
+        let app = launch(["-resetTutorial", "-showTutorial", "-startTab", "settings", "-startDetent", "large"])
+        let skip = app.buttons["tutorial-skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitUntilHittable(skip))
+        skip.tap()
+
+        let signOut = app.buttons["sign-out"]
+        XCTAssertTrue(waitUntilHittable(signOut, timeout: 10))
+        signOut.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["welcome-screen"].waitForExistence(timeout: 10), "signed out")
+
+        // -skipAuth signs the same local account back in.
+        app.terminate()
+        let relaunched = launch(["-showTutorial"])
+        XCTAssertTrue(relaunched.buttons["plan-button"].waitForExistence(timeout: 10))
+        XCTAssertFalse(relaunched.buttons["tutorial-skip"].exists, "signing out didn't erase the finished record")
+    }
+
     @MainActor func testContinueWalksThroughThreePagesThenOpensTheMap() {
         let app = launch(["-resetTutorial", "-showTutorial"])
         let continueButton = app.buttons["tutorial-continue"]
