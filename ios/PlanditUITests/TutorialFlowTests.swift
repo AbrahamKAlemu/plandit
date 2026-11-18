@@ -168,6 +168,22 @@ final class TutorialFlowTests: XCTestCase {
         XCTAssertGreaterThan(skip.frame.midX, app.frame.midX, "Skip on the right")
     }
 
+    /// On iPad the card and buttons stay about 440 pt wide and centered, like Welcome (W-4).
+    /// On iPhone this holds anyway.
+    @MainActor func testTheColumnIsAtMost440PointsWideAndCentered() {
+        let app = launch(["-resetTutorial", "-showTutorial"])
+        let continueButton = app.buttons["tutorial-continue"]
+        let title = app.staticTexts["tutorial-title-1"]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitUntilHittable(title))
+
+        XCTAssertLessThanOrEqual(continueButton.frame.width, 440)
+        XCTAssertEqual(continueButton.frame.midX, app.frame.midX, accuracy: 1, "centered")
+        XCTAssertGreaterThanOrEqual(title.frame.minX, continueButton.frame.minX, "the card sits in the same column")
+        XCTAssertLessThanOrEqual(title.frame.maxX, continueButton.frame.maxX)
+        XCTAssertLessThanOrEqual(app.buttons["tutorial-skip"].frame.maxX, continueButton.frame.maxX + 1, "Skip sits over the column")
+    }
+
     @MainActor func testEveryPagePassesTheAccessibilityAudit() throws {
         let app = launch(["-resetTutorial", "-showTutorial"])
         let continueButton = app.buttons["tutorial-continue"]
