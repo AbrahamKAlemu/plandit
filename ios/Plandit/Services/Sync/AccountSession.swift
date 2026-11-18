@@ -114,7 +114,9 @@ final class AccountSession {
             // Kept while read-only: a later bootstrap that can sync again will take it.
             AccountSeed.retireLegacyFile(in: legacyStore)
         }
-        return AccountSession(userID: user.id, store: store, sync: sync, storage: storage, isNewAccount: decision.seedsNewAccount)
+        // Saves made before signing in mean this person has used Plandit already.
+        let isNewAccount = decision.seedsNewAccount && legacyPosts.isEmpty
+        return AccountSession(userID: user.id, store: store, sync: sync, storage: storage, isNewAccount: isNewAccount)
     }
 
     /// Detaches the store from the file, the sync and the events API. Idempotent; the session is

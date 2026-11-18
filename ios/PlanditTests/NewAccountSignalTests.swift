@@ -28,10 +28,10 @@ final class NewAccountSignalTests: XCTestCase {
         PlanditAPIClient(baseURL: TestJSON.configuration.apiBaseURL, userID: "user-1", tokenProvider: FakeTokenProvider(), transport: transport)
     }
 
-    @MainActor private func bootstrap(_ transport: FakeTransport?) async -> AccountSession {
+    @MainActor private func bootstrap(_ transport: FakeTransport?, legacy: SnapshotStore? = nil) async -> AccountSession {
         let session = await AccountSession.bootstrap(
             user: user, profileName: nil, api: transport.map(api), directory: directory,
-            legacyStore: SnapshotStore(url: directory.appending(path: "missing-legacy.json")), extractor: NoExtractor()
+            legacyStore: legacy ?? SnapshotStore(url: directory.appending(path: "missing-legacy.json")), extractor: NoExtractor()
         )
         addTeardownBlock { @MainActor in session.tearDown() }
         return session
@@ -60,6 +60,31 @@ final class NewAccountSignalTests: XCTestCase {
     @MainActor func testSeededWhenTheServerHasNothingAndThePhoneHasNoFile() async {
         let session = await bootstrap(emptyServer())
         XCTAssertTrue(session.isNewAccount)
+    }
+
+    /// A pre-account file with the person's own saves: the seed carries them in, so this
+    /// is someone who has used Plandit before, not a brand-new account.
+    @MainActor func testNotNewWhenTheSeedCarriesPreAccountSaves() async throws {
+        let legacy = SnapshotStore(url: directory.appending(path: "plandit-store.json"))
+        let own = SavedPost(
+            url: URL(string: "https://www.tiktok.com/@someone/video/7400000000000000900")!,
+            platform: .tiktok, savedAt: .now, status: .ready, place: SampleData.levain, estimatedCost: 6
+        )
+        try legacy.save(StoreSnapshot(saved: SampleData.savedPosts + [own], today: SampleData.dayPlan, profile: SampleData.profile, pastPlans: [], visited: []))
+
+        let session = await bootstrap(emptyServer(), legacy: legacy)
+
+        XCTAssertFalse(session.isNewAccount)
+        XCTAssertTrue(session.store.saved.contains { $0.canonicalURL == own.canonicalURL }, "the seed is unchanged")
+    }
+
+    @MainActor func testSeededWithOnlyTheSampleSavesIsStillNew() async throws {
+        let legacy = SnapshotStore(url: directory.appending(path: "plandit-store.json"))
+        try legacy.save(StoreSnapshot(saved: SampleData.savedPosts, today: SampleData.dayPlan, profile: SampleData.profile, pastPlans: [], visited: []))
+
+        let session = await bootstrap(emptyServer(), legacy: legacy)
+
+        XCTAssertTrue(session.isNewAccount, "sample places are not the person's own saves")
     }
 
     @MainActor func testSeededOfflineWhenThePhoneHasNoFile() async {
