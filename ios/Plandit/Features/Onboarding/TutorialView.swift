@@ -33,6 +33,7 @@ nonisolated enum TutorialPage: Int, CaseIterable, Identifiable {
 struct TutorialView: View {
     let onFinish: () -> Void
     @State private var page: TutorialPage = .share
+    @State private var isTurning = false
     @AccessibilityFocusState private var focusedTitle: TutorialPage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -84,8 +85,18 @@ struct TutorialView: View {
     }
 
     private func advance() {
+        // A second tap while the page turns would otherwise skip the next page unread.
+        guard !isTurning else { return }
         guard let next = page.next else { return onFinish() }
+        isTurning = true
         withAnimation(reduceMotion ? nil : .snappy) { page = next }
+        // The paged TabView slides in UIKit, out of reach of an animation's completion, so wait
+        // about as long as the slide. With Reduce Motion there is none, but a quick double tap
+        // still mustn't skip a page.
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            isTurning = false
+        }
     }
 }
 

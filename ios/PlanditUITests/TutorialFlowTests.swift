@@ -108,6 +108,25 @@ final class TutorialFlowTests: XCTestCase {
         XCTAssertFalse(continueButton.exists)
     }
 
+    /// A second tap while the page is still turning must not skip the next page unread.
+    @MainActor func testADoubleTapOnContinueTurnsOnePage() {
+        let app = launch(["-resetTutorial", "-showTutorial"])
+        let continueButton = app.buttons["tutorial-continue"]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-1"]))
+
+        continueButton.doubleTap()
+        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-2"]), "page 2, not page 3")
+        XCTAssertFalse(app.staticTexts["tutorial-title-3"].isHittable)
+
+        continueButton.doubleTap()
+        XCTAssertTrue(waitUntilHittable(app.staticTexts["tutorial-title-3"]), "page 3 is shown, not skipped")
+        XCTAssertFalse(app.buttons["plan-button"].exists, "still in the tutorial")
+
+        continueButton.tap()
+        XCTAssertTrue(app.buttons["plan-button"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testSwipeMovesForward() {
         let app = launch(["-resetTutorial", "-showTutorial"])
         let first = app.staticTexts["tutorial-title-1"]
