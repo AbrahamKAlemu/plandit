@@ -92,11 +92,7 @@ private struct AccountGate: View {
             next.store.flush()
             await next.sync?.finalPush()
         }
-        let tutorial = tutorial
-        account.onAccountDeleted = { userID in
-            next.removeLocalData()
-            tutorial.forget(userID: userID)
-        }
+        account.onAccountDeleted = tutorial.deletionHook(removing: next)
         // Set with the session, in the same update, so the map never flashes first.
         showsTutorial = tutorial.decide(userID: user.id, isNewAccount: next.isNewAccount, launch: .current)
         // A re-bootstrap for the same user must not leave the old session attached to the API.
@@ -110,9 +106,11 @@ private struct AccountGate: View {
         withAnimation(.easeInOut(duration: 0.25)) { showsTutorial = false }
     }
 
+    /// Signed out (by the person, a revoked session, or deleting the account).
     private func close() {
         account.beforeSignOut = nil
         account.onAccountDeleted = nil
+        if let userID = session?.userID { tutorial.forget(userID: userID) }
         session?.tearDown()
         session = nil
         showsTutorial = false
