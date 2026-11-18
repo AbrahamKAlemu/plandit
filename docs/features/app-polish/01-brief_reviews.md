@@ -90,3 +90,39 @@ Same five personas, judging only the W rows and the "Seen but not in scope" line
 ## Result
 
 Round 2: five approvals, no must_fix. The persona gate passes for the brief.
+
+# Round 3: Design feedback (D-1 to D-8), November 18
+
+Same five personas, judging only the D rows and their "Not in scope" list.
+
+| Persona | Verdict | Score | must_fix |
+|---|---|---|---|
+| Sofia | approve | 8 | none |
+| Marcus | approve with conditions | 6 | D-1 must say Skip ends the whole tutorial in one tap |
+| Andre | approve | 7 | none |
+| Grace | approve | 8 | none |
+| Amara | approve | 7 | none |
+
+**Marcus's must_fix:** fixed. D-1 now says Skip on any page closes the whole tutorial and opens the
+map in one tap, and it's never shown again. The build already behaved this way; the D-1 check
+covers Skip from the first page.
+
+| Nice to have | From | Disposition |
+|---|---|---|
+| "Added" is ambiguous in Saved, where everything is already added | Sofia, Andre | Adopted: the badge and status word are "In plan" (D-5, PRC-5). Flagged to the designer. |
+| Say what + does with no plan today | Sofia | Adopted into D-5: starts a plan or opens the planner with the place picked; never a dead tap. |
+| Keep + one tap with no confirmation | Marcus | Adopted into D-5. |
+| Show a price on rows that aren't free | Grace, Amara, Sofia | Not adopted: the design feedback removes prices from rows on purpose. Raised with the designer. |
+| Mark "Free" as an estimate when Plandit guessed it | Grace, Amara | Not adopted: the rest of the app shows Plandit's estimate the same way. Raised with the designer. |
+| "Neighborhoods explored" vs the brand watch list | Amara, Sofia | Kept: it's a stat label, not a headline (AGENTS.md bans those words as headlines). Raised with the brand-position owners. |
+| Tutorial copy changes (group nod; "what it all costs"; time first; "spots you saved"; a line for people with no saves) | Amara, Grace, Marcus, Andre | Not adopted: the copy is the designer's, changed only where it was inaccurate (page 2). The planner doesn't ask solo or group. Passed to the designer. |
+| Show a save's age on rows | Andre | Not adopted: the feedback removes dates; Sort covers it. |
+| Small TikTok or Instagram mark on rows | Sofia | Not adopted: the feedback removes the source line. |
+| Category order by recent saves; "Closest to me" sort; an "Under $15" filter | Andre, Sofia, Amara | Not in scope. |
+| Keep "$22 under" visible on small phones | Grace | Adopted as part of PRO-2's check. |
+| Share a Saved list | Amara | Not in scope. |
+| Give Home a sense of time when it returns in 1.0.2 | Andre | Noted for 1.0.2. |
+
+## Result
+
+Round 3: five approvals after Marcus's one must_fix was fixed. The persona gate passes for the D rows.

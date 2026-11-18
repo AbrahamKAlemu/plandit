@@ -123,7 +123,7 @@ Not in scope:
 - **PRC-4** A shared video is read on the phone. It ends the same ways a link does. If reading fails,
   the post stays and asks for the place's name or address; it doesn't disappear.
 - **PRC-5** The Saved list uses these status words: "Finding…", "Pick the place", "Add the place",
-  "Check this place", "Couldn't find it", "Added" (D-5).
+  "Check this place", "Couldn't find it", "In plan".
 - **PRC-6** The confidence rule doesn't change: only one exact-address match is added on its own.
   Otherwise the user picks from up to three places.
 - **PRC-7** When a place is added, by match or by pick, the phone gives a success haptic and the
@@ -204,7 +204,8 @@ First-run tutorial:
 
   The pictures follow the draft's three drawings (a saved post with a bookmark, three sliders, a
   map grid with a dotted route), drawn in the app's existing colors. They're swapped for the
-  designer's files if those arrive. Existing accounts never see it, including on a new phone.
+  designer's files if those arrive. Skip on any page closes the whole tutorial and opens the map in
+  one tap, and it's never shown again. Existing accounts never see it, including on a new phone.
 
 Bottom bar:
 
@@ -222,10 +223,13 @@ Saved:
   means the place's cost in Plandit is $0, as set by the user or as Plandit estimates it (parks are
   free).
 - **D-5** Each row shows only the place's name and "Category · Neighborhood", plus "· Free" with a
-  star when it's free. On the right: "Added" with a check when the place is in today's plan,
-  otherwise a + button that adds it to today's plan (success haptic), then a chevron. No
+  star when it's free. On the right: "In plan" with a check when the place is in today's plan,
+  otherwise a + button that adds it to today's plan in one tap, with a success haptic and no
+  confirmation (with no plan yet today, it starts one or opens the planner with the place picked;
+  it never looks like nothing happened), then a chevron. The draft's "Added" became "In plan"
+  because everything in Saved has already been added to Saved. No
   thumbnail, source line, date or price. A post that isn't a place yet shows its status word
-  instead of the + (PRC-5, with "Added" replacing "In plan").
+  instead of the + (PRC-5).
 
 Profile:
 

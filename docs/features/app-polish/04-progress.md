@@ -31,7 +31,7 @@ added to the brief as D requirements.
 | Plan | Draft complete | |
 | Persona round 2 (W rows) | Done | Five approvals, no must_fix |
 | Human approval | Done | Abraham, November 18, in chat |
-| Persona round 3 (D rows) | In progress | |
+| Persona round 3 (D rows) | Done | Five approvals; Marcus's must_fix (Skip ends the tutorial) fixed |
 | Build A, D, E | In progress | Parallel worktrees |
 | Build B, C | Waiting | A and D merged; PR #28 |
 | Reviews and flow walk | Not started | |
@@ -48,3 +48,4 @@ added to the brief as D requirements.
 | Nov 18 | Abraham approved the dossier. |
 | Nov 18 | Abraham asked for the design feedback PDF, the "Images for the app" category images and the new glossy "P" icon (app icon and in-app logo) to be built too. |
 | Nov 18 | Abraham: keep Today for 1.0.1; the Home tab of lists (feedback Change 3) waits for 1.0.2, when the lists arrive and the planner-vs-feed rule is settled. |
+| Nov 18 | Persona round 3 on D-1 to D-8: approvals; Marcus's must_fix fixed in D-1; "Added" became "In plan". |

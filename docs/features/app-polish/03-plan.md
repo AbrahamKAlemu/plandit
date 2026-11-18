@@ -117,7 +117,7 @@ command. "Shot" means a simulator screenshot compared with the November 18 walkt
 | PRC-2 | Source shown while finding; "Still looking" after 8 s | UI with a slow fake extractor | B builder | Not started |
 | PRC-3 | One automatic retry on a transient error, then "We couldn't find a place" | Unit with a fake extractor that fails once, and one that fails twice | B builder | Not started |
 | PRC-4 | Shared video success → normal paths; failure → post stays in `needsEvidence` | Unit with a fake video extractor | B builder | Not started |
-| PRC-5 | Status words exactly as listed, "Added" for in plan | Unit on the status text | D builder | Not started |
+| PRC-5 | Status words exactly as listed | Unit on the status text | D builder | Not started |
 | PRC-6 | Auto-add only on a unique exact-address match | Existing extractor tests pass unchanged | B builder | Not started |
 | PRC-7 | Success haptic and "Add to today's plan" after an add | UI | B builder | Not started |
 | PRC-8 | Relaunch with a `.video` post in `processing` → `needsEvidence`, not "couldn't read this source" | Unit | B builder | Not started |
@@ -130,11 +130,11 @@ command. "Shot" means a simulator screenshot compared with the November 18 walkt
 | W-15 | Headers opaque while scrolled | Shots (25, 42, 46) | C builder | Not started |
 | W-16 | Day with no walking shows rides by kind ("2 subway rides") | Unit or UI with a subway-only plan (47) | C builder | Not started |
 | W-17 | Stop start ≥ earliest arrival; same minutes in timeline and travel sheet. If #28 hasn't merged when 1.0.1 is cut, recorded as open for 1.0.2 | Re-measure after PR #28; unit if code changes (17, 22) | C builder | Not started |
-| D-1 | Brand-new account (seeded) sees 3 pages once; Skip or the last Continue lands on the map; an account with server or local data never sees it; relaunch doesn't repeat it | Unit on the decision; UI with `-showTutorial`; shots of the 3 pages, light and dark | E builder, xhigh reviewer | Not started |
+| D-1 | Brand-new account (seeded) sees 3 pages once; Skip on page 1 or the last Continue lands on the map in one tap; an account with server or local data never sees it; relaunch doesn't repeat it | Unit on the decision; UI with `-showTutorial`; shots of the 3 pages, light and dark | E builder, xhigh reviewer | Not started |
 | D-2 | Four items in order Today, Saved, Plan, Profile; Plan opens the planner; VoiceOver "Plan a day"; 44 pt targets | UI | A builder | Not started |
 | D-3 | Only categories present; tap filters; tap again clears; shopping shows under Others | Unit on `SavedListQuery`; UI | D builder | Not started |
 | D-4 | Free only hides places that cost money; Oldest reverses order; both combine with a category | Unit on `SavedListQuery` | D builder | Not started |
-| D-5 | Row reads "Category · Neighborhood" (+ "· Free"); + adds to today and becomes Added; posts without a place show their status | Unit on row text; UI tap + | D builder | Not started |
+| D-5 | Row reads "Category · Neighborhood" (+ "· Free"); + adds to today in one tap and becomes "In plan"; with no plan today it starts one or opens the planner with the place picked; posts without a place show their status | Unit on row text; UI tap + | D builder | Not started |
 | D-6 | Section order; 3 numbers; Neighborhoods counts distinct neighborhoods of visited places; tapping the header opens Name | UI identifiers in order; unit on `UserStats` | A builder | Not started |
 | D-7 | AppIcon is 1024×1024 with no alpha; the build installs; home screen shows the new icon | `sips -g hasAlpha`; simulator home screen shot | A builder | Not started |
 | D-8 | New mark on splash, Welcome, Profile footer and share sheet | Shots | A builder | Not started |
