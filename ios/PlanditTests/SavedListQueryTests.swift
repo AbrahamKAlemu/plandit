@@ -94,6 +94,24 @@ final class SavedListQueryTests: XCTestCase {
         XCTAssertEqual(SavedListQuery(group: .food).resolved(for: [tacos]).group, .food)
     }
 
+    @MainActor func testAClearedGroupStaysClearedWhenAPlaceOfItArrivesLater() {
+        let tacos = post("Tacos", .food, hoursAgo: 2)
+        let coffee = post("Cafe", .coffee, hoursAgo: 3)
+        var query = SavedListQuery()
+        query.toggle(.coffee)
+
+        query.forgetMissingGroup(in: [tacos, coffee])
+        XCTAssertEqual(query.group, .coffee, "a group that still has places stays selected")
+
+        query.forgetMissingGroup(in: [tacos]) // the last coffee place was removed
+        XCTAssertNil(query.group)
+
+        let newCoffee = post("New cafe", .coffee, hoursAgo: 0) // a new coffee place arrives by share
+        query.forgetMissingGroup(in: [newCoffee, tacos])
+        XCTAssertNil(query.group, "the list doesn't switch back to Coffee on its own")
+        XCTAssertEqual(query.apply(to: [newCoffee, tacos]).count, 2)
+    }
+
     // MARK: - Filter and Sort (D-4)
 
     @MainActor func testFreeOnlyHidesPlacesThatCostMoney() {

@@ -110,6 +110,12 @@ struct SavedListQuery: Equatable {
         return query
     }
 
+    /// Clears a selected group once its last place is gone, so a place of that kind saved later
+    /// doesn't switch the filter back on by itself. Call when the available groups change.
+    mutating func forgetMissingGroup(in posts: [SavedPost]) {
+        self = resolved(for: posts)
+    }
+
     /// The Filter menu's label: "Filter", or the active choice.
     var filterTitle: String { filter == .all ? "Filter" : filter.label }
 
