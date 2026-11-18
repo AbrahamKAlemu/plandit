@@ -6,7 +6,6 @@ struct ProfileSheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(AppearanceSettings.self) private var appearance
     @Environment(AccountModel.self) private var account
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isConfirmingDelete = false
 
     var body: some View {
@@ -198,11 +197,7 @@ struct ProfileSheet: View {
 
     private var footer: some View {
         VStack(spacing: Space.xs) {
-            (colorScheme == .dark ? BrandArt.lockupDark : BrandArt.lockupLight).image
-                .resizable()
-                .scaledToFit()
-                .frame(width: 132)
-                .accessibilityLabel("Plandit")
+            BrandLockup(markSize: 32)
             Text("Version \(Bundle.main.shortVersion)")
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)

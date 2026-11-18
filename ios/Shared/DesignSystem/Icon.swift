@@ -48,6 +48,9 @@ struct Icon: View {
 /// Official Plandit artwork copied from Design/Logo into SharedAssets.xcassets/Brand.
 /// Never recolor, crop or approximate it. Below 24pt, use the favicon export instead of `mark`;
 /// don't use a lockup below ~120pt wide.
+///
+/// `markSquare` is 1.0.1's mark, the white "P" on green that the app icon uses. In the app it
+/// appears through `BrandLockup`; the share sheet shows it on its own. The other assets are 1.0's.
 enum BrandArt: String {
     case mark
     case markSquare = "mark-square"
@@ -61,4 +64,26 @@ enum BrandArt: String {
     case avatar
 
     var image: Image { Image("Brand/\(rawValue)") }
+}
+
+/// The mark beside the word "Plandit" in Manrope: on the splash screen, Welcome and Profile's footer.
+/// A logo, so it keeps its size at every Dynamic Type setting.
+struct BrandLockup: View {
+    var markSize: CGFloat = 40
+
+    var body: some View {
+        HStack(spacing: markSize * 0.25) {
+            BrandArt.markSquare.image
+                .resizable()
+                .scaledToFit()
+                .frame(width: markSize, height: markSize)
+            Text("Plandit")
+                .font(Font(UIFont.manrope(.extraBold, size: markSize * 0.7)))
+                .foregroundStyle(Color.ink)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Plandit")
+        .accessibilityAddTraits(.isImage)
+    }
 }

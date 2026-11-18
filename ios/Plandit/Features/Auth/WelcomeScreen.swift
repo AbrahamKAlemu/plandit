@@ -5,7 +5,6 @@ import SwiftUI
 struct WelcomeScreen: View {
     let onEmail: () -> Void
     @Environment(AccountModel.self) private var account
-    @Environment(\.colorScheme) private var colorScheme
 
     /// On iPad the text and buttons keep a phone's reading width, centered (W-4).
     static let maxContentWidth: CGFloat = 440
@@ -13,11 +12,7 @@ struct WelcomeScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
-                (colorScheme == .dark ? BrandArt.lockupDark : BrandArt.lockupLight).image
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 132)
-                    .accessibilityLabel("Plandit")
+                BrandLockup()
                     .padding(.top, Space.xl)
 
                 VStack(alignment: .leading, spacing: Space.sm) {
