@@ -45,8 +45,8 @@ final class MapAndBudgetTests: XCTestCase {
                      extractor: NoExtractor(), storage: storage, routes: routes)
     }
 
-    /// The sample day with its small overlaps removed (the Met ends 12:45, the subway takes 35 min,
-    /// the High Line was at 13:15), so changing one trip moves later stops by exactly the difference.
+    /// The sample day with any overlap removed (the sample has none since W-17), so changing one trip
+    /// moves later stops by exactly the difference.
     @MainActor private func cleanDay() -> DayPlan {
         var plan = SampleData.dayPlan
         for index in plan.stops.indices.dropFirst() {

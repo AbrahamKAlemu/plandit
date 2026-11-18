@@ -36,7 +36,7 @@ struct TravelOptionsSheet: View {
     }
 
     private func content(leg: TravelLeg, from: PlanStop, to: PlanStop) -> some View {
-        let options = store.travelOptions(forLeg: leg.id)
+        let options = Self.options(store.travelOptions(forLeg: leg.id), planned: leg)
         let upcomingTrips = store.today.legs.filter { store.today.state(of: $0) != .completed }.count
         return ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
@@ -100,6 +100,16 @@ struct TravelOptionsSheet: View {
             .padding(Space.lg)
         }
         .scrollIndicators(.hidden)
+    }
+
+    /// The way the trip is planned shows the plan's own time, so it matches the timeline and the
+    /// stop times; the other ways show Apple Maps times when they've loaded. Picking another way is
+    /// what moves the day, never opening this sheet.
+    static func options(_ options: [PlanditStore.TravelOption], planned: TravelLeg) -> [PlanditStore.TravelOption] {
+        options.map { option in
+            guard option.leg.mode == planned.mode else { return option }
+            return PlanditStore.TravelOption(leg: planned, isLive: option.isLive && option.leg.minutes == planned.minutes)
+        }
     }
 
     private func sourceLine(_ options: [PlanditStore.TravelOption]) -> String {
