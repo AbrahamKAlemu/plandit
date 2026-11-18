@@ -133,7 +133,8 @@ private struct SavedRowStatus: View {
     }
 }
 
-/// A watercolor category picture with its name. Selected: pale emerald behind it, emerald label.
+/// A category tile: a Phosphor duotone icon on a pale emerald square, with its name below.
+/// Selected: an emerald border on the square and an emerald label.
 struct CategoryPicture: View {
     let group: SavedCategoryGroup
     let accessibilityLabel: String
@@ -144,9 +145,17 @@ struct CategoryPicture: View {
         Button(action: action) {
             VStack(spacing: Space.xxs) {
                 Image(group.imageName)
+                    .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
+                    .frame(width: 34, height: 34)
+                    .foregroundStyle(.emeraldDeep)
                     .frame(width: 68, height: 68)
+                    .background(Color.emeraldTint, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                            .strokeBorder(isSelected ? Color.emeraldDeep : Color.clear, lineWidth: 2)
+                    )
                 Text(group.label)
                     .font(.label)
                     .foregroundStyle(isSelected ? Color.emeraldDeep : Color.ink)
@@ -155,11 +164,6 @@ struct CategoryPicture: View {
             .padding(.horizontal, Space.xxs)
             .padding(.vertical, Space.xs)
             .frame(minWidth: 84)
-            .background(isSelected ? Color.emeraldTint : Color.clear, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                    .strokeBorder(isSelected ? Color.emeraldDeep : Color.clear)
-            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

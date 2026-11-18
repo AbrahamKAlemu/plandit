@@ -24,7 +24,7 @@ enum SavedCategoryGroup: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Watercolor picture in `Assets.xcassets/Categories`.
+    /// Phosphor duotone icon (a template image) in `Assets.xcassets/Categories`.
     var imageName: String { "Categories/\(rawValue)" }
 }
 
