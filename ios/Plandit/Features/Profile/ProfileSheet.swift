@@ -107,14 +107,11 @@ struct ProfileSheet: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
                 .accessibilityHidden(true)
-            HStack(spacing: 0) {
-                StatCell(value: stats.plansCompleted, label: "Plans completed")
-                StatDivider()
-                StatCell(value: stats.neighborhoodsExplored, label: "Neighborhoods explored")
-                StatDivider()
-                StatCell(value: stats.placesSaved, label: "Places saved")
-            }
-            .fixedSize(horizontal: false, vertical: true)
+            ActivityStats(items: [
+                (stats.plansCompleted, "Plans completed"),
+                (stats.neighborhoodsExplored, "Neighborhoods explored"),
+                (stats.placesSaved, "Places saved"),
+            ])
         }
     }
 
@@ -150,7 +147,7 @@ struct ProfileSheet: View {
                     Text(signedInText)
                         .font(.manrope(.semiBold, size: 15))
                         .foregroundStyle(.ink)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, Space.md)
@@ -227,37 +224,124 @@ struct ProfileSheet: View {
     }
 }
 
-/// One of Activity's three numbers, centered over its label.
+/// Activity's numbers: side by side in equal columns, tops lined up, when every label fits its
+/// column without breaking a word; otherwise, and always at accessibility sizes, one under another.
+private struct ActivityStats: View {
+    let items: [(value: Int, label: String)]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            stacked
+        } else {
+            ViewThatFits(in: .horizontal) {
+                across
+                stacked
+            }
+        }
+    }
+
+    private var across: some View {
+        EqualColumns {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                StatCell(value: item.value, label: item.label)
+                    .overlay(alignment: .leading) {
+                        if index > 0 {
+                            Rectangle().fill(Color.border).frame(width: 1).padding(.vertical, Space.sm)
+                        }
+                    }
+            }
+        }
+    }
+
+    private var stacked: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                VStack(alignment: .leading, spacing: 2) {
+                    StatNumber(value: item.value)
+                    StatLabel(text: item.label)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.vertical, Space.xs)
+    }
+}
+
+/// One number centered over its label. The hidden longest word sets the narrowest the cell can be,
+/// so `EqualColumns` knows when a column would have to break a word.
 private struct StatCell: View {
     let value: Int
     let label: String
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text("\(value)")
-                .font(.manrope(.extraBold, size: 22))
-                .foregroundStyle(.ink)
-                .lineLimit(1)
-                .contentTransition(.numericText())
-            Text(label)
-                .font(.metadata)
-                .foregroundStyle(.inkMuted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+        ZStack(alignment: .top) {
+            StatLabel(text: longestWord).fixedSize().frame(height: 0).hidden().accessibilityHidden(true)
+            VStack(spacing: 2) {
+                StatNumber(value: value)
+                StatLabel(text: label).multilineTextAlignment(.center)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .padding(.horizontal, Space.xs)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, Space.xxs)
         .padding(.vertical, Space.sm)
         .accessibilityElement(children: .combine)
     }
+
+    private var longestWord: String {
+        label.components(separatedBy: " ").max { $0.count < $1.count } ?? label
+    }
 }
 
-private struct StatDivider: View {
+private struct StatNumber: View {
+    let value: Int
+
     var body: some View {
-        Rectangle()
-            .fill(Color.border)
-            .frame(width: 1)
-            .padding(.vertical, Space.sm)
+        Text("\(value)")
+            .font(.manrope(.extraBold, size: 22))
+            .foregroundStyle(.ink)
+            .lineLimit(1)
+            .contentTransition(.numericText())
+    }
+}
+
+private struct StatLabel: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.metadata)
+            .foregroundStyle(.inkMuted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Equal-width columns, all as tall as the tallest, tops lined up. Its ideal width is the narrowest
+/// that keeps every column at least as wide as its narrowest cell, which is what `ViewThatFits`
+/// compares with the space it has.
+private struct EqualColumns: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let count = CGFloat(subviews.count)
+        let narrowest = subviews.map { $0.sizeThatFits(ProposedViewSize(width: 0, height: nil)).width }.max() ?? 0
+        let proposed = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? 0
+        let width = max(proposed, narrowest * count)
+        let column = width / count
+        let height = subviews.map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let column = bounds.width / CGFloat(subviews.count)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(
+                at: CGPoint(x: bounds.minX + CGFloat(index) * column, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: column, height: bounds.height)
+            )
+        }
     }
 }
 
@@ -288,12 +372,15 @@ private struct AccountActionRow: View {
 }
 
 /// An icon, a title and its current value, opening the screen that changes it.
+/// Titles take two lines and details two lines; at accessibility sizes both wrap as far as they need.
 struct ListRow: View {
     var icon: Lucide?
     let title: String
     let detail: String
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        let lines = dynamicTypeSize.isAccessibilitySize ? nil : 2
         HStack(spacing: Space.sm) {
             if let icon {
                 Icon(icon, size: 20).foregroundStyle(.ink).frame(width: 24)
@@ -302,11 +389,11 @@ struct ListRow: View {
                 Text(title)
                     .font(.manrope(.semiBold, size: 15))
                     .foregroundStyle(.ink)
-                    .lineLimit(1)
+                    .lineLimit(lines)
                 Text(detail)
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
-                    .lineLimit(2)
+                    .lineLimit(lines)
             }
             Spacer(minLength: 0)
             Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)

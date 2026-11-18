@@ -33,22 +33,29 @@ extension PastPlan {
 
 /// A finished day in Profile → Past plans. 1.0 didn't keep a plan's stops, so the row is the
 /// whole record: it doesn't open anything and shows no chevron.
+/// At accessibility sizes the budget mark moves under the text so the title has the whole width.
 struct PastPlanRow: View {
     let plan: PastPlan
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Space.sm))
+        layout {
             VStack(alignment: .leading, spacing: 2) {
                 Text(plan.title)
                     .font(.manrope(.semiBold, size: 15))
                     .foregroundStyle(.ink)
-                    .lineLimit(2)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 Text(plan.summaryText)
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 0)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer(minLength: 0)
+            }
             if let mark = plan.budgetMark {
                 Text(mark)
                     .font(.label)

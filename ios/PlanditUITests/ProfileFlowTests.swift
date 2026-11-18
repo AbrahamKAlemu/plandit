@@ -79,12 +79,23 @@ final class ProfileFlowTests: XCTestCase {
 
         // Three numbers, side by side, and nothing from 1.0's grid.
         let numbers = ["Plans completed", "Neighborhoods explored", "Places saved"].map { stat($0, in: app) }
-        XCTAssertEqual(Set(numbers.map { Int($0.frame.midY) }).count, 1, "the numbers share one row")
+        XCTAssertEqual(Set(numbers.map { Int($0.frame.minY) }).count, 1, "the numbers share one row, tops lined up")
         XCTAssertLessThan(numbers[0].frame.minX, numbers[1].frame.minX)
         XCTAssertLessThan(numbers[1].frame.minX, numbers[2].frame.minX)
         for gone in ["Walked", "Under budget", "Average per plan", "streak", "Notifications", "Coming soon"] {
             XCTAssertEqual(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", gone)).count, 0, "\(gone) is still on Profile")
         }
+    }
+
+    @MainActor func testActivityNumbersStackAtAccessibilitySizes() {
+        // AX3. Side by side, "Neighborhoods" would have to break mid-word.
+        let app = launch(["-startTab", "profile", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
+        _ = header(in: app)
+        let numbers = ["Plans completed", "Neighborhoods explored", "Places saved"].map { stat($0, in: app) }
+        XCTAssertTrue(numbers[0].waitForExistence(timeout: 3))
+        XCTAssertLessThanOrEqual(numbers[0].frame.maxY, numbers[1].frame.minY + 0.5, "one under another")
+        XCTAssertLessThanOrEqual(numbers[1].frame.maxY, numbers[2].frame.minY + 0.5, "one under another")
+        XCTAssertEqual(Set(numbers.map { Int($0.frame.minX) }).count, 1, "stacked in one column")
     }
 
     @MainActor func testPreferenceRowsUseTheDraftsWords() {
