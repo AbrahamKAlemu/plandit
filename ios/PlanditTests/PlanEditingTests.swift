@@ -288,5 +288,6 @@ import XCTest
     func testTripTextOnThePostScreen() {
         let plan = cleanDay()
         XCTAssertEqual(TodayPlacementText.trip(plan.legs[2], from: plan.stops[2]), "\(plan.legs[2].minutes.durationText) walk from The High Line")
+        XCTAssertEqual(TodayPlacementText.trip(plan.legs[1], from: plan.stops[1]), "35 min subway ride from The Met · $2.90", "fares show")
     }
 }

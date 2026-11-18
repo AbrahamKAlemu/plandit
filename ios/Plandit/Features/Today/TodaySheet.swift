@@ -65,22 +65,29 @@ struct TodaySheet: View {
                     } else {
                         PlanSummary(plan: plan) { isShowingBudget = true }
 
-                        CatchUpCard(plan: plan)
-
-                        if plan.isComplete {
-                            DayCompleteCard(plan: plan)
-                                .transition(.scale(scale: 0.96).combined(with: .opacity))
-                        } else if let next = plan.nextStop {
-                            Button {
-                                next.place.openDirections(by: store.travelMode(into: next.id))
-                            } label: {
-                                HStack(spacing: Space.xs) {
-                                    Icon(store.travelMode(into: next.id).icon, size: 18)
-                                    Text("Directions to \(next.place.name)").lineLimit(1)
+                        // One clock for the card and the Directions button: no directions to a stop the card says you missed.
+                        TimelineView(.everyMinute) { _ in
+                            let overdue = plan.overdueStops(now: AppClock.now)
+                            VStack(alignment: .leading, spacing: Space.lg) {
+                                if !overdue.isEmpty {
+                                    CatchUpCard(plan: plan, overdue: overdue, now: AppClock.now)
+                                        .transition(.opacity)
+                                } else if plan.isComplete {
+                                    DayCompleteCard(plan: plan)
+                                        .transition(.scale(scale: 0.96).combined(with: .opacity))
+                                } else if let next = plan.nextStop {
+                                    Button {
+                                        next.place.openDirections(by: store.travelMode(into: next.id))
+                                    } label: {
+                                        HStack(spacing: Space.xs) {
+                                            Icon(store.travelMode(into: next.id).icon, size: 18)
+                                            Text("Directions to \(next.place.name)").lineLimit(1)
+                                        }
+                                    }
+                                    .buttonStyle(.primary)
+                                    .transition(.opacity)
                                 }
                             }
-                            .buttonStyle(.primary)
-                            .transition(.opacity)
                         }
 
                         if plan.stops.count - plan.firstMovableIndex >= 2 {
@@ -229,17 +236,12 @@ private struct DayCompleteCard: View {
 /// Without it, a day nobody updated shows afternoon stops as still ahead at night.
 private struct CatchUpCard: View {
     let plan: DayPlan
+    let overdue: [PlanStop]
+    let now: Date
     @Environment(PlanditStore.self) private var store
 
     var body: some View {
-        TimelineView(.everyMinute) { _ in
-            let now = AppClock.now
-            let overdue = plan.overdueStops(now: now)
-            if !overdue.isEmpty {
-                card(overdue, now: now)
-                    .transition(.opacity)
-            }
-        }
+        card(overdue, now: now)
     }
 
     private func card(_ overdue: [PlanStop], now: Date) -> some View {
@@ -256,6 +258,14 @@ private struct CatchUpCard: View {
                         .font(.metadata)
                         .foregroundStyle(.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
+                    if isToday {
+                        ForEach(Self.laterLines(plan, now: now), id: \.self) { line in
+                            Text(line.text)
+                                .font(.metadata)
+                                .foregroundStyle(line.isWarning ? Color.error : Color.inkMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
             }
             HStack(spacing: Space.sm) {
@@ -274,6 +284,25 @@ private struct CatchUpCard: View {
             }
         }
         .planditCard()
+    }
+
+    struct Line: Hashable {
+        var text: String
+        var isWarning = false
+    }
+
+    /// What "Start from now" / "Still here" would do: where the day ends, and any place you'd reach after it closes.
+    static func laterLines(_ plan: DayPlan, now: Date) -> [Line] {
+        var moved = plan
+        moved.startRestFromNow(now: now)
+        guard let end = moved.stops.last?.end, end != plan.stops.last?.end else { return [] }
+        var lines = [Line(text: "Moving the rest later ends your day at \(end.shortTime).")]
+        let alreadyLate = Set(plan.stopsArrivingAfterClose().map(\.id))
+        let late = moved.stopsArrivingAfterClose().filter { !alreadyLate.contains($0.id) }.map(\.place.name)
+        if !late.isEmpty {
+            lines.append(Line(text: "You'd get to \(late.formatted(.list(type: .and))) after closing.", isWarning: true))
+        }
+        return lines
     }
 
     /// "It's 7:48 PM, past the times planned for The High Line, Los Tacos No. 1 and 2 more."

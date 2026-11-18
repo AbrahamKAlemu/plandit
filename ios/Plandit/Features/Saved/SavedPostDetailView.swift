@@ -579,7 +579,7 @@ private struct TodayPlacement: View {
 }
 
 enum TodayPlacementText {
-    /// "12 min walk from The Met", "35 min subway ride from The Met", "18 min drive from The Met".
+    /// "12 min walk from The Met", "35 min subway ride from The Met · $2.90", "18 min drive from The Met · about $14".
     static func trip(_ leg: TravelLeg, from previous: PlanStop) -> String {
         let way = switch leg.mode {
         case .walk: "walk"
@@ -587,6 +587,8 @@ enum TodayPlacementText {
         case .bus: "bus ride"
         case .drive: "drive"
         }
-        return "\(leg.minutes.durationText) \(way) from \(previous.place.name)"
+        let trip = "\(leg.minutes.durationText) \(way) from \(previous.place.name)"
+        guard leg.cost > 0 else { return trip }
+        return leg.mode == .drive ? "\(trip) · about \(leg.cost.wholeDollarsText)" : "\(trip) · \(leg.cost.dollarsText)"
     }
 }

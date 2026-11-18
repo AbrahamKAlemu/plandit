@@ -161,10 +161,13 @@ final class MapAndBudgetFlowTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["Running behind?"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["catchup-later"].exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Moving the rest later ends your day at'")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["Directions to The High Line"].exists, "no directions to a stop the card says you missed")
         app.buttons["catchup-done"].tap()
         XCTAssertTrue(app.staticTexts["Running behind?"].waitForNonExistence(timeout: 3))
         let park = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Washington Square Park'")).firstMatch
         XCTAssertTrue(park.label.hasPrefix("Stop 5, Now"), park.label)
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Directions to Joe'")).firstMatch.exists, "directions come back for the next stop")
     }
 
     @MainActor func testChangingAStopsCost() {
