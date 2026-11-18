@@ -151,7 +151,7 @@ extension SavedPost {
     /// When it was saved: "Today", "Yesterday", "3 days ago" up to 6 days, then "Nov 6" ("Nov 6, 2025"
     /// in an earlier year). Every saved date in the app reads this way (W-10).
     func savedAgoText(now: Date = .now, calendar: Calendar = .current) -> String {
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: savedAt), to: calendar.startOfDay(for: now)).day ?? 0
+        let days = savedDaysAgo(now: now, calendar: calendar)
         switch days {
         case ..<1: return "Today"
         case 1: return "Yesterday"
@@ -164,6 +164,20 @@ extension SavedPost {
             }
             return savedAt.formatted(style)
         }
+    }
+
+    /// The same date with "Saved" in front, for rows where a bare date would be unclear:
+    /// "Saved today", "Saved yesterday", "Saved 3 days ago", "Saved Nov 6".
+    func savedWhenText(now: Date = .now, calendar: Calendar = .current) -> String {
+        switch savedDaysAgo(now: now, calendar: calendar) {
+        case ..<1: "Saved today"
+        case 1: "Saved yesterday"
+        default: "Saved \(savedAgoText(now: now, calendar: calendar))"
+        }
+    }
+
+    private func savedDaysAgo(now: Date, calendar: Calendar) -> Int {
+        calendar.dateComponents([.day], from: calendar.startOfDay(for: savedAt), to: calendar.startOfDay(for: now)).day ?? 0
     }
 
     /// Has a place we can pin and add to a plan.

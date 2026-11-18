@@ -250,6 +250,18 @@ final class PlanBuildingTests: XCTestCase {
         XCTAssertEqual(text(daysAgo: 294), "Jan 1", "same year, no year")
         XCTAssertEqual(text(daysAgo: 295), "Dec 31, 2025", "an earlier year adds the year")
         XCTAssertEqual(text(daysAgo: -1), "Today", "a clock that ran ahead still reads Today")
+
+        // The planner's pick rows say what the date is.
+        func saved(daysAgo: Int) -> String {
+            var post = SampleData.levainPost
+            post.savedAt = calendar.date(byAdding: .day, value: -daysAgo, to: now)!
+            return post.savedWhenText(now: now, calendar: calendar)
+        }
+        XCTAssertEqual(saved(daysAgo: 0), "Saved today")
+        XCTAssertEqual(saved(daysAgo: 1), "Saved yesterday")
+        XCTAssertEqual(saved(daysAgo: 3), "Saved 3 days ago")
+        XCTAssertEqual(saved(daysAgo: 20), "Saved Oct 2")
+        XCTAssertEqual(saved(daysAgo: 295), "Saved Dec 31, 2025")
     }
 
     @MainActor func testPlanTitles() {
