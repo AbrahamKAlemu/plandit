@@ -205,7 +205,10 @@ First-run tutorial:
   The pictures follow the draft's three drawings (a saved post with a bookmark, three sliders, a
   map grid with a dotted route), drawn in the app's existing colors. They're swapped for the
   designer's files if those arrive. Skip on any page closes the whole tutorial and opens the map in
-  one tap, and it's never shown again. Existing accounts never see it, including on a new phone.
+  one tap, and it's never shown again. Existing accounts don't see it, including on a new phone. The
+  one exception: an existing account whose first sign-in on a new phone can't reach the server
+  (offline, or Render still waking) looks new, so it sees the tutorial once. That's accepted, because
+  a brand-new account often meets a waking server and should still get the tutorial.
 
 Bottom bar:
 
