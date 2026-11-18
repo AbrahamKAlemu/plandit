@@ -46,8 +46,11 @@ final class SheetLayoutTests: XCTestCase {
         UITestScrolling.assertAboveBar(last, in: app)
     }
 
-    @MainActor func testEmptyTodaysPlanButtonIsAboveTheBarAtHalfHeight() {
-        // Empty the sample day through each stop's menu, then reopen at half height.
+    @MainActor func testEmptyTodaysPlanButtonIsAboveTheBarAfterExpanding() {
+        // Empty the sample day through each stop's menu, then reopen at half height. The first
+        // swipe there expands the sheet to full height (the system sheet resizes before it
+        // scrolls), so this checks the button at full height. Fitting it at half height without
+        // a swipe is the empty state's layout in TodaySheet (slice C).
         var app = launch(["-startDetent", "large"])
         for _ in 0..<6 {
             let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Stop '")).firstMatch
