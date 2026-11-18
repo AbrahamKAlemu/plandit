@@ -531,9 +531,27 @@ private struct TodayPlacement: View {
                     .font(.bodyText)
                     .foregroundStyle(.ink)
                     .accessibilityIdentifier("today-placement")
+                if index > 0, let trip = plan.legs.first(where: { $0.toStopID == stop.id }) {
+                    Text(TodayPlacementText.trip(trip, from: plan.stops[index - 1]))
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .accessibilityIdentifier("today-placement-trip")
+                }
                 ForEach(warnings(stop, in: plan), id: \.self) { warning in
                     Text(warning).font(.metadata).foregroundStyle(Color.error).multilineTextAlignment(.center)
                 }
+                // Takes it out of today only; the place stays in Saved.
+                Button {
+                    withAnimation(.snappy) { store.removeStop(stop.id) }
+                } label: {
+                    Text("Remove from today")
+                        .font(.label)
+                        .foregroundStyle(.ink)
+                        .underline()
+                        .frame(minHeight: 44)
+                }
+                .accessibilityHint("Keeps it in your saved places")
+                .accessibilityIdentifier("remove-from-today")
             }
             .frame(maxWidth: .infinity)
         }
@@ -557,5 +575,20 @@ private struct TodayPlacement: View {
             lines.append("Today is \((-plan.remaining).wholeDollarsText) over budget.")
         }
         return lines
+    }
+}
+
+enum TodayPlacementText {
+    /// "12 min walk from The Met", "35 min subway ride from The Met · $2.90", "18 min drive from The Met · about $14".
+    static func trip(_ leg: TravelLeg, from previous: PlanStop) -> String {
+        let way = switch leg.mode {
+        case .walk: "walk"
+        case .subway: "subway ride"
+        case .bus: "bus ride"
+        case .drive: "drive"
+        }
+        let trip = "\(leg.minutes.durationText) \(way) from \(previous.place.name)"
+        guard leg.cost > 0 else { return trip }
+        return leg.mode == .drive ? "\(trip) · about \(leg.cost.wholeDollarsText)" : "\(trip) · \(leg.cost.dollarsText)"
     }
 }

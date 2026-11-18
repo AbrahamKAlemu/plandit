@@ -65,20 +65,29 @@ struct TodaySheet: View {
                     } else {
                         PlanSummary(plan: plan) { isShowingBudget = true }
 
-                        if plan.isComplete {
-                            DayCompleteCard(plan: plan)
-                                .transition(.scale(scale: 0.96).combined(with: .opacity))
-                        } else if let next = plan.nextStop {
-                            Button {
-                                next.place.openDirections(by: store.travelMode(into: next.id))
-                            } label: {
-                                HStack(spacing: Space.xs) {
-                                    Icon(store.travelMode(into: next.id).icon, size: 18)
-                                    Text("Directions to \(next.place.name)").lineLimit(1)
+                        // One clock for the card and the Directions button: no directions to a stop the card says you missed.
+                        TimelineView(.everyMinute) { _ in
+                            let overdue = plan.overdueStops(now: AppClock.now)
+                            VStack(alignment: .leading, spacing: Space.lg) {
+                                if !overdue.isEmpty {
+                                    CatchUpCard(plan: plan, overdue: overdue, now: AppClock.now)
+                                        .transition(.opacity)
+                                } else if plan.isComplete {
+                                    DayCompleteCard(plan: plan)
+                                        .transition(.scale(scale: 0.96).combined(with: .opacity))
+                                } else if let next = plan.nextStop {
+                                    Button {
+                                        next.place.openDirections(by: store.travelMode(into: next.id))
+                                    } label: {
+                                        HStack(spacing: Space.xs) {
+                                            Icon(store.travelMode(into: next.id).icon, size: 18)
+                                            Text("Directions to \(next.place.name)").lineLimit(1)
+                                        }
+                                    }
+                                    .buttonStyle(.primary)
+                                    .transition(.opacity)
                                 }
                             }
-                            .buttonStyle(.primary)
-                            .transition(.opacity)
                         }
 
                         if plan.stops.count - plan.firstMovableIndex >= 2 {
@@ -220,5 +229,92 @@ private struct DayCompleteCard: View {
         }
         .planditCard()
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Asks when the clock has passed stops that aren't marked done: did you go, or are you running behind?
+/// Without it, a day nobody updated shows afternoon stops as still ahead at night.
+private struct CatchUpCard: View {
+    let plan: DayPlan
+    let overdue: [PlanStop]
+    let now: Date
+    @Environment(PlanditStore.self) private var store
+
+    var body: some View {
+        card(overdue, now: now)
+    }
+
+    private func card(_ overdue: [PlanStop], now: Date) -> some View {
+        let onlyUnderway = overdue.count == 1 && overdue[0].status == .now
+        let isToday = Calendar.current.isDate(plan.date, inSameDayAs: now)
+        return VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(alignment: .top, spacing: Space.sm) {
+                Icon(.clock, size: 20).foregroundStyle(.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(onlyUnderway ? "Still at \(overdue[0].place.name)?" : "Running behind?")
+                        .font(.cardHeading)
+                        .foregroundStyle(.ink)
+                    Text(Self.message(overdue, now: now, onlyUnderway: onlyUnderway, isToday: isToday))
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if isToday {
+                        ForEach(Self.laterLines(plan, now: now), id: \.self) { line in
+                            Text(line.text)
+                                .font(.metadata)
+                                .foregroundStyle(line.isWarning ? Color.error : Color.inkMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            HStack(spacing: Space.sm) {
+                Button(onlyUnderway ? "Done here" : (overdue.count == 1 ? "Mark it done" : "Mark them done")) {
+                    withAnimation(.snappy) { store.markOverdueDone() }
+                }
+                .buttonStyle(.secondary)
+                .accessibilityIdentifier("catchup-done")
+                if isToday {
+                    Button(onlyUnderway ? "Still here" : "Start from now") {
+                        withAnimation(.snappy) { store.startRestFromNow() }
+                    }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("catchup-later")
+                }
+            }
+        }
+        .planditCard()
+    }
+
+    struct Line: Hashable {
+        var text: String
+        var isWarning = false
+    }
+
+    /// What "Start from now" / "Still here" would do: where the day ends, and any place you'd reach after it closes.
+    static func laterLines(_ plan: DayPlan, now: Date) -> [Line] {
+        var moved = plan
+        moved.startRestFromNow(now: now)
+        guard let end = moved.stops.last?.end, end != plan.stops.last?.end else { return [] }
+        var lines = [Line(text: "Moving the rest later ends your day at \(end.shortTime).")]
+        let alreadyLate = Set(plan.stopsArrivingAfterClose().map(\.id))
+        let late = moved.stopsArrivingAfterClose().filter { !alreadyLate.contains($0.id) }.map(\.place.name)
+        if !late.isEmpty {
+            lines.append(Line(text: "You'd get to \(late.formatted(.list(type: .and))) after closing.", isWarning: true))
+        }
+        return lines
+    }
+
+    /// "It's 7:48 PM, past the times planned for The High Line, Los Tacos No. 1 and 2 more."
+    static func message(_ overdue: [PlanStop], now: Date, onlyUnderway: Bool, isToday: Bool) -> String {
+        if onlyUnderway {
+            return "It's \(now.shortTime). It was planned until \(overdue[0].end.shortTime). \"Still here\" moves the rest of the day later."
+        }
+        let names = overdue.map(\.place.name)
+        let listed = names.count <= 3 ? names : Array(names.prefix(2)) + ["\(names.count - 2) more"]
+        let past = "past the times planned for \(listed.formatted(.list(type: .and)))"
+        guard isToday else { return "This day is over, \(past)." }
+        let them = overdue.count == 1 ? "it" : "them"
+        return "It's \(now.shortTime), \(past). Mark \(them) done if you went, or start \(them) from now."
     }
 }
