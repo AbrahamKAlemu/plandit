@@ -52,6 +52,8 @@ struct PlanditTabBar: View {
             if !isCollapsed { Hairline() }
         }
         .sensoryFeedback(.selection, trigger: selection)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tab-bar")
     }
 }
 

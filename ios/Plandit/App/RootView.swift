@@ -125,12 +125,33 @@ struct RootView: View {
 }
 
 /// The sheet's content: one navigation stack per tab, with the tab bar pinned to the bottom.
+///
+/// The bar sits below the stacks rather than in a `safeAreaInset`. Each `NavigationStack` hosts its
+/// screens in their own UIKit controllers, and inside this sheet those controllers take their safe
+/// area from the sheet, not from SwiftUI's inset. So with an inset, every scroll view ran on under
+/// the bar and its last bar-height of content never scrolled into view (W-1). Ending the stacks
+/// where the bar begins fixes every screen, pushed ones included.
 private struct SheetContainer: View {
     @Environment(SheetRouter.self) private var router
 
     var body: some View {
         @Bindable var router = router
-        ZStack {
+        VStack(spacing: 0) {
+            stacks
+            // The undo bar sits between the stacks and the tab bar, so it never covers a screen's last item.
+            VStack(spacing: Space.xs) {
+                UndoBar()
+                PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+            }
+        }
+        .sheet(isPresented: $router.isPlanning) {
+            PlanBuilderSheet()
+        }
+    }
+
+    private var stacks: some View {
+        @Bindable var router = router
+        return ZStack {
             switch router.tab {
             case .today:
                 NavigationStack(path: $router.todayPath) {
@@ -157,14 +178,5 @@ private struct SheetContainer: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: router.tab)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: Space.xs) {
-                UndoBar()
-                PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
-            }
-        }
-        .sheet(isPresented: $router.isPlanning) {
-            PlanBuilderSheet()
-        }
     }
 }
