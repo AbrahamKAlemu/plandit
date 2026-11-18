@@ -4,9 +4,10 @@ import SwiftUI
 /// The style guide allows Lucide only: add new icons to the catalog instead of using SF Symbols.
 enum Lucide: String {
     case bookmark, bus, car, check, clock, coffee, footprints, house, info, landmark, link, map, martini
-    case navigation, play, plus, route, ticket, trees, users, utensils, video, wallet, x
+    case navigation, play, plus, route, star, ticket, trees, users, utensils, video, wallet, x
     case moon
     case calendarDays = "calendar-days"
+    case chevronDown = "chevron-down"
     case chevronLeft = "chevron-left"
     case chevronRight = "chevron-right"
     case arrowUpDown = "arrow-up-down"
