@@ -100,4 +100,27 @@ final class SavedListFlowTests: XCTestCase {
         XCTAssertTrue(status.exists)
         XCTAssertLessThanOrEqual(smalls.frame.maxX, status.frame.minX)
     }
+
+    /// W-9: the longest sample name sits next to its In plan pill, shown in full and clear of it.
+    @MainActor func testALongNameNextToAStatusIsShownInFull() {
+        let app = launch()
+        let fullName = "The Hungarian Pastry Shop"
+        let name = app.staticTexts[fullName].firstMatch
+        var swipes = 0
+        while !name.isHittable, swipes < 6 {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        XCTAssertTrue(name.isHittable)
+        XCTAssertEqual(name.label, fullName)
+
+        // The In plan pill on the same row: the one whose frame shares the name's vertical span.
+        let pills = app.staticTexts.matching(identifier: "In plan").allElementsBoundByIndex
+        let pill = pills.first { $0.frame.maxY > name.frame.minY && $0.frame.minY < name.frame.maxY }
+        XCTAssertNotNil(pill, "the pastry shop is in the sample day, so its row reads In plan")
+        if let pill {
+            XCTAssertFalse(name.frame.intersects(pill.frame), "the name doesn't run under the status")
+            XCTAssertLessThanOrEqual(name.frame.maxX, pill.frame.minX)
+        }
+    }
 }
