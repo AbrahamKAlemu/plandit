@@ -90,6 +90,7 @@
 		8E903A57F370E385BB372776 /* SupportedSocialURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF989FD1B55446132D369CCC /* SupportedSocialURL.swift */; };
 		90210A97112312A6C39ABA44 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F524D5A387C25013DA2CB37 /* Typography.swift */; };
 		90A8EB2E306C22D3E6E1B6FF /* Manrope-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D70C41725CF5E3CC2016BBEB /* Manrope-Regular.ttf */; };
+		92476201045692040C7B3D5A /* TodaySummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FFC1C423FA3CED1F07C459 /* TodaySummaryTests.swift */; };
 		9E222E9367AED92EC41D0118 /* VideoEvidenceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7191C0F5D85E96A38F7A0440 /* VideoEvidenceExtractor.swift */; };
 		A6BB9139C67A0E2420BFF6C0 /* AppleReauthorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AE0AC7A49D7795EB817D6F /* AppleReauthorizer.swift */; };
 		A6CC10B3F75C6F24FC7B8455 /* PlanBuilderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504C8B8EFDAB37DFE6540FA9 /* PlanBuilderSheet.swift */; };
@@ -290,6 +291,7 @@
 		DF8A47F0B3B897F2AF699F74 /* PlanditAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditAPIClient.swift; sourceTree = "<group>"; };
 		E199C158B266ABDD3CE2EE39 /* TutorialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialView.swift; sourceTree = "<group>"; };
 		E1B7DEC00D2D93091E423F2C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E2FFC1C423FA3CED1F07C459 /* TodaySummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodaySummaryTests.swift; sourceTree = "<group>"; };
 		E59E8E23998E8DD242E27519 /* RouteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteService.swift; sourceTree = "<group>"; };
 		E617A3E3996B4A8A800A2725 /* PlanditStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditStoreTests.swift; sourceTree = "<group>"; };
 		E792BAD6BC55F331429035C8 /* StopTimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopTimeTests.swift; sourceTree = "<group>"; };
@@ -534,6 +536,7 @@
 				AC13355B43D3344040BFB958 /* SupportedSocialURLTests.swift */,
 				C7C7E155DFE62F72D82A2958 /* SyncCoordinatorTests.swift */,
 				3D14F17A6FC87C91B28D1554 /* SyncReviewTests.swift */,
+				E2FFC1C423FA3CED1F07C459 /* TodaySummaryTests.swift */,
 				9C36D4AA33BD604BAF3186AB /* TodayTimesTests.swift */,
 				D3B314F90C6E01A56854999A /* UsageEventTests.swift */,
 				1386614723DD9841864693A2 /* UserStatsTests.swift */,
@@ -910,6 +913,7 @@
 				8919F59FEC559075A1F8E58C /* SupportedSocialURLTests.swift in Sources */,
 				CFA30F5350EC5C6CED55CCCB /* SyncCoordinatorTests.swift in Sources */,
 				370B1BBA5EC3127C8D4155ED /* SyncReviewTests.swift in Sources */,
+				92476201045692040C7B3D5A /* TodaySummaryTests.swift in Sources */,
 				2312AE57E4F33EA5C79AC3BB /* TodayTimesTests.swift in Sources */,
 				176FF646B17789C7EFD80CE3 /* UsageEventTests.swift in Sources */,
 				099784701DA974D6031E0894 /* UserStatsTests.swift in Sources */,

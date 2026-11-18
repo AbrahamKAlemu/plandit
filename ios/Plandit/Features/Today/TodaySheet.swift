@@ -157,7 +157,8 @@ private struct PlanSummary: View {
                 .accessibilityHint("Shows where the money goes and lets you change it")
                 .accessibilityIdentifier("budget-metric")
                 Rectangle().fill(Color.border).frame(width: 1)
-                SummaryMetric(icon: .footprints, value: plan.walkingMiles.milesText, caption: "Walking")
+                let travel = TodaySummaryText.travel(plan)
+                SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, Space.sm)
@@ -177,6 +178,54 @@ private struct PlanSummary: View {
     private var budgetCaption: String {
         let budget = plan.budget.wholeDollarsText
         return plan.totalCost <= plan.budget ? "of \(budget) budget" : "Over \(budget) budget"
+    }
+}
+
+/// How Today's summary describes getting around: miles walked when the day has any walking,
+/// otherwise its rides by kind, so a subway day never reads "0.0 mi Walking".
+enum TodaySummaryText {
+    struct Travel: Equatable {
+        var icon: Lucide
+        var value: String
+        var caption: String
+    }
+
+    static func travel(_ plan: DayPlan) -> Travel {
+        guard let rides = rides(plan.legs) else {
+            return Travel(icon: .footprints, value: plan.walkingMiles.milesText, caption: "Walking")
+        }
+        return Travel(icon: rides.icon, value: rides.text, caption: "Getting around")
+    }
+
+    /// "All done for today" line: "2.1 mi walked" or "2 subway rides".
+    static func completedTravel(_ plan: DayPlan) -> String {
+        rides(plan.legs)?.text ?? "\(plan.walkingMiles.milesText) walked"
+    }
+
+    /// "2 subway rides", "1 bus ride", "1 drive", or each kind when they're mixed: "1 subway, 1 bus".
+    /// Nil when any trip is a walk, or there are no trips.
+    private static func rides(_ legs: [TravelLeg]) -> (text: String, icon: Lucide)? {
+        guard !legs.isEmpty, !legs.contains(where: { $0.mode == .walk }) else { return nil }
+        let counted = [TravelMode.subway, .bus, .drive].compactMap { mode -> (mode: TravelMode, count: Int)? in
+            let count = legs.filter { $0.mode == mode }.count
+            return count > 0 ? (mode, count) : nil
+        }
+        // The icon follows the most common kind; ties go to the subway, then the bus.
+        guard let most = counted.max(by: { $0.count < $1.count }) else { return nil }
+        guard counted.count == 1 else {
+            return (counted.map { "\($0.count) \(rideWord($0.mode))" }.joined(separator: ", "), most.mode.icon)
+        }
+        let noun = most.mode == .drive ? (most.count == 1 ? "drive" : "drives") : (most.count == 1 ? "\(rideWord(most.mode)) ride" : "\(rideWord(most.mode)) rides")
+        return ("\(most.count) \(noun)", most.mode.icon)
+    }
+
+    private static func rideWord(_ mode: TravelMode) -> String {
+        switch mode {
+        case .walk: "walk"
+        case .subway: "subway"
+        case .bus: "bus"
+        case .drive: "drive"
+        }
     }
 }
 
@@ -222,7 +271,7 @@ private struct DayCompleteCard: View {
                 .background(Color.emerald, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text("All done for today").font(.cardHeading).foregroundStyle(.ink)
-                Text("\(plan.stops.count) stops · \(plan.totalCost.wholeDollarsText) · \(plan.walkingMiles.milesText) walked")
+                Text("\(plan.stops.count) stops · \(plan.totalCost.wholeDollarsText) · \(TodaySummaryText.completedTravel(plan))")
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
             }
