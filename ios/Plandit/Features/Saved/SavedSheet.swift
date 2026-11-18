@@ -4,7 +4,9 @@ import SwiftUI
 struct SavedSheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
-    @State private var filter: PlaceCategory?
+    @State private var query = SavedListQuery()
+    /// Counts + taps that added a place, for the success haptic.
+    @State private var adds = 0
     @State private var isAddingLink = false
     @AppStorage("plandit.saved.showShareTip") private var showShareTip = true
 
@@ -40,34 +42,47 @@ struct SavedSheet: View {
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
 
-                        if categories.count > 1 {
-                            ScrollView(.horizontal) {
-                                HStack(spacing: Space.xs) {
-                                    Chip(title: "All", isSelected: filter == nil) { select(nil) }
-                                    ForEach(categories) { category in
-                                        Chip(title: category.label, icon: category.icon, isSelected: filter == category) {
-                                            select(filter == category ? nil : category)
-                                        }
-                                    }
-                                }
-                            }
-                            .scrollIndicators(.hidden)
+                        if !groups.isEmpty {
+                            categoryPictures
                         }
 
-                        ForEach(posts) { post in
-                            NavigationLink(value: post.id) {
-                                SavedPostRow(post: post, isInToday: store.isInToday(post))
+                        HStack(spacing: Space.xs) {
+                            SavedMenuControl(
+                                title: query.filterTitle,
+                                accessibilityName: "Filter",
+                                isActive: query.filter != .all,
+                                identifier: "saved-filter",
+                                selection: $query.filter,
+                                options: SavedFilter.allCases,
+                                optionLabel: \.label
+                            )
+                            SavedMenuControl(
+                                title: query.sortTitle,
+                                accessibilityName: "Sort",
+                                isActive: query.sort != .newest,
+                                identifier: "saved-sort",
+                                selection: $query.sort,
+                                options: SavedSort.allCases,
+                                optionLabel: \.label
+                            )
+                            Spacer(minLength: 0)
+                        }
+
+                        VStack(spacing: 0) {
+                            ForEach(posts) { post in
+                                SavedListRow(post: post, isInToday: store.isInToday(post)) {
+                                    add(post)
+                                }
+                                .contextMenu {
+                                    SavedPostActions(post: post)
+                                }
+                                .transition(.opacity.combined(with: .move(edge: .leading)))
+                                Hairline()
                             }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                SavedPostActions(post: post)
-                            }
-                            .transition(.opacity.combined(with: .move(edge: .leading)))
-                            Hairline()
                         }
 
                         if posts.isEmpty {
-                            Text("No saved places in this category yet.")
+                            Text(emptyFilterMessage)
                                 .font(.bodyText)
                                 .foregroundStyle(.inkMuted)
                                 .padding(.vertical, Space.lg)
@@ -84,6 +99,7 @@ struct SavedSheet: View {
             .hiddenWhenSheetCollapsed()
         }
         .background(Color.surface)
+        .sensoryFeedback(.success, trigger: adds)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
@@ -93,8 +109,38 @@ struct SavedSheet: View {
         }
     }
 
-    private func select(_ category: PlaceCategory?) {
-        withAnimation(.snappy(duration: 0.3)) { filter = category }
+    private var categoryPictures: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Space.xs) {
+                ForEach(groups, id: \.group) { entry in
+                    CategoryPicture(
+                        group: entry.group,
+                        accessibilityLabel: entry.accessibilityLabel,
+                        isSelected: activeQuery.group == entry.group
+                    ) {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            query = activeQuery
+                            query.toggle(entry.group)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, Space.lg)
+        }
+        .scrollIndicators(.hidden)
+        .padding(.horizontal, -Space.lg)
+    }
+
+    /// + on a row: adds the place to today's plan. If that can't happen, open the post instead, so
+    /// the tap never looks like it did nothing.
+    private func add(_ post: SavedPost) {
+        var added: UUID?
+        withAnimation(.snappy) { added = store.addToToday(post.id) }
+        if added != nil {
+            adds += 1
+        } else {
+            router.savedPath = [post.id]
+        }
     }
 
     private var subtitle: String {
@@ -106,15 +152,19 @@ struct SavedSheet: View {
         return pending > 0 ? "\(places) · \(pending) to finish" : places
     }
 
-    /// Only categories that actually have saved places.
-    private var categories: [PlaceCategory] {
-        let present = Set(store.saved.compactMap { $0.place?.category })
-        return PlaceCategory.allCases.filter(present.contains)
-    }
+    private var groups: [SavedListQuery.GroupCount] { SavedListQuery.groups(in: store.saved) }
 
-    private var posts: [SavedPost] {
-        guard let filter else { return store.saved }
-        return store.saved.filter { $0.place?.category == filter }
+    /// The query, minus a selected category whose last place was removed.
+    private var activeQuery: SavedListQuery { query.resolved(for: store.saved) }
+
+    private var posts: [SavedPost] { activeQuery.apply(to: store.saved) }
+
+    private var emptyFilterMessage: String {
+        switch (activeQuery.group, activeQuery.filter) {
+        case (.some, .freeOnly): "No free places in this category yet."
+        case (.none, .freeOnly): "No free places saved yet."
+        default: "No saved places in this category yet."
+        }
     }
 }
 
@@ -154,7 +204,7 @@ private struct ShareTipCard: View {
         VStack(alignment: .leading, spacing: Space.sm) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text("Save from TikTok and Reels").font(.cardHeading).foregroundStyle(.ink)
+                    Text("Save from TikTok and Instagram").font(.cardHeading).foregroundStyle(.ink)
                     Text("Tap Share in TikTok or Instagram, then choose Plandit. We'll add the place to your map with its price and hours.")
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
@@ -179,43 +229,6 @@ private struct ShareTipCard: View {
             .buttonStyle(.secondary)
         }
         .planditCard()
-    }
-}
-
-struct SavedPostRow: View {
-    let post: SavedPost
-    let isInToday: Bool
-
-    var body: some View {
-        HStack(spacing: Space.sm) {
-            SavedThumbnail(post: post)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(post.title)
-                    .font(.manrope(.bold, size: 16))
-                    .foregroundStyle(post.place == nil ? Color.inkMuted : Color.ink)
-                    .lineLimit(1)
-                if let place = post.place {
-                    Text([place.category.label, place.neighborhood, post.estimatedCost?.dollarsText].compactMap { $0 }.joined(separator: " · "))
-                        .font(.metadata)
-                        .foregroundStyle(.inkMuted)
-                        .lineLimit(1)
-                }
-                Text(post.sourceLine)
-                    .font(.metadata)
-                    .foregroundStyle(.inkMuted)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: Space.xs)
-            SavedStatus(post: post, isInToday: isInToday)
-                .transition(.scale.combined(with: .opacity))
-        }
-        .padding(.vertical, Space.xs)
-        .contentShape(Rectangle())
-        .animation(.snappy(duration: 0.3), value: post.status)
-        .animation(.snappy(duration: 0.3), value: isInToday)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -244,57 +257,5 @@ struct SavedThumbnail: View {
 
     private var fallbackIcon: some View {
         Icon(post.place?.category.icon ?? .video, size: size * 0.42).foregroundStyle(.ink)
-    }
-}
-
-/// Trailing status. Red appears only for the "unavailable" case, and always with text.
-private struct SavedStatus: View {
-    let post: SavedPost
-    let isInToday: Bool
-
-    var body: some View {
-        Group {
-            switch post.status {
-            case .processing:
-                HStack(spacing: Space.xxs) {
-                    ProgressView().controlSize(.small)
-                    Text("Mapping")
-                }
-                .foregroundStyle(.inkMuted)
-            case .needsEvidence:
-                HStack(spacing: Space.xxs) {
-                    Icon(.circleAlert, size: 16)
-                    Text("Add details")
-                }
-                .foregroundStyle(.ink)
-            case .needsConfirmation:
-                HStack(spacing: Space.xxs) {
-                    Icon(.mapPin, size: 16)
-                    Text("Confirm")
-                }
-                .foregroundStyle(.emeraldDeep)
-            case .needsReview:
-                HStack(spacing: Space.xxs) {
-                    Icon(.circleAlert, size: 16)
-                    Text("Review")
-                }
-                .foregroundStyle(.ink)
-            case .failed:
-                HStack(spacing: Space.xxs) {
-                    Icon(.circleAlert, size: 16)
-                    Text("Not found")
-                }
-                .foregroundStyle(.error)
-            case .ready where isInToday:
-                HStack(spacing: Space.xxs) {
-                    Icon(.circleCheck, size: 16)
-                    Text("In plan")
-                }
-                .foregroundStyle(.emeraldDeep)
-            case .ready:
-                Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
-            }
-        }
-        .font(.label)
     }
 }

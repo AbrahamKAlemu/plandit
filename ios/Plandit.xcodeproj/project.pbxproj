@@ -30,6 +30,7 @@
 		29D266F7F036D1FBEC16D21E /* Manrope-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D26D1BE1A789B91CACB62029 /* Manrope-SemiBold.ttf */; };
 		2D417D237FD6C80013CE559B /* Manrope-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D26D1BE1A789B91CACB62029 /* Manrope-SemiBold.ttf */; };
 		2DEE93E655D34F499CD19F7B /* Manrope-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3A2637EF392793AB0EBDE7F /* Manrope-ExtraBold.ttf */; };
+		300EB4AE2780A0A69C764E89 /* SavedListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD25D5D94F85752E4A75AB55 /* SavedListRow.swift */; };
 		3025C99E05B3AD848B959100 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57CF7ECA1069F68EE86C3CF /* Colors.swift */; };
 		326DFD212CC8E91AFFA148E1 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */; };
 		32CDA229B854413D1ADBEAD1 /* AuthenticatedAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FEADE27D31DC9BE404E8996 /* AuthenticatedAPI.swift */; };
@@ -118,6 +119,7 @@
 		D7AB055DD6DB90EA79CEE8EF /* MapAndBudgetFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89843ADA0498BA38B8D5F770 /* MapAndBudgetFlowTests.swift */; };
 		D892E7DD21A2EE1CD484FD0C /* AppleReauthorizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B69D681D36152876FB4DBC /* AppleReauthorizationTests.swift */; };
 		D8F63D307062061D377B327C /* ProfileFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4507162774F07730804AF3EC /* ProfileFlowTests.swift */; };
+		D94B07DCC51B027BA1F37667 /* SavedListFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9684CCBD857D99564E0E021 /* SavedListFlowTests.swift */; };
 		DA97CF6593862918B2B338DD /* SavedSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5582CBA0325676E717C2215 /* SavedSheet.swift */; };
 		DB5B30AA8B4F3B1FAA596D8B /* ProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8896624B417A22D10DD3E7E5 /* ProfileSheet.swift */; };
 		DB9611683E78C7C273CB67AB /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57CF7ECA1069F68EE86C3CF /* Colors.swift */; };
@@ -254,10 +256,12 @@
 		C55D01DF203BA000D57AA263 /* StopTimeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopTimeSheet.swift; sourceTree = "<group>"; };
 		C5E8A490C7A15655F2AEABAE /* MapAndBudgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapAndBudgetTests.swift; sourceTree = "<group>"; };
 		C7C7E155DFE62F72D82A2958 /* SyncCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCoordinatorTests.swift; sourceTree = "<group>"; };
+		C9684CCBD857D99564E0E021 /* SavedListFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedListFlowTests.swift; sourceTree = "<group>"; };
 		C9BC2C401705F9081A799477 /* PlanditShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PlanditShare.entitlements; sourceTree = "<group>"; };
 		CB7417D650900FF52CF7ACC1 /* Plandit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Plandit.entitlements; sourceTree = "<group>"; };
 		CCB7CB9515D07BA681F5888F /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
 		CCEAE7AA2E771103C2DE7BF4 /* PlanditApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditApp.swift; sourceTree = "<group>"; };
+		CD25D5D94F85752E4A75AB55 /* SavedListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedListRow.swift; sourceTree = "<group>"; };
 		D01FF2C6C1868147DCA4E006 /* MapViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewportTests.swift; sourceTree = "<group>"; };
 		D23D940E83BF19D7F19169F9 /* TravelOptionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelOptionsSheet.swift; sourceTree = "<group>"; };
 		D26D1BE1A789B91CACB62029 /* Manrope-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Manrope-SemiBold.ttf"; sourceTree = "<group>"; };
@@ -359,6 +363,7 @@
 				89843ADA0498BA38B8D5F770 /* MapAndBudgetFlowTests.swift */,
 				5B182A9731DBE43D727F7699 /* PlanFlowTests.swift */,
 				4507162774F07730804AF3EC /* ProfileFlowTests.swift */,
+				C9684CCBD857D99564E0E021 /* SavedListFlowTests.swift */,
 				2C5FEF54EECEB97BC5504BCF /* SavedPlaceExtractionFlowTests.swift */,
 				1295EE53202C0571CABD26E3 /* SheetLayoutTests.swift */,
 				47AC59B4BB383A03DDC1BF5A /* WelcomeFlowTests.swift */,
@@ -433,6 +438,7 @@
 			children = (
 				15AC2801DC9EA6D58175224D /* AddLinkSheet.swift */,
 				03A4C108DD7B103848F38717 /* SavedListQuery.swift */,
+				CD25D5D94F85752E4A75AB55 /* SavedListRow.swift */,
 				894E93D2483E91645C6F60E6 /* SavedPostDetailView.swift */,
 				C5582CBA0325676E717C2215 /* SavedSheet.swift */,
 			);
@@ -826,6 +832,7 @@
 				73938BD2A6979E356613CADD /* RouteService.swift in Sources */,
 				AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */,
 				626A7D58EDAB3AE47E9DC55B /* SavedListQuery.swift in Sources */,
+				300EB4AE2780A0A69C764E89 /* SavedListRow.swift in Sources */,
 				D1D84D1534F5C2A2EAD72278 /* SavedPost.swift in Sources */,
 				C4BE7A1321A5AFCC6E30816E /* SavedPostDetailView.swift in Sources */,
 				ABD059E5D3DD7CD3A542FC0B /* SavedPostPersistence.swift in Sources */,
@@ -883,6 +890,7 @@
 				D7AB055DD6DB90EA79CEE8EF /* MapAndBudgetFlowTests.swift in Sources */,
 				16C25BA5E1ED63C809EDFB8D /* PlanFlowTests.swift in Sources */,
 				D8F63D307062061D377B327C /* ProfileFlowTests.swift in Sources */,
+				D94B07DCC51B027BA1F37667 /* SavedListFlowTests.swift in Sources */,
 				7591B46488F202359C0B3374 /* SavedPlaceExtractionFlowTests.swift in Sources */,
 				153496225968ED88756F6D19 /* SheetLayoutTests.swift in Sources */,
 				64D3FAA53F2A3C9A0036975A /* WelcomeFlowTests.swift in Sources */,
