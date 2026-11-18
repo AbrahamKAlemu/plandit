@@ -143,11 +143,6 @@ extension SavedPost {
         }
     }
 
-    var sourceLine: String {
-        let parts = [platform.displayName, creatorHandle, savedAgoText()]
-        return parts.compactMap { $0 }.joined(separator: " · ")
-    }
-
     /// When it was saved: "Today", "Yesterday", "3 days ago" up to 6 days, then "Nov 6" ("Nov 6, 2025"
     /// in an earlier year). Every saved date in the app reads this way (W-10).
     func savedAgoText(now: Date = .now, calendar: Calendar = .current) -> String {
