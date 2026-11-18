@@ -49,6 +49,9 @@ struct RootView: View {
         .onChange(of: store.today.stops.count) {
             if tab == .today { frameMap() }
         }
+        .onChange(of: store.visited.count) {
+            if tab == .profile { frameMap() }
+        }
         .onChange(of: router.todayPath) { syncSelectionFromSheet() }
         .onChange(of: router.savedPath) { syncSelectionFromSheet() }
         .onChange(of: mapSelection) { _, id in openDetail(for: id) }
@@ -114,7 +117,7 @@ struct RootView: View {
             switch tab {
             case .today: coordinates = store.today.stops.map(\.place.coordinate)
             case .saved: coordinates = store.saved.filter(\.isMappable).compactMap { $0.place?.coordinate }
-            case .profile: coordinates = Manhattan.outline
+            case .profile: coordinates = Manhattan.profileFocus(visited: store.visited.map(\.coordinate))
             }
         }
 

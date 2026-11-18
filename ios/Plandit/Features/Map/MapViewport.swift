@@ -31,6 +31,14 @@ enum Manhattan {
     )
 }
 
+extension Manhattan {
+    /// What Profile's map frames: the places you've been, which are its pins, or the whole island
+    /// before there are any.
+    static func profileFocus(visited: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        visited.isEmpty ? outline : visited
+    }
+}
+
 /// The map's on-screen geometry, used to frame coordinates in the part of the map the sheet doesn't cover.
 @MainActor
 struct MapViewport: Equatable {

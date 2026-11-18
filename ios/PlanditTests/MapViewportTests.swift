@@ -82,6 +82,50 @@ final class MapViewportTests: XCTestCase {
         XCTAssertEqual(offset.x, 0, accuracy: 1)
     }
 
+    @MainActor func testClampedZoomStillCentersContentInTheOpenMapAtHalfHeight() {
+        // iPhone 17 Pro at half height: all of Manhattan needs more than the farthest zoom.
+        var phoneViewport = viewport(phone, top: 62)
+        phoneViewport.bottomInset = SheetDetent.coveredHeight(.medium, screenHeight: phone.height)
+        let camera = phoneViewport.camera(fitting: Manhattan.outline)
+
+        XCTAssertEqual(camera.distance, Manhattan.maximumDistance, accuracy: 1, "the clamp applies here")
+        let scale = camera.distance * MapViewport.visibleHeightRatio / Double(phone.height)
+        let offset = screenOffset(of: middle(of: Manhattan.outline), from: camera, metersPerPoint: scale)
+        let openMiddle = (62.0 + Double(phone.height - phoneViewport.bottomInset)) / 2
+        XCTAssertEqual(Double(phone.height) / 2 - offset.y, openMiddle, accuracy: 1, "Manhattan's middle sits in the middle of the open map")
+        XCTAssertEqual(offset.x, 0, accuracy: 1)
+    }
+
+    @MainActor func testProfileFramesVisitedPlacesOrManhattanBeforeThereAreAny() {
+        let visited = [SampleData.hungarianPastry, SampleData.losTacos].map(\.coordinate)
+        XCTAssertEqual(Manhattan.profileFocus(visited: visited).map(\.latitude), visited.map(\.latitude))
+        XCTAssertEqual(Manhattan.profileFocus(visited: []).map(\.latitude), Manhattan.outline.map(\.latitude))
+    }
+
+    @MainActor func testVisitedPinsThatFitTheFarthestZoomAreAllAboveTheSheetAtHalfHeight() {
+        // Morningside Heights to Murray Hill fits. All of the sample (Battery Park to Fort Tryon,
+        // ~18.7 km along the grid) doesn't: at 80 km the open map above a half-height sheet on
+        // this phone holds ~16.6 km, so the ends spill past it whatever the framing.
+        let visited = SampleData.visitedPlaces
+            .filter { ["Morningside Heights", "Harlem", "Central Park", "Midtown East", "Murray Hill"].contains($0.neighborhood) }
+            .map(\.coordinate)
+        XCTAssertGreaterThanOrEqual(visited.count, 5)
+        var phoneViewport = viewport(phone, top: 62)
+        phoneViewport.bottomInset = SheetDetent.coveredHeight(.medium, screenHeight: phone.height)
+        let camera = phoneViewport.camera(fitting: Manhattan.profileFocus(visited: visited))
+
+        let scale = camera.distance * MapViewport.visibleHeightRatio / Double(phone.height)
+        for pin in visited {
+            let offset = screenOffset(of: pin, from: camera, metersPerPoint: scale)
+            let y = Double(phone.height) / 2 - offset.y
+            let x = Double(phone.width) / 2 + offset.x
+            XCTAssertGreaterThanOrEqual(y, 62, "below the status bar")
+            XCTAssertLessThanOrEqual(y, Double(phone.height - phoneViewport.bottomInset), "above the sheet")
+            XCTAssertGreaterThanOrEqual(x, 0)
+            XCTAssertLessThanOrEqual(x, Double(phone.width))
+        }
+    }
+
     // MARK: - Helpers
 
     @MainActor private func middle(of coordinates: [CLLocationCoordinate2D]) -> CLLocationCoordinate2D {
