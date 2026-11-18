@@ -13,6 +13,14 @@ added to the brief as D requirements.
   "late lunch" after dinner (walkthrough shot 42; a GitHub issue for Eldad once approved), and
   Today's times disagree by 1 to 3 minutes (W-17 rechecks after #28, or moves to 1.0.2).
 - Website and App Store wording change with slice A (plan, Rollout).
+- Existing sync risk, found in the slice E review and not caused by this work: an existing account
+  whose first sign-in on a new phone can't reach the server gets an empty offline seed. That seed
+  is pushed once the server answers, and `PUT /api/me/snapshot/` doesn't check versions, so it
+  can replace the real cloud copy. A Render cold start longer than the 30 s fetch timeout is
+  enough. It needs its own issue (not opened yet).
+- `MapAndBudgetFlowTests.testReorderingTheStopsAhead` fails after about 2:30 PM local time: the
+  sample stop is then "Done or underway". It fails on 413d299 too (came in with #27). Slice C
+  fixes it with #28's clock.
 
 ## Documents
 
@@ -32,7 +40,9 @@ added to the brief as D requirements.
 | Persona round 2 (W rows) | Done | Five approvals, no must_fix |
 | Human approval | Done | Abraham, November 18, in chat |
 | Persona round 3 (D rows) | Done | Five approvals; Marcus's must_fix (Skip ends the tutorial) fixed |
-| Build A, D, E | In progress | Parallel worktrees |
+| Build D (Saved list) | Built, reviewed, fixes re-reviewed | `feature/polish-saved-list`; 261 unit tests, targeted UI 16/16. W-9 proved by screenshot 09 (the test only checks the label) |
+| Build E (tutorial) | Built, reviewed (pass); fixing review findings | `feature/polish-tutorial`; review: interrupted tutorial, pre-account saves, AX5, iPad width, double-tap |
+| Build A (bar, Profile, logo) | In progress | `feature/polish-bar-profile` |
 | Build B, C | Waiting | A and D merged; PR #28 |
 | Reviews and flow walk | Not started | |
 | Release | Not started | |
@@ -49,3 +59,5 @@ added to the brief as D requirements.
 | Nov 18 | Abraham asked for the design feedback PDF, the "Images for the app" category images and the new glossy "P" icon (app icon and in-app logo) to be built too. |
 | Nov 18 | Abraham: keep Today for 1.0.1; the Home tab of lists (feedback Change 3) waits for 1.0.2, when the lists arrive and the planner-vs-feed rule is settled. |
 | Nov 18 | Persona round 3 on D-1 to D-8: approvals; Marcus's must_fix fixed in D-1; "Added" became "In plan". |
+| Nov 18 | Slice D reviewed; five findings fixed and re-reviewed. |
+| Nov 18 | Slice E reviewed: D-1 passes. Decided: a tutorial that was started but not finished shows again at the next launch (it ends only with Skip or the last page). |
