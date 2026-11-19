@@ -390,7 +390,7 @@ final class PlanditStoreTests: XCTestCase {
         XCTAssertEqual(post.status, .needsEvidence)
         XCTAssertEqual(
             post.failureMessage,
-            "Automatic imports are paused for today. Add the place name or address below, or use the saved video instead."
+            "Automatic imports are paused for today. Add the place name or address below, or use the video instead."
         )
     }
 }

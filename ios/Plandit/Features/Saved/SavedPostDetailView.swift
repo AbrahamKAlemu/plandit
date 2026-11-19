@@ -286,7 +286,7 @@ private struct FindingPlaceCard: View {
                     .foregroundStyle(.ink)
             }
             if isSlow {
-                Text("Still looking. This can take up to a minute.")
+                Text("Still looking. This can take a minute or two.")
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
                     .accessibilityIdentifier("still-looking")
@@ -304,7 +304,7 @@ private struct FindingPlaceCard: View {
             }
             guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.25)) { isSlow = true }
-            AccessibilityNotification.Announcement("Still looking. This can take up to a minute.").post()
+            AccessibilityNotification.Announcement("Still looking. This can take a minute or two.").post()
         }
     }
 }
@@ -428,14 +428,14 @@ private struct PlaceSearchEditor: View {
 
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("Place name").font(.label).foregroundStyle(.ink)
-                TextField("Place name", text: $name)
+                TextField("Name, like Levain Bakery", text: $name)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("place-search-name")
                     .searchFieldStyle()
 
                 Text("Address").font(.label).foregroundStyle(.ink)
-                TextField("Street address, neighborhood, or city", text: $address)
+                TextField("Street, neighborhood or city", text: $address)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("place-search-address")

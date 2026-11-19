@@ -15,7 +15,7 @@ final class ShareFlowTests: XCTestCase {
         return app
     }
 
-    private func rows(in app: XCUIApplication) -> XCUIElementQuery {
+    @MainActor private func rows(in app: XCUIApplication) -> XCUIElementQuery {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-row-'"))
     }
 
