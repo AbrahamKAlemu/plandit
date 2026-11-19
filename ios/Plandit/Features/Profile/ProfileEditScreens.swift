@@ -52,6 +52,7 @@ struct BudgetScreen: View {
 }
 
 /// Name: shown at the top of Profile. Accounts made with Apple and no shared name start empty.
+/// Saves on every change, so there's no Save button to miss (W-6).
 struct NameScreen: View {
     @Environment(PlanditStore.self) private var store
     @State private var text = ""
@@ -82,6 +83,9 @@ struct NameScreen: View {
                         )
                         .animation(.snappy(duration: 0.2), value: isFocused)
                         .accessibilityIdentifier("profile-name-field")
+                    Text("Changes save as you type.")
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
                 }
             }
             .padding(Space.lg)
@@ -91,6 +95,7 @@ struct NameScreen: View {
         .navigationTitle("Name")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { text = store.profile.name }
+        .onChange(of: text) { save() }
         .onDisappear(perform: save)
     }
 
@@ -149,7 +154,7 @@ struct HomeBaseScreen: View {
     }
 }
 
-/// Getting around: which ways of moving between stops the planner may use.
+/// Preferred transportation: which ways of moving between stops the planner may use.
 struct TravelModesScreen: View {
     @Environment(PlanditStore.self) private var store
 
@@ -197,7 +202,7 @@ struct TravelModesScreen: View {
         }
         .scrollIndicators(.hidden)
         .background(Color.canvas)
-        .navigationTitle("Getting around")
+        .navigationTitle("Preferred transportation")
         .navigationBarTitleDisplayMode(.inline)
         .sensoryFeedback(.selection, trigger: store.profile.travelModes)
     }
@@ -244,7 +249,7 @@ struct HowToSaveScreen: View {
         }
         .scrollIndicators(.hidden)
         .background(Color.canvas)
-        .navigationTitle("Saving from TikTok and Instagram")
+        .navigationTitle("Save from TikTok and Instagram")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -75,10 +75,9 @@ enum SampleData {
     // MARK: - Profile
 
     static let profile = UserProfile(name: "Abraham", school: "Columbia University", homeBase: "Morningside Heights", defaultBudget: 60, travelModes: "Walk + subway")
-    static let stats = UserStats(plansCompleted: 12, neighborhoodsVisited: 9, milesWalked: 41.2, averageSpend: 23, plansUnderBudget: 10, streakWeeks: 3)
     static let pastPlans = [
-        PastPlan(title: "Sunday in the West Village", date: daysAgo(6), stopCount: 5, cost: 31),
-        PastPlan(title: "Harlem food crawl", date: daysAgo(13), stopCount: 4, cost: 38),
+        PastPlan(title: "Sunday in the West Village", date: daysAgo(6), stopCount: 5, cost: 31, budget: 40, walkingMiles: 2.1, fares: 0),
+        PastPlan(title: "Harlem food crawl", date: daysAgo(13), stopCount: 4, cost: 38, budget: 60, walkingMiles: 1.2, fares: 5.80),
         PastPlan(title: "Free museum Friday", date: daysAgo(22), stopCount: 3, cost: 12),
     ]
 

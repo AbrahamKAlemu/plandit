@@ -2,7 +2,7 @@ import Observation
 import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case today, saved, profile, settings
+    case today, saved, profile
 
     var id: String { rawValue }
 
@@ -11,13 +11,19 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: "Today"
         case .saved: "Saved"
         case .profile: "Profile"
-        case .settings: "Settings"
         }
     }
 
     /// Launch with `-startTab saved` (or another raw value) to open on another tab.
-    static var launchTab: AppTab {
-        UserDefaults.standard.string(forKey: "startTab").flatMap(AppTab.init(rawValue:)) ?? .today
+    static var launchTab: AppTab { AppTab(launchValue: UserDefaults.standard.string(forKey: "startTab")) }
+
+    /// `settings` was 1.0's Settings tab; it opens Profile, which holds Appearance and Account now.
+    init(launchValue: String?) {
+        switch launchValue {
+        case "settings": self = .profile
+        case let value?: self = AppTab(rawValue: value) ?? .today
+        case nil: self = .today
+        }
     }
 
     var icon: Lucide {
@@ -25,7 +31,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: .route
         case .saved: .bookmark
         case .profile: .userRound
-        case .settings: .settings
         }
     }
 }
@@ -44,7 +49,7 @@ final class SheetRouter {
         switch tab {
         case .today: todayPath.last
         case .saved: savedPath.last
-        case .profile, .settings: nil
+        case .profile: nil
         }
     }
 
@@ -55,7 +60,7 @@ final class SheetRouter {
             switch tab {
             case .today: todayPath = []
             case .saved: savedPath = []
-            case .profile, .settings: break
+            case .profile: break
             }
         }
     }

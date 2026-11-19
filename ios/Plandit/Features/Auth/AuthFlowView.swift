@@ -35,15 +35,9 @@ struct AuthFlowView: View {
 
 /// While the stored session is read, or the account's data is fetched after sign-in.
 struct SplashScreen: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
         VStack(spacing: Space.lg) {
-            (colorScheme == .dark ? BrandArt.lockupDark : BrandArt.lockupLight).image
-                .resizable()
-                .scaledToFit()
-                .frame(width: 150)
-                .accessibilityLabel("Plandit")
+            BrandLockup(markSize: 48)
             ProgressView()
                 .tint(Color.inkMuted)
                 .accessibilityLabel("Loading")

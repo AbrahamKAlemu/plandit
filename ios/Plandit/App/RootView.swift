@@ -11,6 +11,8 @@ struct RootView: View {
     @State private var camera: MapCameraPosition = .camera(Manhattan.overviewCamera)
     @State private var mapSelection: UUID?
     @State private var viewport = MapViewport()
+    /// The sheet's horizontal extent on screen. On iPad it's a panel narrower than the screen.
+    @State private var sheetColumns: ClosedRange<CGFloat>?
     @State private var location = LocationPermission()
 
     var body: some View {
@@ -21,6 +23,12 @@ struct RootView: View {
         }
         .sheet(isPresented: .constant(true)) {
             SheetContainer()
+                .onGeometryChange(for: ClosedRange<CGFloat>.self) { proxy in
+                    let frame = proxy.frame(in: .global)
+                    return frame.minX.rounded()...frame.maxX.rounded()
+                } action: { columns in
+                    sheetColumns = columns
+                }
                 .environment(store)
                 .environment(router)
                 .environment(\.isSheetCollapsed, detent == SheetDetent.peek)
@@ -37,8 +45,12 @@ struct RootView: View {
             frameMap()
         }
         .onChange(of: detent) { frameMap() }
+        .onChange(of: sheetColumns) { frameMap(animated: false) }
         .onChange(of: store.today.stops.count) {
             if tab == .today { frameMap() }
+        }
+        .onChange(of: store.visited.count) {
+            if tab == .profile { frameMap() }
         }
         .onChange(of: router.todayPath) { syncSelectionFromSheet() }
         .onChange(of: router.savedPath) { syncSelectionFromSheet() }
@@ -70,7 +82,7 @@ struct RootView: View {
             switch tab {
             case .today: if !router.todayPath.isEmpty { router.todayPath = [] }
             case .saved: if !router.savedPath.isEmpty { router.savedPath = [] }
-            case .profile, .settings: break
+            case .profile: break
             }
             return
         }
@@ -92,8 +104,11 @@ struct RootView: View {
 
     private func frameMap(animated: Bool = true) {
         guard viewport.size != .zero else { return }
-        var framing = viewport
-        framing.bottomInset = SheetDetent.coveredHeight(detent, screenHeight: viewport.size.height)
+        // At full height an iPad panel covers the middle of the map, so content goes beside it.
+        let framing = viewport.uncovered(
+            coveredHeight: SheetDetent.coveredHeight(detent, screenHeight: viewport.size.height),
+            fullHeightPanel: detent == .large ? sheetColumns : nil
+        )
 
         let coordinates: [CLLocationCoordinate2D]
         if let focused = focusedCoordinate() {
@@ -102,7 +117,7 @@ struct RootView: View {
             switch tab {
             case .today: coordinates = store.today.stops.map(\.place.coordinate)
             case .saved: coordinates = store.saved.filter(\.isMappable).compactMap { $0.place?.coordinate }
-            case .profile, .settings: coordinates = Manhattan.outline
+            case .profile: coordinates = Manhattan.profileFocus(visited: store.visited.map(\.coordinate))
             }
         }
 
@@ -119,18 +134,39 @@ struct RootView: View {
         switch tab {
         case .today: return store.stop(id: id)?.place.coordinate
         case .saved: return store.post(id: id)?.place?.coordinate
-        case .profile, .settings: return nil
+        case .profile: return nil
         }
     }
 }
 
 /// The sheet's content: one navigation stack per tab, with the tab bar pinned to the bottom.
+///
+/// The bar sits below the stacks rather than in a `safeAreaInset`. Each `NavigationStack` hosts its
+/// screens in their own UIKit controllers, and inside this sheet those controllers take their safe
+/// area from the sheet, not from SwiftUI's inset. So with an inset, every scroll view ran on under
+/// the bar and its last bar-height of content never scrolled into view (W-1). Ending the stacks
+/// where the bar begins fixes every screen, pushed ones included.
 private struct SheetContainer: View {
     @Environment(SheetRouter.self) private var router
 
     var body: some View {
         @Bindable var router = router
-        ZStack {
+        VStack(spacing: 0) {
+            stacks
+            // The undo bar sits between the stacks and the tab bar, so it never covers a screen's last item.
+            VStack(spacing: Space.xs) {
+                UndoBar()
+                PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+            }
+        }
+        .sheet(isPresented: $router.isPlanning) {
+            PlanBuilderSheet()
+        }
+    }
+
+    private var stacks: some View {
+        @Bindable var router = router
+        return ZStack {
             switch router.tab {
             case .today:
                 NavigationStack(path: $router.todayPath) {
@@ -149,22 +185,8 @@ private struct SheetContainer: View {
                     ProfileSheet()
                 }
                 .transition(.opacity)
-            case .settings:
-                NavigationStack {
-                    SettingsScreen()
-                }
-                .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: router.tab)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: Space.xs) {
-                UndoBar()
-                PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
-            }
-        }
-        .sheet(isPresented: $router.isPlanning) {
-            PlanBuilderSheet()
-        }
     }
 }

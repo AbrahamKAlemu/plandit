@@ -42,7 +42,7 @@ enum AuthCopy {
     static let sessionExpired = "Your session ended. Sign in again. Your places and plans are still saved."
     static func resent(_ email: String) -> String { "Sent again to \(email)." }
 
-    // Settings → Account
+    // Profile → Account
     static func signedInAs(_ email: String) -> String { "Signed in as \(email)" }
     static let signedInWithApple = "Signed in with Apple"
     static let signOut = "Sign out"
