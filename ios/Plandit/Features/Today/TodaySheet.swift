@@ -182,7 +182,8 @@ private struct PlanSummary: View {
 }
 
 /// How Today's summary describes getting around: miles walked when the day has any walking,
-/// otherwise its rides by kind, so a subway day never reads "0.0 mi Walking".
+/// otherwise its rides by kind, so a subway day never reads "0.0 mi Walking". Like the other
+/// tiles, a short value over a caption: "2" over "subway rides", "2 rides" over "1 subway, 1 bus".
 enum TodaySummaryText {
     struct Travel: Equatable {
         var icon: Lucide
@@ -194,17 +195,17 @@ enum TodaySummaryText {
         guard let rides = rides(plan.legs) else {
             return Travel(icon: .footprints, value: plan.walkingMiles.milesText, caption: "Walking")
         }
-        return Travel(icon: rides.icon, value: rides.text, caption: "Getting around")
+        return rides
     }
 
-    /// "All done for today" line: "2.1 mi walked" or "2 subway rides".
+    /// "All done for today" line: "2.1 mi walked", "2 subway rides" or "1 subway, 1 bus".
     static func completedTravel(_ plan: DayPlan) -> String {
-        rides(plan.legs)?.text ?? "\(plan.walkingMiles.milesText) walked"
+        guard let rides = rides(plan.legs) else { return "\(plan.walkingMiles.milesText) walked" }
+        return rides.value.hasSuffix("rides") ? rides.caption : "\(rides.value) \(rides.caption)"
     }
 
-    /// "2 subway rides", "1 bus ride", "1 drive", or each kind when they're mixed: "1 subway, 1 bus".
     /// Nil when any trip is a walk, or there are no trips.
-    private static func rides(_ legs: [TravelLeg]) -> (text: String, icon: Lucide)? {
+    private static func rides(_ legs: [TravelLeg]) -> Travel? {
         guard !legs.isEmpty, !legs.contains(where: { $0.mode == .walk }) else { return nil }
         let counted = [TravelMode.subway, .bus, .drive].compactMap { mode -> (mode: TravelMode, count: Int)? in
             let count = legs.filter { $0.mode == mode }.count
@@ -213,10 +214,12 @@ enum TodaySummaryText {
         // The icon follows the most common kind; ties go to the subway, then the bus.
         guard let most = counted.max(by: { $0.count < $1.count }) else { return nil }
         guard counted.count == 1 else {
-            return (counted.map { "\($0.count) \(rideWord($0.mode))" }.joined(separator: ", "), most.mode.icon)
+            let kinds = counted.map { "\($0.count) \(rideWord($0.mode))" }.joined(separator: ", ")
+            return Travel(icon: most.mode.icon, value: "\(legs.count) rides", caption: kinds)
         }
-        let noun = most.mode == .drive ? (most.count == 1 ? "drive" : "drives") : (most.count == 1 ? "\(rideWord(most.mode)) ride" : "\(rideWord(most.mode)) rides")
-        return ("\(most.count) \(noun)", most.mode.icon)
+        let one = most.count == 1
+        let noun = most.mode == .drive ? (one ? "drive" : "drives") : "\(rideWord(most.mode)) \(one ? "ride" : "rides")"
+        return Travel(icon: most.mode.icon, value: "\(most.count)", caption: noun)
     }
 
     private static func rideWord(_ mode: TravelMode) -> String {
