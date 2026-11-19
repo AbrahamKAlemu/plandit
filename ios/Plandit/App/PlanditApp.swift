@@ -43,6 +43,7 @@ private struct AccountGate: View {
     /// D-1: decided once when a session opens; finishing the tutorial clears it.
     @State private var showsTutorial = false
     private let tutorial = FirstRunTutorial()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -70,6 +71,11 @@ private struct AccountGate: View {
         .tint(Color.emeraldDeep)
         .preferredColorScheme(appearance.mode.colorScheme)
         .task { await account.start() }
+        // Shared videos older than a day go even while signed out or in the tutorial, when no
+        // store is open to read them (SHR-3).
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { TemporaryMediaStore().removeExpiredFiles() }
+        }
         .onChange(of: account.state) { _, state in
             if case .signedIn = state { return }
             close()
@@ -141,7 +147,8 @@ private struct PlanditRoot: View {
                 case .active:
                     store.rollOverIfNeeded()
                     // Unread shared videos older than a day go first (SHR-3); a share whose video
-                    // went this way still arrives, asking for the video again.
+                    // went this way still arrives, asking for the video again. (AccountGate runs
+                    // this too, but not necessarily before the ingest below.)
                     store.removeExpiredTemporaryMedia()
 #if DEBUG
                     ShareInbox.seedFromLaunchArguments()
