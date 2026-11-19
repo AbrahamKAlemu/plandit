@@ -100,9 +100,6 @@ struct SavedSheet: View {
         }
         .background(Color.surface)
         .sensoryFeedback(.success, trigger: adds)
-        // A place added to Saved, by an exact match or a pick, here or on its post (PRC-7). The
-        // post screen sits on this tab's stack, so this one modifier covers both.
-        .sensoryFeedback(.success, trigger: store.placesAdded)
         // New shares show on top: back to all places, newest first (PRC-1).
         .onChange(of: router.sharesShown) {
             withAnimation(.snappy(duration: 0.3)) { query = SavedListQuery() }

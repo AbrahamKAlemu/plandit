@@ -152,6 +152,7 @@ struct RootView: View {
 /// where the bar begins fixes every screen, pushed ones included.
 private struct SheetContainer: View {
     @Environment(SheetRouter.self) private var router
+    @Environment(PlanditStore.self) private var store
 
     var body: some View {
         @Bindable var router = router
@@ -163,6 +164,9 @@ private struct SheetContainer: View {
                 PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
             }
         }
+        // A place added to Saved, by an exact match or a pick, from the list or a post (PRC-7).
+        // Here, always on screen, rather than under a pushed post, so each one plays exactly once.
+        .sensoryFeedback(.success, trigger: store.placesAdded)
         .sheet(isPresented: $router.isPlanning) {
             PlanBuilderSheet()
         }
