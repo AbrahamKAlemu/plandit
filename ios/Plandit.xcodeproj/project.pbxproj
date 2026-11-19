@@ -41,6 +41,7 @@
 		354EE4D3F797500C1AED2F7F /* SyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91F3FCC1CE99D767FB460B1D /* SyncCoordinator.swift */; };
 		370B1BBA5EC3127C8D4155ED /* SyncReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D14F17A6FC87C91B28D1554 /* SyncReviewTests.swift */; };
 		37B611A100EE191CD0409C2C /* SavedListQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55C59B549330F99057139406 /* SavedListQueryTests.swift */; };
+		3D39A55A66F2B6549B449A6C /* SendPlanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 690BB647670DB7F9E133EF44 /* SendPlanSheet.swift */; };
 		3EBD5EACA826F5A6D6731964 /* SavedPostPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C343DED8648F131B64A81DBF /* SavedPostPersistenceTests.swift */; };
 		41DC031C659A6965091AFDED /* RideWordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F67A197BAE3BE154194E0661 /* RideWordingTests.swift */; };
 		4435657B68299E78AD404C75 /* LinkParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB333CD79DB125872198E3A4 /* LinkParsing.swift */; };
@@ -104,6 +105,7 @@
 		A6BB9139C67A0E2420BFF6C0 /* AppleReauthorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AE0AC7A49D7795EB817D6F /* AppleReauthorizer.swift */; };
 		A6CC10B3F75C6F24FC7B8455 /* PlanBuilderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504C8B8EFDAB37DFE6540FA9 /* PlanBuilderSheet.swift */; };
 		A725DCBF1897E55DACFD0458 /* RideWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16633FA8AD48A82E013361F0 /* RideWording.swift */; };
+		A9DAEDA6F8CA3F1361AE83C8 /* PlanMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F574168083B457667AF1CBD /* PlanMessage.swift */; };
 		ABD059E5D3DD7CD3A542FC0B /* SavedPostPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E1A27E0B63AAEF95B99BF2 /* SavedPostPersistence.swift */; };
 		AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA42EFDFC3C4B3021E413BFE /* SampleData.swift */; };
 		B0206DFED4B8F5D6820C4522 /* Manrope-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */; };
@@ -227,6 +229,7 @@
 		38E148AE835FA73CDABE5EF1 /* PlanditMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanditMapView.swift; sourceTree = "<group>"; };
 		399D55A50257E318106BEC15 /* NewAccountSignalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewAccountSignalTests.swift; sourceTree = "<group>"; };
 		3D14F17A6FC87C91B28D1554 /* SyncReviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncReviewTests.swift; sourceTree = "<group>"; };
+		3F574168083B457667AF1CBD /* PlanMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanMessage.swift; sourceTree = "<group>"; };
 		40DE1EF691CCB2F9BA7DEFCD /* TutorialIllustration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialIllustration.swift; sourceTree = "<group>"; };
 		41CDBC891880C9C11C0E9D77 /* EmailAuthScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailAuthScreen.swift; sourceTree = "<group>"; };
 		42E1A27E0B63AAEF95B99BF2 /* SavedPostPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPostPersistence.swift; sourceTree = "<group>"; };
@@ -250,6 +253,7 @@
 		6474A7DD8812B6D8B03AE5CF /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		66ADDD9568AE6197BC040C05 /* AppearanceFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceFlowTests.swift; sourceTree = "<group>"; };
 		66E71E938405EB27C0E59A78 /* MapPins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapPins.swift; sourceTree = "<group>"; };
+		690BB647670DB7F9E133EF44 /* SendPlanSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendPlanSheet.swift; sourceTree = "<group>"; };
 		6988A285D9FFB29E8A68A731 /* PlanEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditing.swift; sourceTree = "<group>"; };
 		6A50233F438C1A78F9ED4A48 /* SupabaseAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuthClient.swift; sourceTree = "<group>"; };
 		6AB276F5BFDE257C2D99F0FE /* ShareIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareIntake.swift; sourceTree = "<group>"; };
@@ -596,6 +600,7 @@
 				AAC00C8FF2931CB371CEF296 /* EditPlanSheet.swift */,
 				F605D0A954D4585097AF91B1 /* PlanTimeline.swift */,
 				16633FA8AD48A82E013361F0 /* RideWording.swift */,
+				690BB647670DB7F9E133EF44 /* SendPlanSheet.swift */,
 				900873E088C5FBF07FCF5247 /* StopDetailView.swift */,
 				C55D01DF203BA000D57AA263 /* StopTimeSheet.swift */,
 				130BEB57FE12B63F0783900B /* TodaySheet.swift */,
@@ -672,6 +677,7 @@
 				2E28CCCF74AAA2AC8972B24A /* Place.swift */,
 				634837C4E853C6B8E396996B /* PlaceCandidate.swift */,
 				6988A285D9FFB29E8A68A731 /* PlanEditing.swift */,
+				3F574168083B457667AF1CBD /* PlanMessage.swift */,
 				36542D0F2B447885F6543625 /* Pricing.swift */,
 				EA42EFDFC3C4B3021E413BFE /* SampleData.swift */,
 				F4EA2889EFD0ED181368F449 /* SavedPost.swift */,
@@ -885,6 +891,7 @@
 				7863B1012507869EE8C85C12 /* PlaceExtractor.swift in Sources */,
 				A6CC10B3F75C6F24FC7B8455 /* PlanBuilderSheet.swift in Sources */,
 				55C2D0288CE7C95364520F43 /* PlanEditing.swift in Sources */,
+				A9DAEDA6F8CA3F1361AE83C8 /* PlanMessage.swift in Sources */,
 				C09E519668C9F27F08946702 /* PlanTimeline.swift in Sources */,
 				F3ECC0B67465D390236E010B /* PlanditAPIClient.swift in Sources */,
 				E72A34A8A8B8ED762ACFEBE4 /* PlanditApp.swift in Sources */,
@@ -904,6 +911,7 @@
 				C4BE7A1321A5AFCC6E30816E /* SavedPostDetailView.swift in Sources */,
 				ABD059E5D3DD7CD3A542FC0B /* SavedPostPersistence.swift in Sources */,
 				DA97CF6593862918B2B338DD /* SavedSheet.swift in Sources */,
+				3D39A55A66F2B6549B449A6C /* SendPlanSheet.swift in Sources */,
 				4EDA3379C2289938F43CA4FF /* ShareInbox.swift in Sources */,
 				4A168A6942100BE21F3C1D80 /* ShareIntake.swift in Sources */,
 				5FCA3858C9A6BF7CD758302E /* ShareSheetView.swift in Sources */,

@@ -9,16 +9,17 @@ struct TodaySheet: View {
     @State private var isShowingBudget = false
     @State private var isEditingPlan = false
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var isSendingPlan = false
 
     var body: some View {
         let plan = store.today
         VStack(spacing: 0) {
             SheetHeader(title: "Today", subtitle: plan.date.longDay) {
                 if !plan.stops.isEmpty {
-                    ShareLink(item: plan.shareText) {
+                    Button { isSendingPlan = true } label: {
                         CircleIconLabel(icon: .share)
                     }
-                    .accessibilityLabel("Share the plan")
+                    .accessibilityLabel("Send the plan")
                     .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -93,6 +94,15 @@ struct TodaySheet: View {
                             }
                         }
                         PlanTimeline(plan: plan)
+
+                        Button { isSendingPlan = true } label: {
+                            HStack(spacing: Space.xs) {
+                                Icon(.share, size: 18)
+                                Text("Send plan to friends")
+                            }
+                        }
+                        .buttonStyle(.secondary)
+                        .accessibilityIdentifier("send-plan")
                     }
                     .padding(.horizontal, Space.lg)
                     .padding(.top, Space.xs)
@@ -110,6 +120,7 @@ struct TodaySheet: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
         .sheet(isPresented: $isEditingPlan) { EditPlanSheet() }
+        .sheet(isPresented: $isSendingPlan) { SendPlanSheet() }
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
                 // Same landing as from Saved: watch the new post get mapped.

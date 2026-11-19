@@ -297,28 +297,9 @@ extension DayPlan {
 
     /// Plain text for a group chat: where and when to meet, each stop with its time and price,
     /// and what it costs each person including fares. Readable anywhere, no app needed.
+    /// The short plan text: no travel lines. The Send plan sheet builds richer versions with `message(_:)`.
     var shareText: String {
-        guard let first = stops.first else { return "My Plandit day: nothing planned yet" }
-        let meet = [first.place.name, first.place.address].filter { !$0.isEmpty }.joined(separator: ", ")
-        let lines = stops.map { stop in
-            "\(stop.start.shortTime)  \(stop.place.name) (\(stop.estimatedCost.dollarsText))"
-        }
-        var including: [String] = []
-        if faresCost > 0 { including.append("\(faresCost.dollarsText) in subway fares") }
-        if ridesCost > 0 { including.append("\(ridesCost.wholeDollarsText) in rides") }
-        let cost = including.isEmpty
-            ? "About \(totalCost.wholeDollarsText) per person."
-            : "About \(totalCost.wholeDollarsText) per person, including \(including.joined(separator: " and "))."
-        let ends = stops.last.map { " Done by \($0.end.shortTime)." } ?? ""
-        return ([
-            "\(title) · \(date.shortDay)",
-            "Meet \(first.start.shortTime) at \(meet)",
-            "",
-        ] + lines + [
-            "",
-            cost + ends,
-            "Planned with Plandit",
-        ]).joined(separator: "\n")
+        message(PlanMessageOptions(showTravel: false))
     }
 }
 

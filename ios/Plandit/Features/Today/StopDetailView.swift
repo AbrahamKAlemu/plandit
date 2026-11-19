@@ -24,6 +24,8 @@ struct StopDetailView: View {
                             .foregroundStyle(.inkMuted)
                     }
 
+                    StatusPicker(stop: stop)
+
                     VStack(alignment: .leading, spacing: Space.md) {
                         Button { isEditingTime = true } label: {
                             HStack {
@@ -87,7 +89,6 @@ struct StopDetailView: View {
                         }
                         .buttonStyle(.primary)
 
-                        ProgressButtons(stop: stop)
 
                         Button(role: .destructive) {
                             dismiss()
@@ -98,6 +99,7 @@ struct StopDetailView: View {
                                 .foregroundStyle(.error)
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }
+                        .accessibilityIdentifier("remove-from-plan")
                     }
                 }
                 .padding(Space.lg)
@@ -122,61 +124,42 @@ struct StopDetailView: View {
     }
 }
 
-/// "I'm here" and "Done here" move the day forward; the map and timeline follow.
-private struct ProgressButtons: View {
+/// Where you are with this stop: Planned, I'm here or Done. Any choice can be changed back with one tap,
+/// and the Undo bar covers what it did to the stops around it.
+private struct StatusPicker: View {
     let stop: PlanStop
     @Environment(PlanditStore.self) private var store
 
     var body: some View {
-        HStack(spacing: Space.sm) {
-            switch stop.status {
-            case .upcoming:
-                Button {
-                    withAnimation(.snappy) { store.arrive(at: stop.id) }
-                } label: {
-                    HStack(spacing: Space.xs) {
-                        Icon(.mapPin, size: 18)
-                        Text("I'm here")
-                    }
-                }
-                .buttonStyle(.secondary)
-                .transition(.opacity)
-            case .now:
-                Button {
-                    withAnimation(.snappy) { store.leave(stop.id) }
-                } label: {
-                    HStack(spacing: Space.xs) {
-                        Icon(.undo, size: 18)
-                        Text("Not here yet")
-                    }
-                }
-                .buttonStyle(.secondary)
-                .accessibilityIdentifier("not-here-yet")
-                .transition(.opacity)
-            case .done:
-                Button {
-                    withAnimation(.snappy) { store.arrive(at: stop.id) }
-                } label: {
-                    HStack(spacing: Space.xs) {
-                        Icon(.undo, size: 18)
-                        Text("Not done yet")
-                    }
-                }
-                .buttonStyle(.secondary)
-                .accessibilityIdentifier("not-done-yet")
-                .transition(.opacity)
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Picker("Status", selection: Binding(get: { stop.status }, set: { change(to: $0) })) {
+                Text("Planned").tag(StopStatus.upcoming)
+                Text("I'm here").tag(StopStatus.now)
+                Text("Done").tag(StopStatus.done)
             }
-            if stop.status != .done {
-                Button {
-                    withAnimation(.snappy) { store.complete(stop.id) }
-                } label: {
-                    HStack(spacing: Space.xs) {
-                        Icon(.circleCheck, size: 18)
-                        Text("Done here")
-                    }
-                }
-                .buttonStyle(.secondary)
-                .transition(.opacity)
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("stop-status")
+            Text(hint)
+                .font(.metadata)
+                .foregroundStyle(.inkMuted)
+        }
+    }
+
+    private var hint: String {
+        switch stop.status {
+        case .upcoming: "Tap I'm here when you arrive. Stops before it are marked done."
+        case .now: "Tap Done when you leave. The next stop becomes I'm here."
+        case .done: "Went back or tapped by mistake? Tap Planned or I'm here."
+        }
+    }
+
+    private func change(to status: StopStatus) {
+        guard status != stop.status else { return }
+        withAnimation(.snappy) {
+            switch status {
+            case .upcoming: store.leave(stop.id)
+            case .now: store.arrive(at: stop.id)
+            case .done: store.complete(stop.id)
             }
         }
     }
