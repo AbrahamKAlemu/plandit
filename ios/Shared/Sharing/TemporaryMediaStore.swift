@@ -31,10 +31,13 @@ nonisolated struct TemporaryMediaStore {
     /// How long an unread video may wait before it's deleted.
     static let lifetime: TimeInterval = 24 * 60 * 60
     let root: URL
+    /// How big a video to be copied in is, or nil when that can't be told. Replaceable for tests.
+    private let sourceSize: @Sendable (URL) -> Int64?
 
-    init(root: URL? = nil) {
+    init(root: URL? = nil, sourceSize: @escaping @Sendable (URL) -> Int64? = TemporaryMediaStore.byteCount(of:)) {
         let base = AppGroup.containerURL ?? FileManager.default.temporaryDirectory
         self.root = root ?? base.appending(path: "TemporaryMedia", directoryHint: .isDirectory)
+        self.sourceSize = sourceSize
     }
 
     /// The App Group's folder, or nil when the build has no App Group container (an unsigned
@@ -61,6 +64,10 @@ nonisolated struct TemporaryMediaStore {
         do {
             try FileManager.default.copyItem(at: source, to: destination)
             try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+            // The source didn't say how big it was: the copy does.
+            if let copied = Self.byteCount(of: destination), copied > Self.maximumBytes {
+                throw VideoEvidenceError.tooLarge
+            }
         } catch {
             try? FileManager.default.removeItem(at: destination)
             throw error
@@ -69,13 +76,20 @@ nonisolated struct TemporaryMediaStore {
     }
 
     func validate(_ source: URL) throws {
-        let values = try source.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+        let values = try source.resourceValues(forKeys: [.contentTypeKey])
         guard let contentType = values.contentType, contentType.conforms(to: .movie) else {
             throw VideoEvidenceError.unsupportedType
         }
-        if let fileSize = values.fileSize, Int64(fileSize) > Self.maximumBytes {
+        if let size = sourceSize(source), size > Self.maximumBytes {
             throw VideoEvidenceError.tooLarge
         }
+    }
+
+    /// A file's size: its length, else the space it takes, else what the file system reports.
+    static func byteCount(of url: URL) -> Int64? {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+        if let size = values?.fileSize ?? values?.totalFileAllocatedSize { return Int64(size) }
+        return ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value
     }
 
     /// Where a video waits while it's read: the 24-hour cleanup (here, or in the share extension's

@@ -383,6 +383,39 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertTrue(mediaFiles().isEmpty)
     }
 
+    // MARK: - The 250 MB cap when the size is unknown (nice-to-have 11)
+
+    /// The source won't say how big it is: the copy is checked instead, and an oversized one is
+    /// deleted and reported as too large.
+    @MainActor func testAVideoOfUnknownSizeOverTheCapIsTooLarge() throws {
+        let source = directory.appending(path: "huge.mov")
+        FileManager.default.createFile(atPath: source.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: source)
+        try handle.truncate(atOffset: UInt64(TemporaryMediaStore.maximumBytes + 1))
+        try handle.close()
+        let unknownSize = TemporaryMediaStore(root: mediaStore.root, sourceSize: { _ in nil })
+
+        XCTAssertEqual(ShareIntake.stage(source, in: unknownSize), .problem(.videoTooLarge))
+        XCTAssertTrue(mediaFiles().isEmpty, "the copy is deleted")
+    }
+
+    /// Under the cap, the same video is kept.
+    @MainActor func testAVideoOfUnknownSizeUnderTheCapIsKept() throws {
+        let source = directory.appending(path: "small.mov")
+        try Data(count: 512).write(to: source)
+        let unknownSize = TemporaryMediaStore(root: mediaStore.root, sourceSize: { _ in nil })
+
+        guard case .video = ShareIntake.stage(source, in: unknownSize) else { return XCTFail("should be staged") }
+        XCTAssertEqual(mediaFiles().count, 1)
+    }
+
+    @MainActor func testByteCountReadsAFilesSize() throws {
+        let source = directory.appending(path: "small.mov")
+        try Data(count: 512).write(to: source)
+        XCTAssertEqual(TemporaryMediaStore.byteCount(of: source), 512)
+        XCTAssertNil(TemporaryMediaStore.byteCount(of: directory.appending(path: "missing.mov")))
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))
