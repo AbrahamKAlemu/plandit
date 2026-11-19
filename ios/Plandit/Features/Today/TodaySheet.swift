@@ -29,7 +29,8 @@ struct TodaySheet: View {
                         EmptyState(
                             icon: .route,
                             title: "Nothing planned yet",
-                            message: "Add a place first. Share a TikTok or Reel to Plandit, or paste a link."
+                            message: "Add a place first. Share a TikTok or Reel to Plandit, or paste a link.",
+                            isCompact: true
                         ) {
                             Button {
                                 isAddingLink = true
@@ -42,13 +43,13 @@ struct TodaySheet: View {
                             .buttonStyle(.secondary)
                             .accessibilityIdentifier("today-paste-link")
                         }
-                        .padding(.top, Space.md)
                         .transition(.opacity)
                     } else if plan.stops.isEmpty {
                         EmptyState(
                             icon: .route,
                             title: "Nothing planned yet",
-                            message: "Tap + to turn your saved places into today's plan."
+                            message: "Tap + to turn your saved places into today's plan.",
+                            isCompact: true
                         ) {
                             Button {
                                 router.startPlanning()
@@ -60,7 +61,6 @@ struct TodaySheet: View {
                             }
                             .buttonStyle(.secondary)
                         }
-                        .padding(.top, Space.md)
                         .transition(.opacity)
                     } else {
                         PlanSummary(plan: plan) { isShowingBudget = true }

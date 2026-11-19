@@ -283,17 +283,19 @@ extension LegState {
 }
 
 /// What a sheet shows when a section has nothing in it yet: icon, title, one line, and the next step.
+/// `isCompact` is for a sheet's half height, where the next step has to show above the tab bar.
 struct EmptyState<Action: View>: View {
     let icon: Lucide
     let title: String
     let message: String
+    var isCompact = false
     @ViewBuilder var action: () -> Action
 
     var body: some View {
-        VStack(spacing: Space.sm) {
-            Icon(icon, size: 26)
+        VStack(spacing: isCompact ? Space.xs : Space.sm) {
+            Icon(icon, size: isCompact ? 22 : 26)
                 .foregroundStyle(.ink)
-                .frame(width: 56, height: 56)
+                .frame(width: isCompact ? 44 : 56, height: isCompact ? 44 : 56)
                 .background(Color.canvas, in: Circle())
                 .overlay(Circle().strokeBorder(Color.border))
             Text(title)
@@ -305,10 +307,10 @@ struct EmptyState<Action: View>: View {
                 .foregroundStyle(.inkMuted)
                 .multilineTextAlignment(.center)
             action()
-                .padding(.top, Space.xs)
+                .padding(.top, isCompact ? Space.xxs : Space.xs)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Space.lg)
+        .padding(.vertical, isCompact ? Space.xs : Space.lg)
         .padding(.horizontal, Space.md)
     }
 }
