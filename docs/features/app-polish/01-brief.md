@@ -188,7 +188,7 @@ a "late lunch" after dinner (planner logic; a GitHub issue for Eldad).
 ### Design feedback (D requirements)
 
 From the team's "App Design Feedback" document, the "Images for the app" folder and the new app
-icon, added by Abraham on November 18 after he approved this brief. Where a D requirement and an
+icon, added by Abraham on November 18 after approving this brief. Where a D requirement and an
 earlier one disagree, the D requirement wins; the earlier one is marked.
 
 First-run tutorial:
@@ -280,7 +280,7 @@ No new events. `linkSaved` still fires once per post that stays, including share
 - Ships as 1.0.1: TestFlight internal group first, then App Store review. No feature flags.
 - Before submitting 1.0.1:
   - the privacy, terms and support pages say "Profile → Account → Delete account" instead of
-    "Settings → Account → Delete account". The live site is Jaden's repo, so it needs his PR merge;
+    "Settings → Account → Delete account". The live site is Jaden's repo, so Jaden merges that PR;
   - the App Store description's "delete your account … any time in Settings" says "in your
     Profile";
   - the App Review notes say "Profile > Delete account".
