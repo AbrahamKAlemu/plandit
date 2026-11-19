@@ -31,6 +31,7 @@ struct UndoBar: View {
                 }
                 .padding(.horizontal, Space.md)
                 .planditCard(padding: Space.xs)
+                .floatingShadow()
                 .padding(.horizontal, Space.md)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .task(id: undo.id) {

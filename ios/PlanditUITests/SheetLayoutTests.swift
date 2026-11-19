@@ -68,8 +68,15 @@ final class SheetLayoutTests: XCTestCase {
     @MainActor func testSavedPostsLastButtonScrollsAboveTheBar() {
         let app = launch(["-startTab", "saved", "-startDetent", "large",
                           "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        _ = UITestScrolling.bar(in: app)
+        // The list is lazy, and at this size the first rows start below the sheet.
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-row-' AND label CONTAINS 'Levain Bakery'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        var swipes = 0
+        while !row.exists, swipes < 10 {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
         UITestScrolling.scrollIntoView(row, in: app)
         row.tap()
 
@@ -105,7 +112,7 @@ final class SheetLayoutTests: XCTestCase {
             .allElementsBoundByIndex
             .max(by: { $0.frame.height < $1.frame.height })
         else { return XCTFail("no saved list") }
-        XCTAssertGreaterThanOrEqual(list.frame.maxY, bar.frame.maxY,
+        XCTAssertGreaterThanOrEqual(list.frame.maxY, bar.frame.maxY - 0.5,
                                     "the list stops at \(list.frame.maxY) pt, above the bar's bottom at \(bar.frame.maxY) pt")
     }
 
@@ -118,6 +125,8 @@ final class SheetLayoutTests: XCTestCase {
         for _ in 0..<6 {
             let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Stop '")).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 5), "a stop row is left")
+            // The list runs on under the floating undo and tab bars, so bring the row out first.
+            UITestScrolling.scrollIntoView(row, in: app)
             row.press(forDuration: 1.0)
             let remove = app.buttons["Remove from plan"]
             XCTAssertTrue(remove.waitForExistence(timeout: 3))

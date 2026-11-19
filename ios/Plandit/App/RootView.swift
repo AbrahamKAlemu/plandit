@@ -143,44 +143,50 @@ struct RootView: View {
     }
 }
 
-/// The sheet's content: one navigation stack per tab, with the tab bar pinned to the bottom.
+/// The sheet's content: one navigation stack per tab, with the tab bar floating at the bottom.
 ///
-/// The bar sits below the stacks rather than in a `safeAreaInset`. Each `NavigationStack` hosts its
-/// screens in their own UIKit controllers, and inside this sheet those controllers take their safe
-/// area from the sheet, not from SwiftUI's inset. So with an inset, every scroll view ran on under
-/// the bar and its last bar-height of content never scrolled into view (W-1). Ending the stacks
-/// where the bar begins fixes every screen, pushed ones included.
+/// The undo and tab bars float over the stacks, so content scrolls on under them. Their measured
+/// height goes down as `floatingBarsHeight`, and every screen in the stacks reserves it with
+/// `clearsFloatingBars()` so its end still clears them (W-1). It has to be on each screen, roots
+/// and pushed ones: each `NavigationStack` hosts its screens in their own UIKit controllers, and
+/// inside this sheet those controllers take their safe area from the sheet, not from SwiftUI. A
+/// `safeAreaInset` or `safeAreaPadding` here, outside the stacks, is ignored by every scroll view
+/// in them, roots included. The environment does reach every screen, so the height goes that way.
 private struct SheetContainer: View {
     @Environment(SheetRouter.self) private var router
     @Environment(PlanditStore.self) private var store
-    /// While the keyboard is up the bar steps aside, so the stacks reach down to the keyboard and a
-    /// field's button (Search, Save) isn't hidden behind the tab bar.
+    /// While the keyboard is up the bars step aside and their space is given back, so a screen
+    /// reaches down to the keyboard and a field's button (Search, Save) isn't hidden behind them.
     @State private var isKeyboardUp = false
+    /// The undo and tab bars' height, kept clear at the foot of every screen.
+    @State private var barsHeight: CGFloat = 0
 
     var body: some View {
         @Bindable var router = router
-        VStack(spacing: 0) {
-            stacks
-            // The undo bar sits between the stacks and the tab bar, so it never covers a screen's last item.
-            if !isKeyboardUp {
-                VStack(spacing: Space.xs) {
-                    UndoBar()
-                    PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+        stacks
+            .environment(\.floatingBarsHeight, isKeyboardUp ? 0 : barsHeight)
+            .overlay(alignment: .bottom) {
+                // The undo bar floats just above the tab bar.
+                if !isKeyboardUp {
+                    VStack(spacing: Space.xs) {
+                        UndoBar()
+                        PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+                    }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barsHeight = $0 }
                 }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            isKeyboardUp = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            isKeyboardUp = false
-        }
-        // A place added to Saved, by an exact match or a pick, from the list or a post (PRC-7).
-        // Here, always on screen, rather than under a pushed post, so each one plays exactly once.
-        .sensoryFeedback(.success, trigger: store.placesAdded)
-        .sheet(isPresented: $router.isPlanning) {
-            PlanBuilderSheet()
-        }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                isKeyboardUp = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                isKeyboardUp = false
+            }
+            // A place added to Saved, by an exact match or a pick, from the list or a post (PRC-7).
+            // Here, always on screen, rather than under a pushed post, so each one plays exactly once.
+            .sensoryFeedback(.success, trigger: store.placesAdded)
+            .sheet(isPresented: $router.isPlanning) {
+                PlanBuilderSheet()
+            }
     }
 
     private var stacks: some View {
@@ -190,18 +196,21 @@ private struct SheetContainer: View {
             case .today:
                 NavigationStack(path: $router.todayPath) {
                     TodaySheet()
-                        .navigationDestination(for: UUID.self) { StopDetailView(stopID: $0) }
+                        .clearsFloatingBars()
+                        .navigationDestination(for: UUID.self) { StopDetailView(stopID: $0).clearsFloatingBars() }
                 }
                 .transition(.opacity)
             case .saved:
                 NavigationStack(path: $router.savedPath) {
                     SavedSheet()
-                        .navigationDestination(for: UUID.self) { SavedPostDetailView(postID: $0) }
+                        .clearsFloatingBars()
+                        .navigationDestination(for: UUID.self) { SavedPostDetailView(postID: $0).clearsFloatingBars() }
                 }
                 .transition(.opacity)
             case .profile:
                 NavigationStack {
                     ProfileSheet()
+                        .clearsFloatingBars()
                 }
                 .transition(.opacity)
             }

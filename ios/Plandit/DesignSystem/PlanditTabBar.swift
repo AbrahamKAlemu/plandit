@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Bottom page selector, pinned inside the persistent sheet (like Find My on iOS 26).
-/// Solid surface rather than glass: the style guide rules out glassmorphism.
+/// Bottom page selector, an island floating at the foot of the persistent sheet (like Find My on
+/// iOS 26): the sheet's content scrolls on underneath it. Solid surface with a border and a soft
+/// shadow rather than glass: the style guide rules out glassmorphism.
 /// The selected pill slides between tabs instead of jumping.
 /// Today, Saved, Plan, Profile (D-2). Plan looks like the tabs but opens the planner: it's an action,
 /// not a tab, so it's never selected.
@@ -10,7 +11,6 @@ import SwiftUI
 struct PlanditTabBar: View {
     @Binding var selection: AppTab
     var onPlan: () -> Void = {}
-    @Environment(\.isSheetCollapsed) private var isCollapsed
     @Namespace private var pill
 
     var body: some View {
@@ -51,16 +51,15 @@ struct PlanditTabBar: View {
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .padding(6)
-        .background(Color.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.surface)
+                .floatingShadow()
+        }
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.border))
         .padding(.horizontal, Space.md)
         .padding(.top, Space.xs)
         .padding(.bottom, Space.xxs)
-        .background(Color.surface)
-        // Clean edge where scrolling content meets the bar; not needed when only the header shows.
-        .overlay(alignment: .top) {
-            if !isCollapsed { Hairline() }
-        }
         .sensoryFeedback(.selection, trigger: selection)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tab-bar")

@@ -204,6 +204,21 @@ struct Hairline: View {
 extension EnvironmentValues {
     /// True while the sheet sits at its peek detent, where only the header and tab bar should show.
     @Entry var isSheetCollapsed = false
+    /// How much of the sheet's foot the floating undo and tab bars cover. Zero while the keyboard
+    /// has them hidden.
+    @Entry var floatingBarsHeight: CGFloat = 0
+}
+
+/// Keeps a sheet screen's end clear of the floating bars (W-1): a scroll view still runs on under
+/// them but its last item scrolls fully above them, and a screen that doesn't scroll ends where
+/// they begin. Put it on the screen itself, inside its `NavigationStack`: each screen there is
+/// hosted by its own UIKit controller, which doesn't see safe area added outside the stack.
+private struct ClearsFloatingBars: ViewModifier {
+    @Environment(\.floatingBarsHeight) private var height
+
+    func body(content: Content) -> some View {
+        content.safeAreaPadding(.bottom, height)
+    }
 }
 
 /// Hides a sheet's scrolling body at the peek detent so nothing half-shows above the tab bar.
@@ -216,6 +231,18 @@ private struct HiddenWhenSheetCollapsed: ViewModifier {
             .allowsHitTesting(!isCollapsed)
             .accessibilityHidden(isCollapsed)
             .animation(.easeOut(duration: 0.2), value: isCollapsed)
+    }
+}
+
+/// Lifts a floating bar off the content scrolling under it. Stronger in dark mode, where a light
+/// shadow disappears into the dark surface; the border still draws the edge there.
+private struct FloatingShadow: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .compositingGroup()
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.5 : 0.12), radius: 12, y: 4)
     }
 }
 
@@ -242,12 +269,23 @@ extension View {
         modifier(HiddenWhenSheetCollapsed())
     }
 
+    /// On every screen shown in the sheet's navigation stacks, roots and pushed screens alike.
+    func clearsFloatingBars() -> some View {
+        modifier(ClearsFloatingBars())
+    }
+
     /// Put on the content inside a sheet's `NavigationStack`, next to `navigationTitle`.
     func solidSheetHeader() -> some View {
         modifier(SolidSheetHeader())
     }
 
-    /// White surface, 1px border, 16pt radius. No shadow: shadows are reserved for floating sheets.
+    /// The soft shadow under what floats over a sheet's content: the tab bar and the undo bar.
+    func floatingShadow() -> some View {
+        modifier(FloatingShadow())
+    }
+
+    /// White surface, 1px border, 16pt radius. No shadow: shadows are reserved for what floats
+    /// (`floatingShadow`).
     func planditCard(padding: CGFloat = Space.md) -> some View {
         self
             .padding(padding)
