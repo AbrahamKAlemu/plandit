@@ -266,6 +266,34 @@ import XCTest
         XCTAssertEqual(store.today.legs.first { $0.id == leg.id }?.mode, .walk)
     }
 
+    // MARK: - Bus trips
+
+    func testABusTripShowsAsPlannedWithAppleMapsTime() async throws {
+        let store = makeStore()
+        let leg = try XCTUnwrap(store.today.legs.last { store.today.state(of: $0) == .upcoming })
+        var bus = TravelLeg.estimate(.bus, miles: leg.miles, fromStopID: leg.fromStopID, toStopID: leg.toStopID)
+        bus.id = leg.id
+        bus.detail = "M15 bus"
+        store.chooseTravel(.init(leg: bus, isLive: false))
+        let planned = try XCTUnwrap(store.today.legs.first { $0.id == leg.id })
+        await store.loadTravelOptions(forLeg: leg.id)
+
+        let rows = TravelOptionsSheet.rows(store.travelOptions(forLeg: leg.id), planned: planned)
+        let row = try XCTUnwrap(rows.first(where: \.isPlanned), "the bus is the way it's planned")
+        XCTAssertEqual(row.option.leg.mode, .bus)
+        XCTAssertEqual(row.option.leg.detail, "M15 bus")
+        XCTAssertEqual(row.source, "In your plan")
+        XCTAssertNotNil(row.update, "Apple Maps' bus time is offered")
+        XCTAssertEqual(Set(rows.map(\.option.leg.mode)), [.walk, .subway, .bus, .drive])
+    }
+
+    func testRestOfTheDayTitlesNameTheWayTheyApply() {
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.walk), "Walk the rest of the day")
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.subway), "Take the subway the rest of the day")
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.bus), "Take the bus the rest of the day")
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.drive), "Drive the rest of the day")
+    }
+
     func testRestOfTheDayKeepsTheTimesOfTripsAlreadyMadeThatWay() async throws {
         let store = makeStore()
         let ahead = store.today.legs.filter { store.today.state(of: $0) != .completed }

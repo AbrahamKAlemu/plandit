@@ -96,7 +96,7 @@ struct TravelOptionsSheet: View {
                         Button {
                             withAnimation(.snappy) { store.chooseTravelForRestOfDay(leg.mode) }
                         } label: {
-                            Text(restOfDayTitle(leg.mode))
+                            Text(Self.restOfDayTitle(leg.mode))
                                 .font(.label)
                                 .foregroundStyle(.ink)
                                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -154,10 +154,10 @@ struct TravelOptionsSheet: View {
         }
     }
 
-    private func restOfDayTitle(_ mode: TravelMode) -> String {
+    static func restOfDayTitle(_ mode: TravelMode) -> String {
         switch mode {
         case .walk: "Walk the rest of the day"
-        case .subway, .bus: "Take the subway the rest of the day"
+        case .subway, .bus: "Take the \(mode.label.lowercased()) the rest of the day"
         case .drive: "Drive the rest of the day"
         }
     }

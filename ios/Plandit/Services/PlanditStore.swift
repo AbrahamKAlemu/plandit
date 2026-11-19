@@ -220,10 +220,11 @@ final class PlanditStore {
     }
 
     /// Walk, subway and drive for a leg, using Apple Maps times already loaded and estimates otherwise.
+    /// A trip planned another way (a bus) keeps that way among them.
     func travelOptions(forLeg id: UUID) -> [TravelOption] {
         guard let leg = today.legs.first(where: { $0.id == id }),
               let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return [] }
-        return TravelMode.choices.map { mode in
+        return Self.travelModes(for: leg).map { mode in
             let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
             return TravelOption(leg: Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place), isLive: live != nil)
         }
@@ -233,9 +234,13 @@ final class PlanditStore {
     func loadTravelOptions(forLeg id: UUID) async {
         guard let leg = today.legs.first(where: { $0.id == id }),
               let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return }
-        for mode in TravelMode.choices {
+        for mode in Self.travelModes(for: leg) {
             _ = await liveRoute(mode, from: from.place, to: to.place)
         }
+    }
+
+    private static func travelModes(for leg: TravelLeg) -> [TravelMode] {
+        TravelMode.allCases.filter { TravelMode.choices.contains($0) || $0 == leg.mode }
     }
 
     /// The day if this trip were made this way: later stops move with the new travel time.
