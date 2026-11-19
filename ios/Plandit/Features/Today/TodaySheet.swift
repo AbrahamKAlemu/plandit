@@ -98,7 +98,7 @@ struct TodaySheet: View {
                         Button { isSendingPlan = true } label: {
                             HStack(spacing: Space.xs) {
                                 Icon(.share, size: 18)
-                                Text("Send plan to friends")
+                                Text("Share plan with friends")
                             }
                         }
                         .buttonStyle(.secondary)

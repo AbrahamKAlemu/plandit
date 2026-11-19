@@ -21,7 +21,15 @@ final class AccountSession {
 
     /// `-skipAuth`: the pre-account file with its sample data, no network at all.
     static func local(userID: String) -> AccountSession {
-        AccountSession(userID: userID, store: PlanditStore.load(), sync: nil, storage: .default)
+        let store = PlanditStore.load()
+        #if DEBUG
+        // `-fakeSharing` (or `-fakeSharing fail`): links without the server, for UI tests.
+        if let index = CommandLine.arguments.firstIndex(of: "-fakeSharing") {
+            let next = CommandLine.arguments.indices.contains(index + 1) ? CommandLine.arguments[index + 1] : ""
+            store.sharing = FakePlanSharing(fails: next == "fail")
+        }
+        #endif
+        return AccountSession(userID: userID, store: store, sync: nil, storage: .default)
     }
 
     /// Sign-in: ask the server for the account's copy and decide between it, the local file and a
@@ -106,6 +114,7 @@ final class AccountSession {
         let store = PlanditStore(snapshot: snapshot, extractor: extractor, storage: storage) { event in
             Task { try? await eventClient.send(event) }
         }
+        store.sharing = SharedPlanClient(api: api)
         store.persistNow()
         let sync = SyncCoordinator(userID: user.id, client: client, stateStore: stateStore, store: store)
         sync.start(version: version, dirty: dirty, readOnly: readOnly)

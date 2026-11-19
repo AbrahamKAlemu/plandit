@@ -199,14 +199,49 @@ final class MapAndBudgetFlowTests: XCTestCase {
         XCTAssertTrue(status.buttons["I'm here"].isSelected, "Undo puts it back")
     }
 
-    @MainActor func testSendingThePlan() {
+    @MainActor func testSharingThePlanAsALink() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "11:00", "-fakeSharing"]
+        app.launch()
+        let send = app.buttons["send-plan"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        scrollTo(send, in: app)
+        send.tap()
+        XCTAssertTrue(app.navigationBars["Share plan"].waitForExistence(timeout: 3))
+
+        let create = app.buttons["share-create-link"]
+        XCTAssertTrue(create.exists)
+        create.tap()
+        let url = app.staticTexts["share-link-url"]
+        XCTAssertTrue(url.waitForExistence(timeout: 5))
+        XCTAssertTrue(url.label.contains("https://plandit.app/p/test123abc"))
+        XCTAssertTrue(app.buttons["share-send-link"].exists)
+        XCTAssertTrue(app.buttons["share-copy-link"].exists)
+
+        // Changing what the page shows offers to update it.
+        app.switches["send-prices"].switches.firstMatch.tap()
+        XCTAssertTrue(app.buttons["share-update-link"].waitForExistence(timeout: 2))
+        app.buttons["share-update-link"].tap()
+        XCTAssertTrue(app.buttons["share-update-link"].waitForNonExistence(timeout: 3))
+
+        app.buttons["share-stop"].tap()
+        XCTAssertTrue(app.buttons["share-create-link"].waitForExistence(timeout: 3), "back to no link")
+    }
+
+    @MainActor func testSendingThePlanAsText() {
         let app = launch()
         let send = app.buttons["send-plan"]
         XCTAssertTrue(send.waitForExistence(timeout: 5))
         scrollTo(send, in: app)
         send.tap()
-        XCTAssertTrue(app.navigationBars["Send plan"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Share plan"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Sign in to share your plan as a link."].exists, "the local test account has no server")
+
+        let textToggle = app.buttons["Send as a text instead"]
+        scrollTo(textToggle, in: app)
+        textToggle.tap()
         let preview = app.staticTexts["send-preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 2))
         XCTAssertTrue(preview.label.contains("Next: "), "halfway through the day it starts with what's left")
         XCTAssertFalse(preview.label.contains("Hungarian Pastry"))
         XCTAssertTrue(preview.label.contains("↓"), "how to get between stops")
