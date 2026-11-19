@@ -35,8 +35,8 @@ import XCTest
     func testTodayAndBudgetSayTheSameThing() {
         let mixed = legs([.subway, .bus, .drive, .drive, .bus])
         let plan = day(mixed)
-        XCTAssertEqual(TodaySummaryText.travel(plan).caption, "1 subway, 2 bus, 2 drives")
-        XCTAssertEqual(TodaySummaryText.travel(plan).value, "5 rides")
+        XCTAssertEqual(TodaySummaryText.travel(plan)?.caption, "1 subway, 2 bus, 2 drives")
+        XCTAssertEqual(TodaySummaryText.travel(plan)?.value, "5 rides")
 
         XCTAssertEqual(BudgetSheet.transitText(mixed.filter(\.mode.isTransit)), "3 rides: 1 subway, 2 bus")
         XCTAssertEqual(BudgetSheet.transitText(legs([.subway, .subway])), RideWording.count(2, .subway))

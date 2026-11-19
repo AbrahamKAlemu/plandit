@@ -160,9 +160,11 @@ private struct PlanSummary: View {
                 .buttonStyle(.plain)
                 .accessibilityHint("Shows where the money goes and lets you change it")
                 .accessibilityIdentifier("budget-metric")
-                divider
-                let travel = TodaySummaryText.travel(plan)
-                SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption, isStacked: isStacked)
+                if let travel = TodaySummaryText.travel(plan) {
+                    divider
+                    SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption,
+                                  accessibilityLabel: travel.accessibilityLabel, isStacked: isStacked)
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, Space.sm)
@@ -193,39 +195,57 @@ private struct PlanSummary: View {
     }
 }
 
-/// How Today's summary describes getting around: miles walked when the day has any walking,
-/// otherwise its rides by kind, so a subway day never reads "0.0 mi Walking". Like the other
-/// tiles, a short value over a caption: "2" over "subway rides", "2 rides" over "1 subway, 1 bus".
+/// How Today's summary describes getting around: miles walked when the day has any walking that
+/// rounds to more than nothing, otherwise its rides by kind, so a subway day never reads
+/// "0.0 mi Walking". Like the other tiles, a short value over a caption: "2" over "subway rides",
+/// "2 rides" over "1 subway, 1 bus". A day with no trips (one stop) has nothing to say.
 enum TodaySummaryText {
     struct Travel: Equatable {
         var icon: Lucide
         var value: String
         var caption: String
+        /// What VoiceOver reads: "2 subway rides", "2.3 miles walking".
+        var accessibilityLabel: String
     }
 
-    static func travel(_ plan: DayPlan) -> Travel {
-        guard let rides = rides(plan.legs) else {
-            return Travel(icon: .footprints, value: plan.walkingMiles.milesText, caption: "Walking")
+    static func travel(_ plan: DayPlan) -> Travel? {
+        guard !plan.legs.isEmpty else { return nil }
+        let walks = plan.legs.filter { $0.mode == .walk }
+        let miles = plan.walkingMiles.milesText
+        if !walks.isEmpty, miles != 0.0.milesText {
+            return Travel(icon: .footprints, value: miles, caption: "Walking", accessibilityLabel: spokenMiles(plan.walkingMiles) + " walking")
         }
-        return rides
+        if let rides = rides(plan.legs.filter { $0.mode != .walk }) { return rides }
+        // Only short walks: count them rather than say "0.0 mi".
+        return Travel(icon: .footprints, value: "\(walks.count)", caption: RideWording.noun(.walk, count: walks.count),
+                      accessibilityLabel: RideWording.count(walks.count, .walk))
     }
 
-    /// "All done for today" line: "2.1 mi walked", "2 subway rides" or "1 subway, 1 bus".
-    static func completedTravel(_ plan: DayPlan) -> String {
-        guard let rides = rides(plan.legs) else { return "\(plan.walkingMiles.milesText) walked" }
-        return rides.value.hasSuffix("rides") ? rides.caption : "\(rides.value) \(rides.caption)"
+    /// "All done for today" line: "2.1 mi walked", "2 subway rides" or "1 subway, 1 bus". Nil with no trips.
+    static func completedTravel(_ plan: DayPlan) -> String? {
+        guard let travel = travel(plan) else { return nil }
+        if travel.caption == "Walking" { return "\(travel.value) walked" }
+        return travel.value.hasSuffix("rides") ? travel.caption : "\(travel.value) \(travel.caption)"
     }
 
-    /// Nil when any trip is a walk, or there are no trips.
+    /// Nil when there are no rides.
     private static func rides(_ legs: [TravelLeg]) -> Travel? {
-        guard !legs.isEmpty, !legs.contains(where: { $0.mode == .walk }) else { return nil }
         let counted = RideWording.counts(legs)
         // The icon follows the most common kind; ties go to the subway, then the bus.
         guard let most = counted.max(by: { $0.count < $1.count }) else { return nil }
         guard counted.count == 1 else {
-            return Travel(icon: most.mode.icon, value: "\(legs.count) rides", caption: RideWording.kinds(legs))
+            let kinds = RideWording.kinds(legs)
+            return Travel(icon: most.mode.icon, value: "\(legs.count) rides", caption: kinds,
+                          accessibilityLabel: "\(legs.count) rides: \(kinds)")
         }
-        return Travel(icon: most.mode.icon, value: "\(most.count)", caption: RideWording.noun(most.mode, count: most.count))
+        return Travel(icon: most.mode.icon, value: "\(most.count)", caption: RideWording.noun(most.mode, count: most.count),
+                      accessibilityLabel: RideWording.count(most.count, most.mode))
+    }
+
+    /// "2.3 miles", "1 mile": words for VoiceOver rather than "mi".
+    private static func spokenMiles(_ miles: Double) -> String {
+        let number = miles.formatted(.number.precision(.fractionLength(1)))
+        return number == 1.0.formatted(.number.precision(.fractionLength(1))) ? "1 mile" : "\(number) miles"
     }
 }
 
@@ -234,6 +254,8 @@ private struct SummaryMetric: View {
     let value: String
     let caption: String
     var showsChevron = false
+    /// What VoiceOver reads instead of the value and caption run together.
+    var accessibilityLabel: String?
     /// One under the other, full width: nothing has to shrink or fit on one line.
     var isStacked = false
 
@@ -260,7 +282,8 @@ private struct SummaryMetric: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Space.sm)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityLabel ?? "\(value), \(caption)"))
     }
 }
 
@@ -276,7 +299,7 @@ private struct DayCompleteCard: View {
                 .background(Color.emerald, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text("All done for today").font(.cardHeading).foregroundStyle(.ink)
-                Text("\(plan.stops.count) stops · \(plan.totalCost.wholeDollarsText) · \(TodaySummaryText.completedTravel(plan))")
+                Text(summary)
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
             }
@@ -284,6 +307,14 @@ private struct DayCompleteCard: View {
         }
         .planditCard()
         .accessibilityElement(children: .combine)
+    }
+
+    /// "6 stops · $42 · 2.3 mi walked", or "1 stop · $9" when there were no trips.
+    private var summary: String {
+        let stops = plan.stops.count == 1 ? "1 stop" : "\(plan.stops.count) stops"
+        return [stops, plan.totalCost.wholeDollarsText, TodaySummaryText.completedTravel(plan)]
+            .compactMap { $0 }
+            .joined(separator: " · ")
     }
 }
 
