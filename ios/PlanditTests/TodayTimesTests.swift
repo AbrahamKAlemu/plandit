@@ -208,6 +208,7 @@ import XCTest
         let update = try XCTUnwrap(row.update)
         XCTAssertEqual(update.leg.minutes, live.leg.minutes)
         XCTAssertEqual(row.liveMinutes, live.leg.minutes, "the line reads Apple Maps' time")
+        XCTAssertNil(row.pickupNote, "no pickup on the subway")
         XCTAssertEqual(update.leg.detail, "4 and 7 trains", "the line keeps its name")
         XCTAssertEqual(update.leg.miles, leg.miles)
         XCTAssertEqual(update.leg.cost, leg.cost)
@@ -240,6 +241,7 @@ import XCTest
         let update = try XCTUnwrap(row.update)
         XCTAssertEqual(row.liveMinutes, appleMaps.minutes, "the line reads Apple Maps' own driving time")
         XCTAssertEqual(update.leg.minutes, appleMaps.minutes + TravelLeg.pickupMinutes, "the day counts the wait for pickup")
+        XCTAssertEqual(row.pickupNote, "\(appleMaps.minutes + TravelLeg.pickupMinutes) min with pickup", "and says so under the line")
         XCTAssertEqual(update.leg.cost, 23, "the fare stays the plan's")
         XCTAssertEqual(update.leg.miles, planned.miles)
     }
@@ -286,6 +288,8 @@ import XCTest
         XCTAssertEqual(row.option.leg.detail, "M15 bus")
         XCTAssertEqual(row.source, "In your plan")
         XCTAssertNotNil(row.update, "Apple Maps' bus time is offered")
+        XCTAssertEqual(row.liveMinutes, row.update?.leg.minutes)
+        XCTAssertNil(row.pickupNote)
         XCTAssertEqual(Set(rows.map(\.option.leg.mode)), [.walk, .subway, .bus, .drive])
     }
 
@@ -294,6 +298,15 @@ import XCTest
         XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.subway), "Take the subway the rest of the day")
         XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.bus), "Take the bus the rest of the day")
         XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.drive), "Drive the rest of the day")
+    }
+
+    func testDirectionsButtonsNameTheirTransit() {
+        XCTAssertEqual(TravelOptionsSheet.directionsTitle(.subway), "Subway directions in Maps")
+        XCTAssertEqual(TravelOptionsSheet.directionsTitle(.bus), "Bus directions in Maps")
+        XCTAssertEqual(TravelOptionsSheet.directionsTitle(.walk), "Directions in Maps")
+        XCTAssertEqual(TravelOptionsSheet.directionsTitle(.drive), "Directions in Maps")
+        // Only the words differ: a bus opens Apple Maps in transit mode, like the subway.
+        XCTAssertEqual(TravelMode.bus.mapsLaunchMode, TravelMode.subway.mapsLaunchMode)
     }
 
     func testRestOfTheDayKeepsTheTimesOfTripsAlreadyMadeThatWay() async throws {

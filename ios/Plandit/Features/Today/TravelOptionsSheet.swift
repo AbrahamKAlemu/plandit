@@ -65,7 +65,7 @@ struct TravelOptionsSheet: View {
                             withAnimation(.snappy) { store.chooseTravel(row.option) }
                         }
                         if let update = row.update, let minutes = row.liveMinutes {
-                            LiveTimeButton(minutes: minutes, preview: store.previewTravel(update), destination: to) {
+                            LiveTimeButton(minutes: minutes, pickupNote: row.pickupNote, preview: store.previewTravel(update), destination: to) {
                                 withAnimation(.snappy) { store.chooseTravel(update) }
                             }
                         }
@@ -86,7 +86,7 @@ struct TravelOptionsSheet: View {
                     } label: {
                         HStack(spacing: Space.xs) {
                             Icon(.navigation, size: 18)
-                            Text(leg.mode.isTransit ? "Subway directions in Maps" : "Directions in Maps")
+                            Text(Self.directionsTitle(leg.mode))
                         }
                     }
                     .buttonStyle(.secondary)
@@ -127,6 +127,13 @@ struct TravelOptionsSheet: View {
             return update.leg.minutes - (update.leg.mode == .drive ? TravelLeg.pickupMinutes : 0)
         }
 
+        /// Drives only: the trip's time once Apple Maps' time is taken, waiting for pickup included,
+        /// so "Apple Maps now says 12 min" doesn't turn into 17 min unexplained.
+        var pickupNote: String? {
+            guard let update, update.leg.mode == .drive else { return nil }
+            return "\(update.leg.minutes) min with pickup"
+        }
+
         /// Where the row's time comes from.
         var source: String {
             if isPlanned { return "In your plan" }
@@ -151,6 +158,14 @@ struct TravelOptionsSheet: View {
                 update = PlanditStore.TravelOption(leg: newer, isLive: true)
             }
             return Row(option: PlanditStore.TravelOption(leg: kept, isLive: false), isPlanned: true, update: update)
+        }
+    }
+
+    /// Buses open Apple Maps in transit mode, like the subway; only the words differ.
+    static func directionsTitle(_ mode: TravelMode) -> String {
+        switch mode {
+        case .subway, .bus: "\(mode.label) directions in Maps"
+        case .walk, .drive: "Directions in Maps"
         }
     }
 
@@ -235,10 +250,12 @@ private struct OptionRow: View {
 }
 
 /// Under the planned way, when Apple Maps' time for it has changed: "Apple Maps now says 24 min".
-/// Tapping it uses that time and moves the stops after the trip.
+/// Tapping it uses that time and moves the stops after the trip. A drive adds what the trip comes
+/// to with pickup: "17 min with pickup".
 private struct LiveTimeButton: View {
     /// Apple Maps' own time for the trip.
     let minutes: Int
+    let pickupNote: String?
     /// The day with Apple Maps' time.
     let preview: DayPlan
     let destination: PlanStop
@@ -246,18 +263,27 @@ private struct LiveTimeButton: View {
 
     var body: some View {
         Button(action: apply) {
-            HStack(spacing: Space.xxs) {
-                Icon(.clock, size: 14)
-                Text("Apple Maps now says \(minutes) min")
-                Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Space.xxs) {
+                    Icon(.clock, size: 14)
+                    Text("Apple Maps now says \(minutes) min")
+                    Spacer(minLength: 0)
+                }
+                .font(.label)
+                .foregroundStyle(.ink)
+                if let pickupNote {
+                    Text(pickupNote)
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .padding(.leading, 14 + Space.xxs)
+                }
             }
-            .font(.label)
-            .foregroundStyle(.ink)
             .padding(.leading, 32 + Space.sm)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
         .accessibilityHint(hint)
         .accessibilityIdentifier("travel-live-time")
     }
