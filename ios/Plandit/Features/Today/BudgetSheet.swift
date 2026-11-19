@@ -46,6 +46,7 @@ struct BudgetSheet: View {
             .background(Color.surface)
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

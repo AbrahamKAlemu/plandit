@@ -217,9 +217,32 @@ private struct HiddenWhenSheetCollapsed: ViewModifier {
     }
 }
 
+/// A sheet's navigation bar (Budget, Plan a day, Cost, Getting there…) stays solid surface while
+/// the content scrolls under it: no see-through bar and, on iOS 26 and later, no blurred text
+/// showing through the scroll edge.
+private struct SolidSheetHeader: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .toolbarBackground(Color.surface, for: .navigationBar)
+                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+                .scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            content
+                .toolbarBackground(Color.surface, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+}
+
 extension View {
     func hiddenWhenSheetCollapsed() -> some View {
         modifier(HiddenWhenSheetCollapsed())
+    }
+
+    /// Put on the content inside a sheet's `NavigationStack`, next to `navigationTitle`.
+    func solidSheetHeader() -> some View {
+        modifier(SolidSheetHeader())
     }
 
     /// White surface, 1px border, 16pt radius. No shadow: shadows are reserved for floating sheets.

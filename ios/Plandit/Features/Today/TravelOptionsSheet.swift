@@ -21,6 +21,7 @@ struct TravelOptionsSheet: View {
             .background(Color.surface)
             .navigationTitle("Getting there")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

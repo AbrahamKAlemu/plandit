@@ -46,6 +46,7 @@ struct PlanBuilderSheet: View {
             .background(Color.surface)
             .navigationTitle("Plan a day")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

@@ -23,6 +23,7 @@ struct StopTimeSheet: View {
             .background(Color.surface)
             .navigationTitle("Time")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
