@@ -140,10 +140,10 @@ final class ShareIntakeTests: XCTestCase {
         try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -10 * 86_400)], ofItemAtPath: source.path)
 
         let staged = try mediaStore.stage(source)
-        try mediaStore.removeExpiredFiles(now: Date())
+        mediaStore.removeExpiredFiles(now: Date())
         XCTAssertTrue(FileManager.default.fileExists(atPath: staged.path), "A fresh share isn't deleted because the video is old")
 
-        try mediaStore.removeExpiredFiles(now: Date(timeIntervalSinceNow: 25 * 3600))
+        mediaStore.removeExpiredFiles(now: Date(timeIntervalSinceNow: 25 * 3600))
         XCTAssertFalse(FileManager.default.fileExists(atPath: staged.path), "Unread after 24 hours: deleted")
     }
 

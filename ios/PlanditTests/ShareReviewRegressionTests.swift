@@ -153,4 +153,23 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertEqual(s.post(id: id)?.status, .failed)
         XCTAssertEqual(s.post(id: id)?.failureMessage, PlanditStore.lookupFailedMessage)
     }
+
+    // MARK: - Cleanup carries on past a file it can't delete (nice-to-have 5)
+
+    /// One expired video can't be deleted (it's locked): the rest still go, and nothing asserts.
+    @MainActor func testCleanupCarriesOnPastAFileItCantDelete() throws {
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: GatedVideoReader())
+        try FileManager.default.createDirectory(at: mediaStore.root, withIntermediateDirectories: true)
+        let locked = mediaStore.root.appending(path: "locked.mov")
+        try Data(count: 8).write(to: locked)
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: locked.path) }
+        for n in 0..<6 {
+            try Data(count: 8).write(to: mediaStore.root.appending(path: "clip-\(n).mov"))
+        }
+
+        s.removeExpiredTemporaryMedia(now: Date(timeIntervalSinceNow: 25 * 3600))
+
+        XCTAssertEqual(mediaFiles().map(\.lastPathComponent), ["locked.mov"])
+    }
 }

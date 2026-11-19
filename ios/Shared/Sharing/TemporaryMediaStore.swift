@@ -1,4 +1,5 @@
 import Foundation
+import os
 import UniformTypeIdentifiers
 
 nonisolated enum VideoEvidenceError: LocalizedError, Equatable {
@@ -97,23 +98,52 @@ nonisolated struct TemporaryMediaStore {
 
     /// Deletes every file staged before `cutoff`, read or not (a partial copy from an extension
     /// that was stopped included). A share whose video is gone asks for the video again in the app.
-    func removeExpiredFiles(olderThan cutoff: Date) throws {
-        guard FileManager.default.fileExists(atPath: root.path) else { return }
-        let files = try FileManager.default.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        )
+    /// A file it can't delete is logged and skipped, so one stuck file never keeps the rest; a file
+    /// that's already gone (read and deleted meanwhile) is fine.
+    func removeExpiredFiles(olderThan cutoff: Date) {
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            if !Self.isMissingFile(error) {
+                Self.log.error("Couldn't list temporary media: \(error.localizedDescription, privacy: .public)")
+            }
+            return
+        }
         for file in files {
-            let modified = try file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
-            if modified < cutoff {
-                try remove(file)
+            do {
+                let modified = try file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
+                if modified < cutoff {
+                    try remove(file)
+                }
+            } catch where Self.isMissingFile(error) {
+                continue
+            } catch {
+                Self.log.error(
+                    "Couldn't delete expired \(file.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
             }
         }
     }
 
     /// `removeExpiredFiles` with the 24-hour rule.
-    func removeExpiredFiles(now: Date = Date()) throws {
-        try removeExpiredFiles(olderThan: now.addingTimeInterval(-Self.lifetime))
+    func removeExpiredFiles(now: Date = Date()) {
+        removeExpiredFiles(olderThan: now.addingTimeInterval(-Self.lifetime))
+    }
+
+    private static let log = Logger(subsystem: "com.plandit.app", category: "TemporaryMedia")
+
+    /// Whether an error only says the file (or folder) isn't there.
+    static func isMissingFile(_ error: any Error) -> Bool {
+        let error = error as NSError
+        switch error.domain {
+        case NSCocoaErrorDomain: return error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError
+        case NSPOSIXErrorDomain: return error.code == Int(ENOENT)
+        default: return false
+        }
     }
 }

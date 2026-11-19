@@ -644,11 +644,7 @@ final class PlanditStore {
 
     /// Deletes videos that waited more than 24 hours without being read (SHR-3).
     func removeExpiredTemporaryMedia(now: Date = Date()) {
-        do {
-            try mediaStore.removeExpiredFiles(now: now)
-        } catch {
-            assertionFailure("Temporary media cleanup failed: \(error)")
-        }
+        mediaStore.removeExpiredFiles(now: now)
     }
 
     private func startExtraction(_ id: UUID) {

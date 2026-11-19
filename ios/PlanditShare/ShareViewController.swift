@@ -25,7 +25,7 @@ final class ShareViewController: UIViewController {
         host.didMove(toParent: self)
 
         // Unread videos older than a day go, even if Plandit itself hasn't opened since.
-        try? TemporaryMediaStore.shared?.removeExpiredFiles()
+        TemporaryMediaStore.shared?.removeExpiredFiles()
 
         let items = extensionContext?.inputItems as? [NSExtensionItem] ?? []
         Task {
