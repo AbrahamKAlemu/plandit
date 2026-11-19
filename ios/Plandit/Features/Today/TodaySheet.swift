@@ -22,47 +22,27 @@ struct TodaySheet: View {
                 }
             }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.lg) {
-                    if plan.stops.isEmpty, store.saved.isEmpty {
-                        // Nothing to plan from yet: the first step is a place, not a plan.
-                        EmptyState(
-                            icon: .route,
-                            title: "Nothing planned yet",
-                            message: "Add a place first. Share a TikTok or Reel to Plandit, or paste a link.",
-                            isCompact: true
-                        ) {
-                            Button {
-                                isAddingLink = true
-                            } label: {
-                                HStack(spacing: Space.xs) {
-                                    Icon(.clipboardPaste, size: 18)
-                                    Text("Paste a link")
-                                }
-                            }
-                            .buttonStyle(.secondary)
-                            .accessibilityIdentifier("today-paste-link")
-                        }
-                        .transition(.opacity)
-                    } else if plan.stops.isEmpty {
-                        EmptyState(
-                            icon: .route,
-                            title: "Nothing planned yet",
-                            message: "Tap + to turn your saved places into today's plan.",
-                            isCompact: true
-                        ) {
-                            Button {
-                                router.startPlanning()
-                            } label: {
-                                HStack(spacing: Space.xs) {
-                                    Icon(.plus, size: 18)
-                                    Text("Plan a day")
-                                }
-                            }
-                            .buttonStyle(.secondary)
-                        }
-                        .transition(.opacity)
-                    } else {
+            if plan.stops.isEmpty {
+                // Sized to the space above the tab bar rather than scrolled, so the next step is
+                // never cut off at half height: the icon goes first when the sheet is short. The
+                // tab bar covers the bottom of this view, so its height is set aside first.
+                VStack(spacing: 0) {
+                    ViewThatFits(in: .vertical) {
+                        emptyToday(showsIcon: true)
+                        emptyToday(showsIcon: false)
+                        ScrollView { emptyToday(showsIcon: false) }
+                            .scrollIndicators(.hidden)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    TabBarSpace()
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("empty-today")
+                .hiddenWhenSheetCollapsed()
+                .transition(.opacity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Space.lg) {
                         PlanSummary(plan: plan) { isShowingBudget = true }
 
                         // One clock for the card and the Directions button: no directions to a stop the card says you missed.
@@ -110,16 +90,18 @@ struct TodaySheet: View {
                         }
                         PlanTimeline(plan: plan)
                     }
+                    .padding(.horizontal, Space.lg)
+                    .padding(.top, Space.xs)
+                    .padding(.bottom, Space.lg)
+                    .animation(.snappy(duration: 0.35), value: plan.stops.map(\.id))
+                    .animation(.snappy(duration: 0.35), value: plan.stops.map(\.status))
                 }
-                .padding(.horizontal, Space.lg)
-                .padding(.top, Space.xs)
-                .padding(.bottom, Space.lg)
-                .animation(.snappy(duration: 0.35), value: plan.stops.map(\.id))
-                .animation(.snappy(duration: 0.35), value: plan.stops.map(\.status))
+                .scrollIndicators(.hidden)
+                .hiddenWhenSheetCollapsed()
+                .transition(.opacity)
             }
-            .scrollIndicators(.hidden)
-            .hiddenWhenSheetCollapsed()
         }
+        .animation(.snappy(duration: 0.35), value: plan.stops.isEmpty)
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
@@ -130,6 +112,55 @@ struct TodaySheet: View {
                 router.showPost(id)
             }
         }
+    }
+
+    /// Nothing planned: paste a link when nothing is saved yet (the first step is a place, not a
+    /// plan), otherwise plan a day from what's saved.
+    @ViewBuilder private func emptyToday(showsIcon: Bool) -> some View {
+        Group {
+            if store.saved.isEmpty {
+                EmptyState(
+                    icon: .route,
+                    title: "Nothing planned yet",
+                    message: "Add a place first. Share a TikTok or Reel to Plandit, or paste a link.",
+                    isCompact: true,
+                    showsIcon: showsIcon
+                ) {
+                    Button {
+                        isAddingLink = true
+                    } label: {
+                        HStack(spacing: Space.xs) {
+                            Icon(.clipboardPaste, size: 18)
+                            Text("Paste a link")
+                        }
+                    }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("today-paste-link")
+                }
+            } else {
+                EmptyState(
+                    icon: .route,
+                    title: "Nothing planned yet",
+                    message: "Tap + to turn your saved places into today's plan.",
+                    isCompact: true,
+                    showsIcon: showsIcon
+                ) {
+                    Button {
+                        router.startPlanning()
+                    } label: {
+                        HStack(spacing: Space.xs) {
+                            Icon(.plus, size: 18)
+                            Text("Plan a day")
+                        }
+                    }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("today-plan-a-day")
+                }
+            }
+        }
+        .padding(.horizontal, Space.lg)
+        .padding(.top, Space.xs)
+        .padding(.bottom, Space.sm)
     }
 }
 
