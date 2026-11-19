@@ -416,6 +416,26 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertNil(TemporaryMediaStore.byteCount(of: directory.appending(path: "missing.mov")))
     }
 
+    // MARK: - When a shared link was saved (nice-to-have 13)
+
+    /// A link shared yesterday and opened today is dated when it was shared, like a video.
+    @MainActor func testASharedLinkIsDatedWhenItWasShared() throws {
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: GatedVideoReader())
+        let sharedAt = Date(timeIntervalSinceNow: -86_400)
+        ShareInbox.enqueue(IncomingShare(url: URL(string: "https://www.tiktok.com/@nycbites/video/7400000000000000001")!, receivedAt: sharedAt))
+
+        let id = try XCTUnwrap(s.ingestPendingShares().first)
+
+        XCTAssertEqual(try XCTUnwrap(s.post(id: id)?.savedAt).timeIntervalSince1970, sharedAt.timeIntervalSince1970, accuracy: 0.001)
+    }
+
+    /// A link added in the app is dated now.
+    @MainActor func testALinkAddedInTheAppIsDatedNow() throws {
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: GatedVideoReader())
+        let id = try s.save(url: URL(string: "https://www.tiktok.com/@nycbites/video/7400000000000000002")!)
+        XCTAssertLessThan(abs(try XCTUnwrap(s.post(id: id)?.savedAt).timeIntervalSinceNow), 5)
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))

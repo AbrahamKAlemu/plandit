@@ -454,7 +454,7 @@ final class PlanditStore {
                         if !ids.contains(share.id) { ids.append(share.id) }
                     }
                 } else if let url = share.url {
-                    let id = try save(url: url, sharedText: share.sharedText)
+                    let id = try save(url: url, sharedText: share.sharedText, savedAt: share.receivedAt)
                     if !ids.contains(id) { ids.append(id) }
                 }
                 ShareInbox.acknowledge(share.id)
@@ -522,8 +522,9 @@ final class PlanditStore {
         (error as? VideoEvidenceError)?.errorDescription ?? shareVideoAgainMessage
     }
 
+    /// `savedAt` is when it was shared, for a link from the share sheet; now, for one added in the app.
     @discardableResult
-    func save(url: URL, sharedText: String? = nil) throws -> UUID {
+    func save(url: URL, sharedText: String? = nil, savedAt: Date = .now) throws -> UUID {
         let supported = try SupportedSocialURL(url)
         if let index = saved.firstIndex(where: { $0.canonicalURL == supported.canonicalURL }) {
             let existing = saved[index]
@@ -545,7 +546,7 @@ final class PlanditStore {
             // A TikTok link names its creator, so the post can show them while it waits (PRC-2).
             creatorHandle: supported.canonicalURL.pathComponents.first { $0.hasPrefix("@") && $0.count > 1 },
             caption: sharedText,
-            savedAt: .now,
+            savedAt: savedAt,
             status: .processing
         )
         var updated = saved
