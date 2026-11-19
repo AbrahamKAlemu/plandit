@@ -73,6 +73,8 @@ final class ShareIntakeTests: XCTestCase {
         )
         XCTAssertEqual(store.ingestPendingShares().count, 1)
         XCTAssertEqual(store.saved.first?.platform, .tiktok)
+        // The creator shows while the place is found (PRC-2).
+        XCTAssertEqual(store.saved.first?.creatorHandle, "@nycbites")
         XCTAssertTrue(ShareInbox.pending().isEmpty)
     }
 

@@ -522,6 +522,8 @@ final class PlanditStore {
             url: url,
             canonicalURL: supported.canonicalURL,
             platform: supported.platform,
+            // A TikTok link names its creator, so the post can show them while it waits (PRC-2).
+            creatorHandle: supported.canonicalURL.pathComponents.first { $0.hasPrefix("@") && $0.count > 1 },
             caption: sharedText,
             savedAt: .now,
             status: .processing
