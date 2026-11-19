@@ -8,6 +8,8 @@ struct StoreSnapshot: Codable {
     var profile: UserProfile
     var pastPlans: [PastPlan]
     var visited: [Place]
+    /// Today's plan shared as a link, if it is. Older files and builds have none.
+    var sharedLink: SharedLink? = nil
 }
 
 /// One JSON file in the App Group container (so the share extension could read it too),

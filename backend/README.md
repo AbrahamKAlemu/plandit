@@ -124,8 +124,8 @@ in `website/config.js` so the landing page's form starts saving signups.
 ## API
 
 JSON in and out, snake_case keys, money as numbers, UUID ids, ISO 8601 timestamps. Every route
-needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/api/waitlist/` and
-`/api/metrics/` (secret key). Unauthenticated calls get `401`; another user's objects return `404`.
+needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/api/waitlist/`,
+`/api/metrics/` (secret key) and the public shared-plan page `/p/<slug>`. Unauthenticated calls get `401`; another user's objects return `404`.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -153,6 +153,9 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | POST | `/api/plans/<id>/stops/reorder/` | `{"stop_ids":[...]}` every stop exactly once |
 | PATCH, DELETE | `/api/plans/<id>/stops/<stop_id>/` | PATCH `status`, `start`, `duration_minutes`, `estimated_cost`, `note` |
 | POST | `/api/plans/<id>/build/` | the planner: `{"saved_post_ids":[...], "start", "end", "budget", "mode":"add"\|"replace", "dry_run"}`; returns the plan plus `skipped` (`closed`, `over_budget`, `out_of_time`, `evening_only`). `dry_run` previews without saving. Same rules as the iOS planner; see `plandit/plans/planner.py` |
+| POST | `/api/shares/` | share a plan as a link: camelCase, display-ready texts from the app (`planId`, `title`, `dateText`, `timeText`, `note`, `costText`, `stops[]`, `legs[]`; see `contracts/openapi.yaml`) → `{"slug","url"}`. `201` new, `200` when that plan already had a link (same slug, page updated). One link per plan per account |
+| DELETE | `/api/shares/<slug>/` | stop sharing: `204`, the page 404s at once. Another account's slug is `404` |
+| GET | `/p/<slug>` | the public page (HTML, no sign-in, `noindex`, Open Graph tags for link previews). Link host is `SHARE_BASE_URL` when set (`https://plandit.app` once the site forwards `/p/` here), else this API's own host |
 
 Every plan mutation returns the full plan, with legs rebuilt between consecutive stops.
 

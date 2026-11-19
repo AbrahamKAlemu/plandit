@@ -125,6 +125,60 @@ paths:
           description: Endpoint is off (`METRICS_API_KEY` not configured)
         "429":
           description: Throttled (30/min per IP)
+  /api/shares/:
+    post:
+      operationId: sharePlan
+      summary: Share a plan as a link, or update the page of a plan already shared (one link per plan)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SharedPlan"
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SharedPlanLink"
+        "200":
+          description: The plan's existing link; its page now shows this version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SharedPlanLink"
+        "400":
+          description: No stops, more than 30, a text too long, or more trips than gaps between stops
+  /api/shares/{slug}/:
+    delete:
+      operationId: stopSharingPlan
+      summary: Stop sharing; the link stops working
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Taken down
+        "404":
+          description: No such link of yours
+  /p/{slug}:
+    get:
+      operationId: sharedPlanPage
+      summary: The public HTML page for a shared plan (no sign-in)
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: HTML page
+        "404":
+          description: HTML page saying the plan isn't shared anymore
   /v1/place-resolutions:
     post:
       operationId: createPlaceResolution
@@ -159,6 +213,47 @@ components:
       in: query
       name: key
   schemas:
+    SharedPlan:
+      type: object
+      description: Display-ready texts formatted on the phone; the server shows them as-is.
+      required: [planId, title, dateText, stops]
+      properties:
+        planId: { type: string, format: uuid }
+        title: { type: string, maxLength: 120 }
+        dateText: { type: string, maxLength: 60, examples: ["Saturday, November 22"] }
+        timeText: { type: string, maxLength: 60, examples: ["11:00 AM – 6:15 PM"] }
+        note: { type: string, maxLength: 280 }
+        costText: { type: string, maxLength: 160, examples: ["About $42 per person"] }
+        stops:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            type: object
+            required: [name, timeText]
+            properties:
+              name: { type: string, maxLength: 120 }
+              place: { type: string, maxLength: 120, examples: ["Food · Chelsea"] }
+              address: { type: string, maxLength: 200 }
+              timeText: { type: string, maxLength: 40 }
+              durationText: { type: string, maxLength: 40 }
+              costText: { type: string, maxLength: 40 }
+              latitude: { type: [number, "null"] }
+              longitude: { type: [number, "null"] }
+        legs:
+          type: array
+          description: The trip after each stop but the last, in order
+          items:
+            type: object
+            required: [text]
+            properties:
+              text: { type: string, maxLength: 120, examples: ["22 min walk"] }
+    SharedPlanLink:
+      type: object
+      required: [slug, url]
+      properties:
+        slug: { type: string, examples: ["k7Qx2aB9cD"] }
+        url: { type: string, format: uri, examples: ["https://plandit.app/p/k7Qx2aB9cD"] }
     Detail:
       type: object
       required: [detail]

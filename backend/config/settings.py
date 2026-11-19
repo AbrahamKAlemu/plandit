@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "plandit.saved",
     "plandit.plans",
     "plandit.waitlist",
+    "plandit.shares",
     "resolution",
 ]
 
@@ -165,6 +166,10 @@ if DEBUG:
     REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"].append("rest_framework.renderers.BrowsableAPIRenderer")
 
 # --- CORS: only the marketing site calls the API from a browser (the waitlist form) ---
+
+# --- Shared plan links: plandit.app/p/<slug> once the site forwards /p/ to this API; blank = this host ---
+
+SHARE_BASE_URL = env("SHARE_BASE_URL", "")
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "https://plandit.app,https://www.plandit.app")
 CORS_ALLOW_ALL_ORIGINS = DEBUG

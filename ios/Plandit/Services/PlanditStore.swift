@@ -21,6 +21,12 @@ final class PlanditStore {
     var savedErrorMessage: String?
     /// Real walking or driving geometry per leg, filled in by `loadRoutes()`.
     private(set) var legPaths: [UUID: [CLLocationCoordinate2D]] = [:]
+    /// The plan shared as a link (plandit.app/p/<slug>). It follows the plan: edits update the page.
+    private(set) var sharedLink: SharedLink?
+    /// Publishes links; nil when signed out of the server (the local test account).
+    @ObservationIgnored var sharing: (any PlanSharing)?
+    @ObservationIgnored private var pendingShareUpdate: Task<Void, Never>?
+    @ObservationIgnored private var lastPublished: SharedPlanPayload?
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
 
@@ -100,6 +106,7 @@ final class PlanditStore {
             storage: storage,
             events: events
         )
+        sharedLink = snapshot.sharedLink
     }
 
     /// Swaps in another copy of this account's data (the server's, after sync) and writes it locally.
@@ -112,6 +119,7 @@ final class PlanditStore {
         profile = snapshot.profile
         pastPlans = snapshot.pastPlans
         visited = snapshot.visited
+        sharedLink = snapshot.sharedLink
         legPaths = [:]
         persistNow()
         rollOverIfNeeded()
@@ -172,6 +180,7 @@ final class PlanditStore {
             extractor: extractor,
             storage: storage
         )
+        store.sharedLink = snapshot.sharedLink
         store.rollOverIfNeeded()
         if resetsSavedData { store.persistNow() }
         return store
@@ -818,7 +827,8 @@ final class PlanditStore {
             today: today,
             profile: profile,
             pastPlans: pastPlans,
-            visited: visited
+            visited: visited,
+            sharedLink: sharedLink
         )
         try storage.save(snapshot)
         onChange?(snapshot)
@@ -911,6 +921,55 @@ final class PlanditStore {
         remember(today.stops[index].status == .done ? "\(name) is back to planned" : "Not at \(name) yet")
         setStatuses(doneThrough: index - 1, now: nil)
     }
+
+    // MARK: - Sharing the plan as a link
+
+    /// Today's link, if today's plan is the one shared.
+    var todayLink: SharedLink? {
+        guard let sharedLink, sharedLink.planID == today.id else { return nil }
+        return sharedLink
+    }
+
+    var canShareLinks: Bool { sharing != nil }
+
+    /// Creates today's link (or updates its page with new options) and remembers it.
+    @discardableResult
+    func shareToday(showPrices: Bool, note: String) async throws -> SharedLink {
+        guard let sharing else { throw APIError.network }
+        let payload = today.sharedPayload(showPrices: showPrices, note: note)
+        let created = try await sharing.publish(payload)
+        let link = SharedLink(slug: created.slug, url: created.url, planID: payload.planId, showPrices: showPrices, note: note)
+        lastPublished = payload
+        sharedLink = link
+        persist()
+        return link
+    }
+
+    /// Takes the page down; the link stops working.
+    func stopSharing() async throws {
+        guard let link = sharedLink else { return }
+        if let sharing { try await sharing.unpublish(slug: link.slug) }
+        pendingShareUpdate?.cancel()
+        sharedLink = nil
+        lastPublished = nil
+        persist()
+    }
+
+    /// After a change to a shared plan, the page catches up a moment later. Failures are quiet:
+    /// the next change tries again.
+    private func scheduleShareUpdate() {
+        guard let link = todayLink, let sharing else { return }
+        let payload = today.sharedPayload(showPrices: link.showPrices, note: link.note)
+        guard payload != lastPublished else { return }
+        pendingShareUpdate?.cancel()
+        pendingShareUpdate = Task { [weak self] in
+            try? await Task.sleep(for: Self.shareUpdateDelay)
+            guard !Task.isCancelled else { return }
+            if (try? await sharing.publish(payload)) != nil { self?.lastPublished = payload }
+        }
+    }
+
+    static var shareUpdateDelay: Duration = .seconds(2)
 
     // MARK: - Undo
 
@@ -1080,7 +1139,7 @@ final class PlanditStore {
     // MARK: - Persistence
 
     var snapshot: StoreSnapshot {
-        StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited)
+        StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited, sharedLink: sharedLink)
     }
 
     /// The current state in the exact JSON shape the file and the cloud copy use.
@@ -1088,6 +1147,7 @@ final class PlanditStore {
 
     /// Coalesces bursts of changes into one write a moment later.
     private func persist() {
+        scheduleShareUpdate()
         guard let storage, !isClosed else { return }
         let snapshot = snapshot
         pendingSave?.cancel()
