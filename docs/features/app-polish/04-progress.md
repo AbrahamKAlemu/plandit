@@ -10,7 +10,8 @@ added to the brief as D requirements.
 
 - PR #28 and #29 merged on November 18. The docs, A, D and E are restacked on the new main (e81d1d0)
   as `app-polish/docs`, `app-polish/a-bar-profile`, `app-polish/d-saved-list` and
-  `app-polish/e-tutorial`, one PR each, stacked in that order. Nothing is pushed yet.
+  `app-polish/e-tutorial`, then `app-polish/c-today` and `app-polish/b-share`: one PR each, stacked in
+  that order. Nothing is pushed yet.
 - Two walkthrough findings belong to Eldad's planner work and aren't in scope: the planner put a
   "late lunch" after dinner (walkthrough shot 42; a GitHub issue for Eldad once approved), and
   Today's times disagree by 1 to 3 minutes (W-17 rechecks after #28, or moves to 1.0.2).
@@ -22,7 +23,10 @@ added to the brief as D requirements.
   enough. It needs its own issue (not opened yet).
 - `MapAndBudgetFlowTests.testReorderingTheStopsAhead` fails on main too. Cause: #29 put the stop's
   number and time into the reorder control's accessibility label, so the test's exact match broke.
-  Slice C fixes the test (1b625e3); until C is stacked, the integrated UI run is 55/56.
+  Slice C fixes the test; it passes on `app-polish/c-today`.
+- More planner findings for Eldad's issue (with the late lunch): `startRestFromNow` on a day that runs
+  past midnight leaves times that a Time sheet changes again when opened (`DayPlan.shiftStops` applies
+  the evening rule from each stop's own date).
 
 ## Documents
 
@@ -46,8 +50,8 @@ added to the brief as D requirements.
 | Build A (bar, Profile, logo) | Built; xhigh review done (no account or data-loss bugs); 7 findings fixed. The last fix commits are checked in the final review | `feature/polish-bar-profile`; 268 unit tests, ProfileFlowTests 10/10 |
 | Build E (tutorial) | Built, reviewed, fixes re-reviewed | `feature/polish-tutorial`; 278 unit tests; FirstRunTutorialTests 19, TutorialFlowTests 12, twice each |
 | Integration (docs, A, D, E on main) | Done | 319 unit tests; UI 55/56 (the reorder test, fixed in C); share extension builds |
-| Build C (sheets and Today) | Built (W-1, W-15, W-16, W-17, reorder test); reviewed; fixing findings | `feature/polish-today`, from main e81d1d0; 293/293 before the fixes |
-| Build B (share and processing) | In progress | `app-polish/b-share`, from `app-polish/e-tutorial` |
+| Build C (sheets and Today) | Built, reviewed twice, all findings fixed | `app-polish/c-today` 046cde3; 349 unit tests, EmptyToday and TodaySummary UI tests pass |
+| Build B (share and processing) | Built; persona round 4 passed; xhigh review running | `app-polish/b-share` 1372ff4 on c-today f74693a; 381 unit and 67 UI tests, 0 failures |
 | Reviews and flow walk | Not started | |
 | Release | Not started | |
 
@@ -69,3 +73,5 @@ added to the brief as D requirements.
 | Nov 18 | PR #28 and #29 merged; slice C started from main. |
 | Nov 18 | Slice A reviewed at xhigh: account actions safe. Fixing: past-plan rounding, stat alignment and word breaks, Profile map framing, case-insensitive neighborhoods, dead code, README. Empty Today at half height moved to slice C. Recorded, not fixed: a 1.0 phone drops `fares` from synced past plans (last writer wins); the iPad mini zoom on a selected pin. |
 | Nov 18 | Kept the 80 km cap on the map. A, D and E restacked onto main; the undo bar from #29 sits just above the new tab bar. Slice B started. |
+| Nov 18 | Slice C stacked on E; its tab-bar spacer dropped because A's bar already sits below the sheet. Second review of C: travel sheet keeps the plan's line and fare, travel changes clear a pending undo, bus trips show as planned. |
+| Nov 18 | Slice B built. Persona round 4 on its new copy: five approvals, no must_fix; error wording simplified from their suggestions. |
