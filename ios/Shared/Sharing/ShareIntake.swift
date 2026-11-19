@@ -40,7 +40,7 @@ nonisolated enum ShareProblem: Equatable, Sendable {
         case .noLink: "This share didn't include a link or a video. \(Self.whatWorks)"
         case .notVideo: Self.whatWorks
         case .videoTooLarge: "Try a shorter video, up to 250 MB. You can also share a TikTok or an Instagram post or Reel."
-        case .videosUnavailable: "Plandit can't save videos right now. Share a TikTok or an Instagram post or Reel instead."
+        case .videosUnavailable: "Share a TikTok or an Instagram post or Reel instead."
         case .videoNotSaved: "Try sharing it again. \(Self.whatWorks)"
         }
     }
