@@ -95,6 +95,9 @@ struct FixturePlaceExtractor: PlaceExtracting {
             guard Self.hasMeaningfulSharedText(sharedText) else { throw error }
             metadata = nil
         } catch {
+            // Unreachable (a sleeping server, a timeout, no connection) with nothing else to search:
+            // say so, so the store retries once and then offers Try again (PRC-3).
+            guard !TransientNetworkError.matches(error) || Self.hasMeaningfulSharedText(sharedText) else { throw error }
             metadata = nil
         }
         let evidence = [metadata?.searchEvidence, metadata?.title, sharedText]
@@ -266,6 +269,11 @@ struct MapKitPlaceSearcher: PlaceSearching {
             if candidates.count == 3 { return candidates }
         }
         if !completedSearch, let lastError {
+            throw lastError
+        }
+        // Some queries ran, but the rest couldn't reach Apple Maps and nothing turned up: that's a
+        // network failure, not "no such place" (PRC-3).
+        if candidates.isEmpty, let lastError, TransientNetworkError.matches(lastError) {
             throw lastError
         }
         return candidates
@@ -668,9 +676,34 @@ struct FallbackSocialMetadataProvider: SocialMetadataProviding {
             }
             throw primaryError
         } catch {
-            return try await fallback.metadata(for: url)
+            guard TransientNetworkError.matches(error) else { return try await fallback.metadata(for: url) }
+            // The fallback may know nothing about this link (oEmbed and Instagram), so an
+            // unreachable backend stays an error unless the fallback found something to search.
+            if let metadata = try? await fallback.metadata(for: url), metadata.hasPlaceEvidence {
+                return metadata
+            }
+            throw error
         }
         return try await fallback.metadata(for: url)
+    }
+}
+
+/// A network failure that may pass: a timeout, no connection, a server that can't be reached, or
+/// Apple Maps being briefly unavailable. Worth the one automatic retry (PRC-3).
+enum TransientNetworkError {
+    private static let codes: Set<URLError.Code> = [
+        .timedOut, .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost,
+        .cannotFindHost, .dnsLookupFailed, .internationalRoamingOff, .dataNotAllowed, .callIsActive,
+    ]
+
+    static func matches(_ error: any Error) -> Bool {
+        if let error = error as? URLError { return codes.contains(error.code) }
+        let error = error as NSError
+        if error.domain == NSURLErrorDomain { return codes.contains(URLError.Code(rawValue: error.code)) }
+        if error.domain == MKError.errorDomain, let code = MKError.Code(rawValue: UInt(error.code)) {
+            return code == .serverFailure || code == .loadingThrottled
+        }
+        return false
     }
 }
 
