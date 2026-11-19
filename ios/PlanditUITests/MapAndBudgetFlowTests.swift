@@ -119,9 +119,13 @@ final class MapAndBudgetFlowTests: XCTestCase {
         // Drag the High Line below Los Tacos.
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS ', was '")).firstMatch.exists,
                        "nothing moves until you drag")
-        // The drag handle reads "Reorder " plus the row's label ("The High Line, stop 3, 1:20 PM"), so match the start, up to the comma ("Los Tacos No. 1" must not match "No. 10").
-        let highLine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder The High Line,'")).firstMatch
-        let tacos = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder Los Tacos No. 1,'")).firstMatch
+        // The drag handle reads "Reorder The High Line" (or "Reorder " plus the whole row label on some iOS
+        // versions), so match the name exactly or up to the comma ("Los Tacos No. 1" must not match "No. 10").
+        func handle(_ name: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "Reorder \(name)", "Reorder \(name),")).firstMatch
+        }
+        let highLine = handle("The High Line")
+        let tacos = handle("Los Tacos No. 1")
         XCTAssertTrue(highLine.waitForExistence(timeout: 3))
         highLine.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.6, thenDragTo: tacos.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.2)))
