@@ -27,9 +27,6 @@ nonisolated enum TutorialPage: Int, CaseIterable, Identifiable {
     }
 }
 
-/// On iPad the header, card and Continue stay this wide and centered, like Welcome (W-4).
-private let tutorialColumnWidth: CGFloat = 440
-
 /// First-run tutorial (D-1), after the design draft: the logo and Skip on top, a card with a
 /// drawing over the title and subtitle, Continue at the bottom. Swipe or Continue moves forward;
 /// Skip on any page, or Continue on the last, finishes it.
@@ -53,7 +50,7 @@ struct TutorialView: View {
             Button("Continue", action: advance)
                 .buttonStyle(.primary)
                 .accessibilityIdentifier("tutorial-continue")
-                .frame(maxWidth: tutorialColumnWidth)
+                .frame(maxWidth: ContentWidth.column)
                 .padding(.horizontal, Space.lg)
                 .padding(.top, Space.sm)
                 .padding(.bottom, Space.md)
@@ -84,7 +81,7 @@ struct TutorialView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("tutorial-skip")
         }
-        .frame(maxWidth: tutorialColumnWidth)
+        .frame(maxWidth: ContentWidth.column)
         .padding(.horizontal, Space.lg)
         .padding(.vertical, Space.xs)
     }
@@ -160,7 +157,7 @@ private struct TutorialPageView: View {
             .background(Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Color.border))
-            .frame(maxWidth: tutorialColumnWidth)
+            .frame(maxWidth: ContentWidth.column)
             .padding(.horizontal, Space.lg)
             // Centered in the page, which still spans the screen so the swipe does too.
             .frame(maxWidth: .infinity)

@@ -6,9 +6,6 @@ struct WelcomeScreen: View {
     let onEmail: () -> Void
     @Environment(AccountModel.self) private var account
 
-    /// On iPad the text and buttons keep a phone's reading width, centered (W-4).
-    static let maxContentWidth: CGFloat = 440
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
@@ -27,7 +24,7 @@ struct WelcomeScreen: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: Self.maxContentWidth, alignment: .leading)
+            .frame(maxWidth: ContentWidth.column, alignment: .leading)
             .padding(Space.lg)
             .frame(maxWidth: .infinity)
         }
@@ -52,7 +49,7 @@ struct WelcomeScreen: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, Space.xxs)
             }
-            .frame(maxWidth: Self.maxContentWidth)
+            .frame(maxWidth: ContentWidth.column)
             .padding(.horizontal, Space.lg)
             .frame(maxWidth: .infinity)
             .padding(.top, Space.sm)

@@ -12,6 +12,12 @@ enum Space {
     static let xxxl: CGFloat = 64
 }
 
+/// The widest a full-screen column of text and buttons gets. On iPad, Welcome and the first-run
+/// tutorial keep a phone's reading width, centered (W-4).
+enum ContentWidth {
+    static let column: CGFloat = 440
+}
+
 enum Radius {
     /// Buttons and inputs.
     static let control: CGFloat = 12

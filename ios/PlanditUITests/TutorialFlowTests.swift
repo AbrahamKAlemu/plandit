@@ -97,13 +97,16 @@ final class TutorialFlowTests: XCTestCase {
     /// Signing out keeps the record, so "never shown again" doesn't hang on anything else. Only
     /// deleting the account forgets it.
     @MainActor func testSigningOutKeepsTheFinishedRecord() {
-        let app = launch(["-resetTutorial", "-showTutorial", "-startTab", "settings", "-startDetent", "large"])
+        let app = launch(["-resetTutorial", "-showTutorial", "-startTab", "profile", "-startDetent", "large"])
         let skip = app.buttons["tutorial-skip"]
         XCTAssertTrue(skip.waitForExistence(timeout: 10))
         XCTAssertTrue(waitUntilHittable(skip))
         skip.tap()
 
+        // Profile → Account → Sign out, below the stats and recent plans.
         let signOut = app.buttons["sign-out"]
+        XCTAssertTrue(signOut.waitForExistence(timeout: 10))
+        UITestScrolling.scrollIntoView(signOut, in: app)
         XCTAssertTrue(waitUntilHittable(signOut, timeout: 10))
         signOut.tap()
         XCTAssertTrue(app.descendants(matching: .any)["welcome-screen"].waitForExistence(timeout: 10), "signed out")
