@@ -459,12 +459,13 @@ final class PlanditStore {
 
     /// A video from the share sheet becomes a post right away, in `processing`, and is read on this
     /// phone in the background. If it can't be read (or it's gone), the post stays and asks for the
-    /// place's name instead of disappearing (PRC-4). The file is deleted once it's read.
+    /// place's name instead of disappearing (PRC-4). The file is deleted once it's read; until then
+    /// it's in `Reading/`, where the 24-hour cleanup can't reach it.
     @discardableResult
     func importSharedVideo(fileURL: URL?, receivedAt: Date = .now) throws -> UUID {
         let id = UUID()
         let sourceURL = URL(string: "plandit-video://\(id.uuidString)")!
-        let file = fileURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+        let file = fileURL.flatMap { try? mediaStore.claimForReading($0) }
         let post = SavedPost(
             id: id,
             url: sourceURL,

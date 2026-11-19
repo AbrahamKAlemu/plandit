@@ -25,6 +25,7 @@ nonisolated enum VideoEvidenceError: LocalizedError, Equatable {
 /// Plandit's own folder for videos waiting to be read: `TemporaryMedia/` in the App Group container,
 /// so the share extension can stage a video the app reads later. Nothing in it is ever uploaded.
 /// A file is deleted once it's read, or by `removeExpiredFiles` 24 hours after it was staged.
+/// A file being read sits in `Reading/`, out of the cleanup's way.
 nonisolated struct TemporaryMediaStore {
     static let maximumBytes: Int64 = 250 * 1024 * 1024
     /// How long an unread video may wait before it's deleted.
@@ -77,16 +78,40 @@ nonisolated struct TemporaryMediaStore {
         }
     }
 
-    /// Whether a file sits directly in this folder (so it's one of ours to read or delete).
+    /// Where a video waits while it's read: the 24-hour cleanup (here, or in the share extension's
+    /// process) skips this folder, so it can't delete a video mid-read.
+    var readingFolder: URL { root.appending(path: Self.readingFolderName, directoryHint: .isDirectory) }
+    private static let readingFolderName = "Reading"
+    /// A read never takes this long: a file still in `Reading/` after 48 hours was left by a read
+    /// the app never finished (it quit, or was stopped), and is deleted.
+    static let abandonedReadLifetime: TimeInterval = 48 * 60 * 60
+
+    /// Whether a file sits directly in this folder or in `Reading/` (so it's one of ours to read or delete).
     func contains(_ url: URL) -> Bool {
-        url.deletingLastPathComponent().standardizedFileURL == root.standardizedFileURL
+        let folder = url.deletingLastPathComponent().standardizedFileURL
+        return folder == root.standardizedFileURL || folder == readingFolder.standardizedFileURL
     }
 
     /// The staged file a share names, or nil when the name could point outside this folder.
     func file(named name: String) -> URL? {
-        guard !name.isEmpty, !name.contains("/"), name != ".", name != ".." else { return nil }
+        guard !name.isEmpty, !name.contains("/"), name != ".", name != "..", name != Self.readingFolderName else { return nil }
         let url = root.appending(path: name)
         return contains(url) ? url : nil
+    }
+
+    /// Moves a staged video into `Reading/` before it's read, and restarts its clock. Throws when
+    /// the file is gone (cleaned up, say). A file already there is returned as it is.
+    func claimForReading(_ url: URL) throws -> URL {
+        let folder = url.deletingLastPathComponent().standardizedFileURL
+        if folder == readingFolder.standardizedFileURL { return url }
+        guard folder == root.standardizedFileURL else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        try FileManager.default.createDirectory(at: readingFolder, withIntermediateDirectories: true)
+        let destination = readingFolder.appending(path: url.lastPathComponent)
+        try FileManager.default.moveItem(at: url, to: destination)
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        return destination
     }
 
     func remove(_ url: URL) throws {
@@ -96,16 +121,22 @@ nonisolated struct TemporaryMediaStore {
         }
     }
 
-    /// Deletes every file staged before `cutoff`, read or not (a partial copy from an extension
-    /// that was stopped included). A share whose video is gone asks for the video again in the app.
+    /// Deletes every file staged more than 24 hours ago and not being read (a partial copy from an
+    /// extension that was stopped included), and any read abandoned for 48 hours. A share whose
+    /// video is gone asks for the video again in the app.
     /// A file it can't delete is logged and skipped, so one stuck file never keeps the rest; a file
     /// that's already gone (read and deleted meanwhile) is fine.
-    func removeExpiredFiles(olderThan cutoff: Date) {
+    func removeExpiredFiles(now: Date = Date()) {
+        removeExpiredFiles(in: root, olderThan: now.addingTimeInterval(-Self.lifetime))
+        removeExpiredFiles(in: readingFolder, olderThan: now.addingTimeInterval(-Self.abandonedReadLifetime))
+    }
+
+    private func removeExpiredFiles(in folder: URL, olderThan cutoff: Date) {
         let files: [URL]
         do {
             files = try FileManager.default.contentsOfDirectory(
-                at: root,
-                includingPropertiesForKeys: [.contentModificationDateKey],
+                at: folder,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
                 options: [.skipsHiddenFiles]
             )
         } catch {
@@ -116,8 +147,8 @@ nonisolated struct TemporaryMediaStore {
         }
         for file in files {
             do {
-                let modified = try file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
-                if modified < cutoff {
+                let values = try file.resourceValues(forKeys: [.contentModificationDateKey, .isDirectoryKey])
+                if values.isDirectory != true, (values.contentModificationDate ?? .distantPast) < cutoff {
                     try remove(file)
                 }
             } catch where Self.isMissingFile(error) {
@@ -128,11 +159,6 @@ nonisolated struct TemporaryMediaStore {
                 )
             }
         }
-    }
-
-    /// `removeExpiredFiles` with the 24-hour rule.
-    func removeExpiredFiles(now: Date = Date()) {
-        removeExpiredFiles(olderThan: now.addingTimeInterval(-Self.lifetime))
     }
 
     private static let log = Logger(subsystem: "com.plandit.app", category: "TemporaryMedia")

@@ -172,4 +172,42 @@ final class ShareReviewRegressionTests: XCTestCase {
 
         XCTAssertEqual(mediaFiles().map(\.lastPathComponent), ["locked.mov"])
     }
+
+    // MARK: - Cleanup during a read (nice-to-have 4)
+
+    /// A shared video staged almost a day ago is being read when the 24-hour cleanup runs (in the
+    /// app, or in the share extension's process): the read keeps its file.
+    @MainActor func testCleanupLeavesAVideoBeingReadAlone() async throws {
+        let reader = GatedVideoReader()
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: reader)
+        _ = try stageSharedVideo()
+        _ = try XCTUnwrap(s.ingestPendingShares().first)
+        try await waitUntil { reader.continuation != nil }
+
+        s.removeExpiredTemporaryMedia(now: Date(timeIntervalSinceNow: 25 * 3600))
+
+        XCTAssertEqual(mediaFiles().count, 1, "the video being read is still there")
+        reader.continuation?.resume()
+        try await waitUntil { self.mediaFiles().isEmpty }
+        XCTAssertTrue(mediaFiles().isEmpty, "and is deleted once read")
+    }
+
+    /// A read the app never finished (it quit mid-read) leaves its file in `Reading/`: it goes
+    /// after 48 hours, not 24.
+    @MainActor func testAnAbandonedReadIsDeletedAfterTwoDays() throws {
+        let source = directory.appending(path: "clip.mov")
+        try Data(count: 512).write(to: source)
+        let reading = try mediaStore.claimForReading(try mediaStore.stage(source))
+
+        mediaStore.removeExpiredFiles(now: Date(timeIntervalSinceNow: 25 * 3600))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: reading.path))
+
+        mediaStore.removeExpiredFiles(now: Date(timeIntervalSinceNow: 49 * 3600))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: reading.path))
+    }
+
+    /// A share can't name the `Reading/` folder itself.
+    @MainActor func testAShareCantNameTheReadingFolder() {
+        XCTAssertNil(mediaStore.file(named: "Reading"))
+    }
 }

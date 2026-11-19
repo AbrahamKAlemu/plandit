@@ -10,19 +10,8 @@ struct PickedVideo: Transferable {
         FileRepresentation(contentType: .movie) { video in
             SentTransferredFile(video.url)
         } importing: { received in
-            let mediaStore = TemporaryMediaStore()
-            try mediaStore.validate(received.file)
-            try FileManager.default.createDirectory(
-                at: mediaStore.root,
-                withIntermediateDirectories: true
-            )
-            let fileExtension = received.file.pathExtension.isEmpty
-                ? "mov"
-                : received.file.pathExtension
-            let destination = mediaStore.root
-                .appending(path: "Picker-\(UUID().uuidString).\(fileExtension)")
-            try FileManager.default.copyItem(at: received.file, to: destination)
-            return PickedVideo(url: destination)
+            // Staged like a shared video: checked, and its 24 hours count from now, not from filming.
+            PickedVideo(url: try TemporaryMediaStore().stage(received.file))
         }
     }
 }

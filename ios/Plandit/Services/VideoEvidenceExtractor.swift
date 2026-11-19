@@ -39,7 +39,8 @@ struct VideoEvidenceExtractor: VideoEvidenceReading {
     }
 
     /// Reads the video, then deletes Plandit's copy. A file already in `TemporaryMedia/` (a shared
-    /// video, or one picked in the app) is read in place; anything else is copied in first.
+    /// video, or one picked in the app) is read there; anything else is copied in first. Either way
+    /// it's moved into `Reading/` first, so the 24-hour cleanup leaves it alone mid-read.
     func extract(from source: URL) async throws -> VideoEvidence {
         let staged: URL
         if mediaStore.contains(source) {
@@ -48,9 +49,16 @@ struct VideoEvidenceExtractor: VideoEvidenceReading {
         } else {
             staged = try mediaStore.stage(source)
         }
-        defer { try? mediaStore.remove(staged) }
+        let reading: URL
+        do {
+            reading = try mediaStore.claimForReading(staged)
+        } catch {
+            try? mediaStore.remove(staged)
+            throw error
+        }
+        defer { try? mediaStore.remove(reading) }
 
-        let asset = AVURLAsset(url: staged)
+        let asset = AVURLAsset(url: reading)
         let duration = try await asset.load(.duration).seconds
         guard duration.isFinite, duration <= Self.maximumDuration else {
             throw VideoEvidenceError.tooLong
@@ -63,7 +71,7 @@ struct VideoEvidenceExtractor: VideoEvidenceReading {
         if Self.shouldAttemptTranscription(audioTrackCount: audioTracks.count) {
             do {
                 transcript = try await transcribe(
-                    url: staged,
+                    url: reading,
                     contextualStrings: frameText
                 )
                 if transcript?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
