@@ -9,6 +9,9 @@ struct PlanditApp: App {
 
     init() {
         Appearance.configure()
+        // A video read can't survive a relaunch: whatever a read left behind goes now, before
+        // any store opens or a share is ingested.
+        TemporaryMediaStore().removeAbandonedReads()
         _account = State(initialValue: Self.makeAccount())
     }
 

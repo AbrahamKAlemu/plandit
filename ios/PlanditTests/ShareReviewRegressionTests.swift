@@ -436,6 +436,20 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertLessThan(abs(try XCTUnwrap(s.post(id: id)?.savedAt).timeIntervalSinceNow), 5)
     }
 
+    /// At the app's launch, a read left behind goes at once, however fresh; videos still waiting to
+    /// be read stay.
+    @MainActor func testLaunchDeletesAbandonedReadsButNotWaitingVideos() throws {
+        let source = directory.appending(path: "clip.mov")
+        try Data(count: 512).write(to: source)
+        let abandoned = try mediaStore.claimForReading(try mediaStore.stage(source))
+        let waiting = try mediaStore.stage(source)
+
+        mediaStore.removeAbandonedReads()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: waiting.path))
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))

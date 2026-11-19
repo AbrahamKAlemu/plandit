@@ -145,6 +145,13 @@ nonisolated struct TemporaryMediaStore {
         removeExpiredFiles(in: readingFolder, olderThan: now.addingTimeInterval(-Self.abandonedReadLifetime))
     }
 
+    /// Deletes every video left in `Reading/`. A read never outlives its process, so at the app's
+    /// launch anything there was abandoned. App only: the share extension must never call this,
+    /// since the app may be reading while the extension runs. The 48-hour sweep stays as a backstop.
+    func removeAbandonedReads() {
+        removeExpiredFiles(in: readingFolder, olderThan: .distantFuture)
+    }
+
     private func removeExpiredFiles(in folder: URL, olderThan cutoff: Date) {
         let files: [URL]
         do {
