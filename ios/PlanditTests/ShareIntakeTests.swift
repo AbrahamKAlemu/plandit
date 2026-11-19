@@ -209,13 +209,11 @@ final class ShareIntakeTests: XCTestCase {
     }
 
     @MainActor func testEveryProblemNamesWhatWorks() {
-        let problems: [ShareProblem] = [.notVideo, .videoNotSaved]
+        let problems: [ShareProblem] = [.unsupportedLink, .noLink, .notVideo, .videoNotSaved]
         for problem in problems {
             XCTAssertTrue(problem.message.contains("a TikTok, an Instagram post or Reel, or a video"), "\(problem)")
             XCTAssertFalse(problem.title.isEmpty)
         }
-        XCTAssertEqual(ShareProblem.unsupportedLink.message, "That link isn't from TikTok or Instagram. You can add any place by name in Plandit.")
-        XCTAssertEqual(ShareProblem.noLink.message, "This share didn't include a link or a video.")
         XCTAssertTrue(ShareProblem.videoTooLarge.message.contains("250 MB"))
         XCTAssertTrue(ShareProblem.videoTooLarge.message.contains("a TikTok or an Instagram post or Reel"))
         XCTAssertTrue(ShareProblem.videosUnavailable.message.contains("a TikTok or an Instagram post or Reel"))

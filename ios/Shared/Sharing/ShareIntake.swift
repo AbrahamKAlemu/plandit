@@ -36,8 +36,8 @@ nonisolated enum ShareProblem: Equatable, Sendable {
 
     var message: String {
         switch self {
-        case .unsupportedLink: "That link isn't from TikTok or Instagram. You can add any place by name in Plandit."
-        case .noLink: "This share didn't include a link or a video."
+        case .unsupportedLink: "Plandit can save a TikTok, an Instagram post or Reel, or a video."
+        case .noLink: "This share didn't include a link or a video. \(Self.whatWorks)"
         case .notVideo: Self.whatWorks
         case .videoTooLarge: "Try a shorter video, up to 250 MB. You can also share a TikTok or an Instagram post or Reel."
         case .videosUnavailable: "Plandit can't save videos right now. Share a TikTok or an Instagram post or Reel instead."
