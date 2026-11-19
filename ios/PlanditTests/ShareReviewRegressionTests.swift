@@ -296,6 +296,34 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertNil(s.post(id: elsewhere.id)?.failureMessage)
     }
 
+    // MARK: - Re-import after a crash (nice-to-have 8)
+
+    /// The app saved the post, then quit before acknowledging the share: the share comes back
+    /// next launch and must not become a second post.
+    @MainActor func testAShareImportedTwiceIsOnePost() throws {
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: GatedVideoReader())
+        let share = try stageSharedVideo()
+        XCTAssertEqual(s.ingestPendingShares().count, 1)
+        ShareInbox.enqueue(share)
+
+        XCTAssertEqual(s.ingestPendingShares(), [share.id], "the share opens the post it already made")
+
+        XCTAssertEqual(s.saved.count, 1)
+        XCTAssertEqual(s.saved.first?.id, share.id)
+        XCTAssertTrue(ShareInbox.pending().isEmpty)
+    }
+
+    /// The same for a link: still one post.
+    @MainActor func testALinkShareImportedTwiceIsOnePost() throws {
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: GatedVideoReader())
+        let share = IncomingShare(url: URL(string: "https://www.tiktok.com/@nycbites/video/7400000000000000001")!)
+        ShareInbox.enqueue(share)
+        _ = s.ingestPendingShares()
+        ShareInbox.enqueue(share)
+        _ = s.ingestPendingShares()
+        XCTAssertEqual(s.saved.count, 1)
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))

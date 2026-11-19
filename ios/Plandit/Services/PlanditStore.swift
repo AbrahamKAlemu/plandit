@@ -445,7 +445,14 @@ final class PlanditStore {
         for share in ShareInbox.pending() {
             do {
                 if let fileName = share.videoFileName {
-                    ids.append(try importSharedVideo(fileURL: mediaStore.file(named: fileName), receivedAt: share.receivedAt))
+                    // The post takes the share's id, so a share that comes back (the app quit
+                    // before acknowledging it) finds its post instead of making a second one.
+                    if post(id: share.id) == nil {
+                        ids.append(try importSharedVideo(id: share.id, fileURL: mediaStore.file(named: fileName), receivedAt: share.receivedAt))
+                    } else {
+                        if let leftover = mediaStore.file(named: fileName) { try? mediaStore.remove(leftover) }
+                        if !ids.contains(share.id) { ids.append(share.id) }
+                    }
                 } else if let url = share.url {
                     let id = try save(url: url, sharedText: share.sharedText)
                     if !ids.contains(id) { ids.append(id) }
@@ -463,8 +470,7 @@ final class PlanditStore {
     /// place's name instead of disappearing (PRC-4). The file is deleted once it's read; until then
     /// it's in `Reading/`, where the 24-hour cleanup can't reach it.
     @discardableResult
-    func importSharedVideo(fileURL: URL?, receivedAt: Date = .now) throws -> UUID {
-        let id = UUID()
+    func importSharedVideo(id: UUID = UUID(), fileURL: URL?, receivedAt: Date = .now) throws -> UUID {
         let sourceURL = URL(string: "plandit-video://\(id.uuidString)")!
         let file = fileURL.flatMap { try? mediaStore.claimForReading($0) }
         let post = SavedPost(
@@ -478,7 +484,13 @@ final class PlanditStore {
         )
         var updated = saved
         updated.insert(post, at: 0)
-        try persistSaved(updated)
+        do {
+            try persistSaved(updated)
+        } catch {
+            // Not saved, so the share stays queued: put its video back for the next try.
+            if let file, let fileURL { try? FileManager.default.moveItem(at: file, to: fileURL) }
+            throw error
+        }
         saved = updated
         events?(.linkSaved)
         if let file {
