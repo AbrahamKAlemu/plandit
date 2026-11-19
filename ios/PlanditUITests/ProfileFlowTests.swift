@@ -54,6 +54,27 @@ final class ProfileFlowTests: XCTestCase {
 
     // MARK: - Profile (D-6, PRO-2, W-6, W-7)
 
+    @MainActor func testBarStopsGrowingAtTheLargestStandardTextSize() {
+        // Like the system tab bar: text stops growing at XXXL, and a long press shows the large
+        // version at accessibility sizes.
+        func barHeight(at size: String) -> CGFloat {
+            let app = launch(["-startTab", "today", "-UIPreferredContentSizeCategoryName", size])
+            let bar = UITestScrolling.bar(in: app)
+            let items = bar.buttons.allElementsBoundByIndex
+            XCTAssertEqual(items.count, 4)
+            for item in items {
+                XCTAssertGreaterThanOrEqual(item.frame.width, 44, "\(item.label) at \(size)")
+                XCTAssertGreaterThanOrEqual(item.frame.height, 44, "\(item.label) at \(size)")
+            }
+            let height = bar.frame.height
+            app.terminate()
+            return height
+        }
+        let largestStandard = barHeight(at: "UICTContentSizeCategoryXXXL")
+        let largestAccessibility = barHeight(at: "UICTContentSizeCategoryAccessibilityXXXL")
+        XCTAssertEqual(largestAccessibility, largestStandard, accuracy: 0.5)
+    }
+
     @MainActor func testProfileReadsInTheDraftsOrder() {
         let app = launch(["-startTab", "profile"])
         let landmarks: [(String, XCUIElement)] = [

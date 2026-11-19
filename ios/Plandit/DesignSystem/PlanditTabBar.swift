@@ -4,7 +4,8 @@ import SwiftUI
 /// Solid surface rather than glass: the style guide rules out glassmorphism.
 /// The selected pill slides between tabs instead of jumping.
 /// Today, Saved, Plan, Profile (D-2). The emerald Plan pill opens the planner; it's an action, not a tab.
-/// Labels shrink rather than clip or wrap at the largest text sizes.
+/// Like the system tab bar, text stops growing at the largest standard size; at accessibility
+/// sizes a long press on an item shows its large version. Labels shrink rather than clip or wrap.
 struct PlanditTabBar: View {
     @Binding var selection: AppTab
     var onPlan: () -> Void = {}
@@ -42,8 +43,12 @@ struct PlanditTabBar: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.title)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityShowsLargeContentViewer {
+                    Label(tab.title, image: "Icons/\(tab.icon.rawValue)")
+                }
             }
         }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .padding(6)
         .background(Color.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.border))
@@ -88,6 +93,9 @@ private struct PlanButton: View {
         .padding(.horizontal, Space.xxs)
         .accessibilityLabel("Plan a day")
         .accessibilityIdentifier("plan-button")
+        .accessibilityShowsLargeContentViewer {
+            Label("Plan a day", image: "Icons/\(Lucide.plus.rawValue)")
+        }
         .sensoryFeedback(.impact(weight: .light), trigger: taps)
     }
 }
