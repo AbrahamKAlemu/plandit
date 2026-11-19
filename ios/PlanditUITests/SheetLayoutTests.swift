@@ -62,6 +62,53 @@ final class SheetLayoutTests: XCTestCase {
         XCTAssertTrue(last.isHittable)
     }
 
+    // Pushed screens get the bar's space too. At the largest text size both run past the sheet,
+    // so their last button has to scroll up out from under the bar.
+
+    @MainActor func testSavedPostsLastButtonScrollsAboveTheBar() {
+        let app = launch(["-startTab", "saved", "-startDetent", "large",
+                          "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-row-' AND label CONTAINS 'Levain Bakery'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        UITestScrolling.scrollIntoView(row, in: app)
+        row.tap()
+
+        let remove = app.buttons["remove-saved-place"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        UITestScrolling.scrollToEnd(watching: remove, in: app)
+        UITestScrolling.assertAboveBar(remove, in: app)
+        XCTAssertTrue(remove.isHittable)
+    }
+
+    @MainActor func testProfileSubpagesLastButtonScrollsAboveTheBar() {
+        let app = launch(["-startTab", "profile", "-startDetent", "large",
+                          "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let row = app.buttons.containing(NSPredicate(format: "label CONTAINS 'How it works'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        UITestScrolling.scrollIntoView(row, in: app)
+        row.tap()
+
+        let goToSaved = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Go to Saved'")).firstMatch
+        XCTAssertTrue(goToSaved.waitForExistence(timeout: 3))
+        UITestScrolling.scrollToEnd(watching: goToSaved, in: app)
+        UITestScrolling.assertAboveBar(goToSaved, in: app)
+        XCTAssertTrue(goToSaved.isHittable)
+    }
+
+    /// The bar floats over the sheet: the list runs on under it instead of stopping at its top.
+    @MainActor func testSavedListRunsUnderTheFloatingBar() {
+        let app = launch(["-startTab", "saved", "-startDetent", "large"])
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-row-'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        let bar = UITestScrolling.bar(in: app)
+        guard let list = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH 'saved-row-'"))
+            .allElementsBoundByIndex
+            .max(by: { $0.frame.height < $1.frame.height })
+        else { return XCTFail("no saved list") }
+        XCTAssertGreaterThanOrEqual(list.frame.maxY, bar.frame.maxY,
+                                    "the list stops at \(list.frame.maxY) pt, above the bar's bottom at \(bar.frame.maxY) pt")
+    }
+
     @MainActor func testEmptyTodaysPlanButtonIsAboveTheBarAfterExpanding() {
         // Empty the sample day through each stop's menu, then reopen at half height. The first
         // swipe there expands the sheet to full height (the system sheet resizes before it
