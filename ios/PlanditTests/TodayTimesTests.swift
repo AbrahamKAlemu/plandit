@@ -110,9 +110,11 @@ import XCTest
         assertTimesAgree(store, "the rest of the day started from now")
         store.undoLastChange()
         XCTAssertEqual(store.today.stops.map(\.start), beforeLate.stops.map(\.start))
+        XCTAssertEqual(store.today.legs, beforeLate.legs)
         assertTimesAgree(store, "undone")
 
         // "I'm here" at the next stop, then "Not here yet": it's planned again, at its planned time.
+        // A regression guard: arrive and leave only change statuses today, never times.
         store.arrive(at: next.id)
         store.leave(next.id)
         XCTAssertEqual(store.stop(id: next.id)?.status, .upcoming)
