@@ -17,23 +17,45 @@ nonisolated enum AppGroup {
     }
 }
 
-/// A link someone shared into Plandit from TikTok, Instagram, or any app's share sheet.
+/// Something shared into Plandit from TikTok, Instagram, Photos, Files or any app's share sheet:
+/// a link, or a video the extension copied into `TemporaryMedia/` (named by `videoFileName`).
+/// 1.0 queued links only (`url` always set, no `videoFileName`); those entries still decode.
 struct IncomingShare: Codable, Identifiable, Hashable {
     var id = UUID()
-    var url: URL
+    var url: URL?
     var sharedText: String?
     var receivedAt = Date()
+    var videoFileName: String?
+
+    init(id: UUID = UUID(), url: URL, sharedText: String? = nil, receivedAt: Date = Date()) {
+        self.id = id
+        self.url = url
+        self.sharedText = sharedText
+        self.receivedAt = receivedAt
+    }
+
+    init(id: UUID = UUID(), videoFileName: String, receivedAt: Date = Date()) {
+        self.id = id
+        self.videoFileName = videoFileName
+        self.receivedAt = receivedAt
+    }
 }
 
 /// Hand-off queue: the share extension enqueues, and the app acknowledges only after durable import.
 enum ShareInbox {
     private static let key = "plandit.pendingShares"
 
-    static func enqueue(_ share: IncomingShare) {
+    /// Queues a share and returns what's stored for it. A link that's already waiting isn't queued
+    /// twice: the waiting share comes back, and `isNew` is false.
+    @discardableResult
+    static func enqueue(_ share: IncomingShare) -> (share: IncomingShare, isNew: Bool) {
         var queue = pending()
-        guard !queue.contains(where: { $0.url == share.url }) else { return }
+        if let url = share.url, let waiting = queue.first(where: { $0.url == url }) {
+            return (waiting, false)
+        }
         queue.append(share)
-        AppGroup.defaults.set(try? JSONEncoder().encode(queue), forKey: key)
+        write(queue)
+        return (share, true)
     }
 
     static func pending() -> [IncomingShare] {
@@ -42,11 +64,47 @@ enum ShareInbox {
     }
 
     static func acknowledge(_ id: UUID) {
-        let queue = pending().filter { $0.id != id }
+        write(pending().filter { $0.id != id })
+    }
+
+    /// Undo from the share sheet: takes the share back before the app sees it, and deletes the
+    /// video it copied. Returns false when the app already took it.
+    @discardableResult
+    static func remove(_ id: UUID, mediaStore: TemporaryMediaStore?) -> Bool {
+        let queue = pending()
+        guard let share = queue.first(where: { $0.id == id }) else { return false }
+        write(queue.filter { $0.id != id })
+        if let name = share.videoFileName, let file = mediaStore?.file(named: name) {
+            try? mediaStore?.remove(file)
+        }
+        return true
+    }
+
+    private static func write(_ queue: [IncomingShare]) {
         if queue.isEmpty {
             AppGroup.defaults.removeObject(forKey: key)
         } else {
             AppGroup.defaults.set(try? JSONEncoder().encode(queue), forKey: key)
         }
     }
+
+#if DEBUG
+    /// UI tests: `-seedShares 1` (up to 3) queues that many TikTok shares once per launch, as if
+    /// they'd come through the share sheet while Plandit was closed.
+    private static var didSeed = false
+
+    static func seedFromLaunchArguments(_ arguments: [String] = CommandLine.arguments) {
+        guard !didSeed, let index = arguments.firstIndex(of: "-seedShares"), index + 1 < arguments.count,
+              let count = Int(arguments[index + 1]) else { return }
+        didSeed = true
+        let samples: [(String, String)] = [
+            ("https://www.tiktok.com/@nycbites/video/7400000000000000201", "The cookies at Levain Bakery are worth the line"),
+            ("https://www.tiktok.com/@cheapeatsnyc/video/7400000000000000202", "Best tacos in Chelsea Market"),
+            ("https://www.tiktok.com/@parkdays/video/7400000000000000203", "Sunset walk on the High Line"),
+        ]
+        for (url, text) in samples.prefix(max(0, min(count, samples.count))) {
+            enqueue(IncomingShare(url: URL(string: url)!, sharedText: "\(text) \(url)"))
+        }
+    }
+#endif
 }

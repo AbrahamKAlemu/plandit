@@ -83,6 +83,7 @@ targets:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
               NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsMovieWithMaxCount: 1
     entitlements:
       path: PlanditShare/PlanditShare.entitlements
       properties:
