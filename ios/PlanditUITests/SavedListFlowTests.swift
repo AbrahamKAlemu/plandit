@@ -84,6 +84,29 @@ final class SavedListFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Added"].exists)
     }
 
+    /// Remove from today on the post screen (main #28) turns the row's In plan back into +.
+    @MainActor func testRemovingFromTodayBringsBackThePlus() {
+        let app = launch()
+        let add = app.buttons["Add Little Island to today's plan"]
+        XCTAssertTrue(add.waitForExistence(timeout: 3))
+        add.tap()
+        XCTAssertTrue(add.waitForNonExistence(timeout: 3))
+
+        app.staticTexts["Little Island"].firstMatch.tap()
+        let remove = app.buttons["remove-from-today"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 5))
+        var swipes = 0
+        while !remove.isHittable, swipes < 6 {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        remove.tap()
+        XCTAssertTrue(app.buttons["Add to today's plan"].waitForExistence(timeout: 3))
+
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(add.waitForExistence(timeout: 3), "the row offers + again")
+    }
+
     @MainActor func testRowsAreSlimAndStatusesKeepTheName() {
         let app = launch()
         XCTAssertTrue(app.staticTexts["Food · Upper West Side"].exists, "no price on the row")
