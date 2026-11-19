@@ -9,6 +9,9 @@ struct PlanditApp: App {
 
     init() {
         Appearance.configure()
+        // A video read can't survive a relaunch: whatever a read left behind goes now, before
+        // any store opens or a share is ingested.
+        TemporaryMediaStore().removeAbandonedReads()
         _account = State(initialValue: Self.makeAccount())
     }
 
@@ -43,6 +46,7 @@ private struct AccountGate: View {
     /// D-1: decided once when a session opens; finishing the tutorial clears it.
     @State private var showsTutorial = false
     private let tutorial = FirstRunTutorial()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -70,6 +74,11 @@ private struct AccountGate: View {
         .tint(Color.emeraldDeep)
         .preferredColorScheme(appearance.mode.colorScheme)
         .task { await account.start() }
+        // Shared videos older than a day go even while signed out or in the tutorial, when no
+        // store is open to read them (SHR-3).
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { TemporaryMediaStore().removeExpiredFiles() }
+        }
         .onChange(of: account.state) { _, state in
             if case .signedIn = state { return }
             close()
@@ -134,20 +143,22 @@ private struct PlanditRoot: View {
             .preferredColorScheme(appearance.mode.colorScheme)
             .accessibilityIdentifier("appearance-\(appearance.mode.rawValue)")
             .task {
-                store.removeExpiredTemporaryMedia()
                 await store.loadRoutes()
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 switch phase {
                 case .active:
                     store.rollOverIfNeeded()
-                    // Coming back from "Share → Plandit": take the user straight to what they just saved.
-                    let incoming = store.ingestPendingShares()
-                    if incoming.count == 1, let id = incoming.first {
-                        router.showPost(id)
-                    } else if !incoming.isEmpty {
-                        router.show(.saved)
-                    }
+                    // Unread shared videos older than a day go first (SHR-3); a share whose video
+                    // went this way still arrives, asking for the video again. (AccountGate runs
+                    // this too, but not necessarily before the ingest below.)
+                    store.removeExpiredTemporaryMedia()
+#if DEBUG
+                    ShareInbox.seedFromLaunchArguments()
+#endif
+                    // Coming back from "Share → Plandit": one share opens its post, several open
+                    // Saved with them on top; none leaves the app where it was (PRC-1).
+                    router.showShares(store.ingestPendingShares())
                     if let sync {
                         Task { await sync.appBecameActive() }
                     }

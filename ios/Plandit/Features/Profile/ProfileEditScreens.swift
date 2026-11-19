@@ -215,7 +215,7 @@ struct HowToSaveScreen: View {
     private let steps = [
         "In TikTok or Instagram, open the post and tap Share.",
         "Choose Plandit. The first time, tap More to turn it on.",
-        "Tap Save to Plandit. The place shows up in Saved with its price and hours.",
+        "The place shows up in Saved with its price and hours.",
     ]
 
     var body: some View {

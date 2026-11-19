@@ -241,7 +241,7 @@ import XCTest
         let update = try XCTUnwrap(row.update)
         XCTAssertEqual(row.liveMinutes, appleMaps.minutes, "the line reads Apple Maps' own driving time")
         XCTAssertEqual(update.leg.minutes, appleMaps.minutes + TravelLeg.pickupMinutes, "the day counts the wait for pickup")
-        XCTAssertEqual(row.pickupNote, "\(appleMaps.minutes + TravelLeg.pickupMinutes) min with pickup", "and says so under the line")
+        XCTAssertEqual(row.pickupNote, "\(appleMaps.minutes + TravelLeg.pickupMinutes) min with the wait for your ride", "and says so under the line")
         XCTAssertEqual(update.leg.cost, 23, "the fare stays the plan's")
         XCTAssertEqual(update.leg.miles, planned.miles)
     }
@@ -294,10 +294,10 @@ import XCTest
     }
 
     func testRestOfTheDayTitlesNameTheWayTheyApply() {
-        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.walk), "Walk the rest of the day")
-        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.subway), "Take the subway the rest of the day")
-        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.bus), "Take the bus the rest of the day")
-        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.drive), "Drive the rest of the day")
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.walk), "Walk for the rest of today's trips")
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.subway), "Take the subway for the rest of today's trips")
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.bus), "Take the bus for the rest of today's trips")
+        XCTAssertEqual(TravelOptionsSheet.restOfDayTitle(.drive), "Drive for the rest of today's trips")
     }
 
     func testDirectionsButtonsNameTheirTransit() {

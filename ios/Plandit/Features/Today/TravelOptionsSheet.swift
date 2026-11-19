@@ -131,7 +131,7 @@ struct TravelOptionsSheet: View {
         /// so "Apple Maps now says 12 min" doesn't turn into 17 min unexplained.
         var pickupNote: String? {
             guard let update, update.leg.mode == .drive else { return nil }
-            return "\(update.leg.minutes) min with pickup"
+            return "\(update.leg.minutes) min with the wait for your ride"
         }
 
         /// Where the row's time comes from.
@@ -171,9 +171,9 @@ struct TravelOptionsSheet: View {
 
     static func restOfDayTitle(_ mode: TravelMode) -> String {
         switch mode {
-        case .walk: "Walk the rest of the day"
-        case .subway, .bus: "Take the \(mode.label.lowercased()) the rest of the day"
-        case .drive: "Drive the rest of the day"
+        case .walk: "Walk for the rest of today's trips"
+        case .subway, .bus: "Take the \(mode.label.lowercased()) for the rest of today's trips"
+        case .drive: "Drive for the rest of today's trips"
         }
     }
 }
@@ -251,7 +251,7 @@ private struct OptionRow: View {
 
 /// Under the planned way, when Apple Maps' time for it has changed: "Apple Maps now says 24 min".
 /// Tapping it uses that time and moves the stops after the trip. A drive adds what the trip comes
-/// to with pickup: "17 min with pickup".
+/// to with the wait for the ride: "17 min with the wait for your ride".
 private struct LiveTimeButton: View {
     /// Apple Maps' own time for the trip.
     let minutes: Int

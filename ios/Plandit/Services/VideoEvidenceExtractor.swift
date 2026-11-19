@@ -4,26 +4,6 @@ import Speech
 import UniformTypeIdentifiers
 import Vision
 
-enum VideoEvidenceError: LocalizedError, Equatable {
-    case unsupportedType
-    case tooLarge
-    case tooLong
-    case noEvidence
-
-    var errorDescription: String? {
-        switch self {
-        case .unsupportedType:
-            "Choose a standard video file such as MP4, MOV, or M4V."
-        case .tooLarge:
-            "Choose a video smaller than 250 MB."
-        case .tooLong:
-            "Choose a video shorter than five minutes."
-        case .noEvidence:
-            "We couldn't read a place name from that video. Add the name or neighborhood yourself."
-        }
-    }
-}
-
 struct VideoEvidence: Sendable {
     let text: String
     let transcriptionNotice: String?
@@ -45,68 +25,12 @@ struct VideoEvidence: Sendable {
     }
 }
 
-nonisolated struct TemporaryMediaStore {
-    private static let maximumBytes: Int64 = 250 * 1024 * 1024
-    let root: URL
-
-    init(root: URL? = nil) {
-        let base = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: AppGroup.identifier
-        ) ?? FileManager.default.temporaryDirectory
-        self.root = root ?? base.appending(path: "TemporaryMedia", directoryHint: .isDirectory)
-    }
-
-    func stage(_ source: URL) throws -> URL {
-        let accessed = source.startAccessingSecurityScopedResource()
-        defer {
-            if accessed { source.stopAccessingSecurityScopedResource() }
-        }
-
-        try validate(source)
-
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let extensionName = source.pathExtension.isEmpty ? "mov" : source.pathExtension
-        let destination = root.appending(path: "\(UUID().uuidString).\(extensionName)")
-        try FileManager.default.copyItem(at: source, to: destination)
-        return destination
-    }
-
-    func validate(_ source: URL) throws {
-        let values = try source.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
-        guard let contentType = values.contentType, contentType.conforms(to: .movie) else {
-            throw VideoEvidenceError.unsupportedType
-        }
-        if let fileSize = values.fileSize, Int64(fileSize) > Self.maximumBytes {
-            throw VideoEvidenceError.tooLarge
-        }
-    }
-
-    func remove(_ url: URL) throws {
-        guard url.deletingLastPathComponent().standardizedFileURL == root.standardizedFileURL else {
-            return
-        }
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
-    }
-
-    func removeExpiredFiles(olderThan cutoff: Date) throws {
-        guard FileManager.default.fileExists(atPath: root.path) else { return }
-        let files = try FileManager.default.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        )
-        for file in files {
-            let modified = try file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
-            if modified < cutoff {
-                try remove(file)
-            }
-        }
-    }
+/// Reads a video on the phone for place evidence. A protocol so tests can stand in for OCR and speech.
+protocol VideoEvidenceReading: Sendable {
+    func extract(from source: URL) async throws -> VideoEvidence
 }
 
-struct VideoEvidenceExtractor {
+struct VideoEvidenceExtractor: VideoEvidenceReading {
     private static let maximumDuration: TimeInterval = 5 * 60
     private let mediaStore: TemporaryMediaStore
 
@@ -114,11 +38,27 @@ struct VideoEvidenceExtractor {
         self.mediaStore = mediaStore
     }
 
+    /// Reads the video, then deletes Plandit's copy. A file already in `TemporaryMedia/` (a shared
+    /// video, or one picked in the app) is read there; anything else is copied in first. Either way
+    /// it's moved into `Reading/` first, so the 24-hour cleanup leaves it alone mid-read.
     func extract(from source: URL) async throws -> VideoEvidence {
-        let staged = try mediaStore.stage(source)
-        defer { try? mediaStore.remove(staged) }
+        let staged: URL
+        if mediaStore.contains(source) {
+            try mediaStore.validate(source)
+            staged = source
+        } else {
+            staged = try mediaStore.stage(source)
+        }
+        let reading: URL
+        do {
+            reading = try mediaStore.claimForReading(staged)
+        } catch {
+            try? mediaStore.remove(staged)
+            throw error
+        }
+        defer { try? mediaStore.remove(reading) }
 
-        let asset = AVURLAsset(url: staged)
+        let asset = AVURLAsset(url: reading)
         let duration = try await asset.load(.duration).seconds
         guard duration.isFinite, duration <= Self.maximumDuration else {
             throw VideoEvidenceError.tooLong
@@ -131,7 +71,7 @@ struct VideoEvidenceExtractor {
         if Self.shouldAttemptTranscription(audioTrackCount: audioTracks.count) {
             do {
                 transcript = try await transcribe(
-                    url: staged,
+                    url: reading,
                     contextualStrings: frameText
                 )
                 if transcript?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {

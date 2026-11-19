@@ -117,7 +117,7 @@ Not in scope:
   shares, Plandit opens where it always does and never jumps to Saved.
 - **PRC-2** While Plandit looks for the place, the post shows where it came from (platform, creator,
   caption and thumbnail when known) and a progress line. After 8 s it adds "Still looking. This can
-  take up to a minute."
+  take a minute or two." (A 60 s timeout plus one retry can take about two minutes.)
 - **PRC-3** A network error or timeout is retried once on its own before the post shows "We
   couldn't find a place" with Try again.
 - **PRC-4** A shared video is read on the phone. It ends the same ways a link does. If reading fails,
@@ -188,7 +188,7 @@ a "late lunch" after dinner (planner logic; a GitHub issue for Eldad).
 ### Design feedback (D requirements)
 
 From the team's "App Design Feedback" document, the "Images for the app" folder and the new app
-icon, added by Abraham on November 18 after he approved this brief. Where a D requirement and an
+icon, added by Abraham on November 18 after approving this brief. Where a D requirement and an
 earlier one disagree, the D requirement wins; the earlier one is marked.
 
 First-run tutorial:
@@ -280,7 +280,7 @@ No new events. `linkSaved` still fires once per post that stays, including share
 - Ships as 1.0.1: TestFlight internal group first, then App Store review. No feature flags.
 - Before submitting 1.0.1:
   - the privacy, terms and support pages say "Profile → Account → Delete account" instead of
-    "Settings → Account → Delete account". The live site is Jaden's repo, so it needs his PR merge;
+    "Settings → Account → Delete account". The live site is Jaden's repo, so Jaden merges that PR;
   - the App Store description's "delete your account … any time in Settings" says "in your
     Profile";
   - the App Review notes say "Profile > Delete account".

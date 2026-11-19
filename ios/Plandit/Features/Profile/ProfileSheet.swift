@@ -40,7 +40,7 @@ struct ProfileSheet: View {
     private var header: some View {
         let profile = store.profile
         return NavigationLink {
-            NameScreen()
+            NameScreen().clearsFloatingBars()
         } label: {
             HStack(spacing: Space.sm) {
                 Group {
@@ -217,7 +217,9 @@ struct ProfileSheet: View {
     private func preferenceRow<Destination: View>(
         _ icon: Lucide, _ title: String, _ value: String, @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
-        NavigationLink(destination: destination) {
+        NavigationLink {
+            destination().clearsFloatingBars()
+        } label: {
             ListRow(icon: icon, title: title, detail: value)
         }
         .buttonStyle(.plain)

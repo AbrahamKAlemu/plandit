@@ -43,7 +43,7 @@ Persona gate, round 1 (November 18, 2026), on [01-brief.md](01-brief.md) with
 | Before "Add to today's plan", show the cost, distance and new day total | Not in scope: a planner change. After adding, the post already shows the stop's time and any budget overrun. |
 | Distance and price on each "Pick the place" card | Not in scope: changes the November 8 candidate-card decision (name and one-line address). |
 | W rows mustn't add a sign-up wall, trial, or price ranges in place of numbers | Accepted as a constraint on the W rows. |
-| Keep "Still looking. This can take up to a minute." | Kept (PRC-2). |
+| Keep "Still looking. This can take up to a minute." | Kept (PRC-2), then reworded on November 18 to "This can take a minute or two." after the slice B review: the timeout plus one retry can run about two minutes. |
 
 ## Amara (persona-amara): approve, 7/10, no must_fix
 

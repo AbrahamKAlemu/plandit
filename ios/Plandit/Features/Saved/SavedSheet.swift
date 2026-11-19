@@ -100,6 +100,10 @@ struct SavedSheet: View {
         }
         .background(Color.surface)
         .sensoryFeedback(.success, trigger: adds)
+        // New shares show on top: back to all places, newest first (PRC-1).
+        .onChange(of: router.sharesShown) {
+            withAnimation(.snappy(duration: 0.3)) { query = SavedListQuery() }
+        }
         // Once a selected category's last place is gone, forget the selection for good, so a new
         // place of that kind doesn't switch the filter back on by itself.
         .onChange(of: groups.map(\.group)) {

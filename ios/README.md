@@ -38,13 +38,26 @@ the EnsembleData token remains only on the server. If any value is absent, relea
 to TikTok oEmbed rather than sending an unauthenticated provider request.
 
 Dev launch arguments (Scheme → Run → Arguments): `-startTab saved|profile` and `-startDetent peek|large`.
+Debug builds also take `-seedShares 1|2|3`, which queues sample TikTok shares the way the share
+extension does, and `-fakeExtraction slow|fail|match|pick`, which stands in for the backend
+(`slow` answers after 30 s, `fail` times out, `match` adds Levain Bakery on its own, `pick` offers
+three places). The UI tests in `ShareFlowTests` use both.
 
 Appearance follows the device by default. Open **Profile → Appearance** to choose
 System, Light, or Dark; the preference also applies to the share extension.
 
 ### Testing Share → Plandit
 
-You need a signed build with the App Group capability. On a device, or in a simulator with Safari: open a TikTok or Instagram link, tap Share, then **Plandit**, then **Save to Plandit**. When you switch back to Plandit, it reads the shared inbox and the post appears in Saved as "Mapping".
+You need a signed build with the App Group capability. On a device, or in a simulator with Safari: open a TikTok or Instagram link, tap Share, then **Plandit**. There is no Save button: the share is saved as soon as the sheet opens, which then says "Saved to Plandit" and closes by itself after 2 seconds (it stays open while VoiceOver is on). **Undo** takes the share back before the app sees it.
+
+Videos work too: share a video from Photos or Files (up to 250 MB). The extension copies it into
+the App Group's `TemporaryMedia` folder; it never leaves the device. The app reads the video's
+on-screen text and speech, then deletes the copy. A copy that is never read is deleted after
+24 hours, by the extension or the app, whichever runs first. Unsigned builds have no App Group, so
+they can't take videos from other apps.
+
+When you switch back to Plandit, it reads the shared inbox. One new share opens its post; several
+open Saved. Each post shows what was shared while Plandit finds the place.
 
 ## Layout
 
@@ -59,10 +72,11 @@ Plandit/            App target
     Profile/        Profile and stats
   Models/           Place, DayPlan, SavedPost, UserProfile, SampleData (mock)
   Services/         PlanditStore (state), RouteService (Apple Maps walk/transit/drive times and paths), PlaceExtractor
-PlanditShare/       Share extension: accepts a URL or text containing a link, queues it in the App Group
+PlanditShare/       Share extension: hosts the share sheet; saves a link, text with a link, or a video
 Shared/             Code and assets compiled into both targets
   DesignSystem/     Color tokens, Manrope type scale, spacing, Lucide Icon, BrandArt, button styles
-  Sharing/          ShareInbox (App Group handoff), link parsing, SourcePlatform
+  Sharing/          ShareInbox (App Group handoff), ShareIntake (reads what was shared), the share
+                    sheet's view, TemporaryMediaStore (shared videos), link parsing, SourcePlatform
   Fonts/            Manrope 400–800 (OFL)
   SharedAssets.xcassets   Brand/ (official logo SVGs) and Icons/ (Lucide)
 Design/Logo/        The full logo package, copied unchanged from the design team
@@ -87,7 +101,7 @@ Asset sources:
 
 ## Flows worth knowing
 
-- **Share → Plandit → app:** when the app comes back to the foreground it drains the share inbox, switches to Saved, and opens the new post so you can watch it get mapped. Pasting a link does the same.
+- **Share → Plandit → app:** when the app comes back to the foreground it drains the share inbox, switches to Saved, and opens the new post so you can watch it get mapped (several new shares open Saved instead, and a collapsed sheet comes up to half height). New shares are looked up side by side, not one after another; a lookup that fails is retried once after 2 seconds. A lookup cut off when the app quit starts again on the next launch. Pasting a link does the same.
 - **+ → Plan a day:** the emerald + in the tab bar (on every tab) opens the planner. Pick saved places (each shows when it was saved), set a start time, an optional "Free until" and a budget, and a live preview shows the order, times, cost and anything left out (closed, over budget, or past the end of the day). "Add to today" keeps stops that are done or underway and re-orders the rest with the new picks; "Start over" replaces the day. The logic lives in `Services/DayPlanner.swift`; `backend/plandit/plans/planner.py` follows the same rules. Launch with `-openPlanner YES` to start in the planner.
 - **Add to today:** a saved place goes into the best open slot among the stops still ahead, not just the end. It tries every slot and picks the one where the place is open and nothing else ends up closed, with the least extra travel and the least added time (ties go to the latest slot). Later stops only move as much as they have to; a visit that can't fit ends at closing, and the post screen says "Stop 4 · 2:30–3:15 PM" plus any closing or budget warning. The logic is `DayPlan.inserting` in `Models/PlanEditing.swift`.
 - **Running behind?** When a stop's planned time has been over for 10 minutes and it isn't marked done, Today shows a card: "Mark them done" (they're done; the stop whose time has started becomes Now) or "Start from now" (a stop underway runs until now, otherwise the first missed stop starts now; the rest of the day moves by the same amount). Logic: `DayPlan.overdueStops`, `markOverdueDone`, `startRestFromNow`. Debug builds take `-clock 16:00` to pin the time for UI tests.

@@ -132,6 +132,7 @@ private struct TimelineStopRow: View {
 private struct TravelLegRow: View {
     let leg: TravelLeg
     let state: LegState
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: Space.sm) {
@@ -139,7 +140,8 @@ private struct TravelLegRow: View {
                 .frame(width: 28)
             HStack(spacing: Space.xs) {
                 Icon(leg.mode.icon, size: 16)
-                Text(leg.summary).lineLimit(2)
+                // Two lines at standard sizes; at accessibility sizes the whole trip shows.
+                Text(leg.summary).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
             }
             .font(.metadata)
             .foregroundStyle(state == .active ? Color.ink : Color.inkMuted)

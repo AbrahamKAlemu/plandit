@@ -7,6 +7,38 @@ final class TodaySummaryFlowTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// At accessibility text sizes "Directions to …" wraps instead of cutting the place name off,
+    /// so the button grows past one line; at the default size it stays one line.
+    @MainActor func testDirectionsWrapAtAccessibilitySizes() {
+        func directionsHeight(_ extra: [String], screenshot: String? = nil) -> CGFloat {
+            let app = XCUIApplication()
+            app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "11:00"] + extra
+            app.launch()
+            let directions = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Directions to'")).firstMatch
+            XCTAssertTrue(directions.waitForExistence(timeout: 5))
+            if let screenshot {
+                // The date, then the Directions button, then the first trips.
+                func capture(_ part: String) {
+                    let shot = XCTAttachment(screenshot: app.screenshot())
+                    shot.name = "\(screenshot)-\(part)"
+                    shot.lifetime = .keepAlways
+                    add(shot)
+                }
+                capture("top")
+                for _ in 0..<4 where !directions.isHittable { app.swipeUp(velocity: .slow) }
+                capture("directions")
+                app.swipeUp(velocity: .slow)
+                capture("trips")
+            }
+            return directions.frame.height
+        }
+        let standard = directionsHeight([])
+        let accessibility = directionsHeight(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"],
+                                             screenshot: "today-axl")
+        XCTAssertLessThan(standard, 60, "one line at the default size")
+        XCTAssertGreaterThan(accessibility, standard * 1.5, "the label wraps at AccessibilityXL")
+    }
+
     @MainActor func testStatTilesSitInsideTheCard() {
         let app = XCUIApplication()
         app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "11:00"]

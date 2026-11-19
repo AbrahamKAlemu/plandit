@@ -8,6 +8,7 @@ struct TodaySheet: View {
     @State private var isAddingLink = false
     @State private var isShowingBudget = false
     @State private var isEditingPlan = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let plan = store.today
@@ -25,7 +26,8 @@ struct TodaySheet: View {
             if plan.stops.isEmpty {
                 // Sized to the space above the tab bar rather than scrolled, so the next step is
                 // never cut off at half height: the icon goes first when the sheet is short. The
-                // tab bar sits below the sheet's stacks (SheetContainer), so this space ends at it.
+                // screen reserves the floating bars' height (clearsFloatingBars), so this space ends
+                // where they begin.
                 ViewThatFits(in: .vertical) {
                     emptyToday(showsIcon: true)
                     emptyToday(showsIcon: false)
@@ -58,8 +60,13 @@ struct TodaySheet: View {
                                     } label: {
                                         HStack(spacing: Space.xs) {
                                             Icon(store.travelMode(into: next.id).icon, size: 18)
-                                            Text("Directions to \(next.place.name)").lineLimit(1)
+                                            // One line at standard sizes; at accessibility sizes the place name wraps
+                                            // instead of being cut off.
+                                            Text("Directions to \(next.place.name)")
+                                                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                                .multilineTextAlignment(.center)
                                         }
+                                        .padding(.vertical, typeSize.isAccessibilitySize ? Space.xs : 0)
                                     }
                                     .buttonStyle(.primary)
                                     .transition(.opacity)

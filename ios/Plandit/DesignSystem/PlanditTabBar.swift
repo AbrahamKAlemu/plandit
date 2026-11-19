@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// Bottom page selector, pinned inside the persistent sheet (like Find My on iOS 26).
-/// Solid surface rather than glass: the style guide rules out glassmorphism.
+/// Bottom page selector, an island floating at the foot of the persistent sheet (like Find My on
+/// iOS 26): the sheet's content scrolls on underneath it. Solid surface with a border and a soft
+/// shadow rather than glass: the style guide rules out glassmorphism.
 /// The selected pill slides between tabs instead of jumping.
-/// Today, Saved, Plan, Profile (D-2). The emerald Plan pill opens the planner; it's an action, not a tab.
+/// Today, Saved, Plan, Profile (D-2). Plan looks like the tabs but opens the planner: it's an action,
+/// not a tab, so it's never selected.
 /// Like the system tab bar, text stops growing at the largest standard size; at accessibility
 /// sizes a long press on an item shows its large version. Labels shrink rather than clip or wrap.
 struct PlanditTabBar: View {
     @Binding var selection: AppTab
     var onPlan: () -> Void = {}
-    @Environment(\.isSheetCollapsed) private var isCollapsed
     @Namespace private var pill
 
     var body: some View {
@@ -50,16 +51,15 @@ struct PlanditTabBar: View {
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .padding(6)
-        .background(Color.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.surface)
+                .floatingShadow()
+        }
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.border))
         .padding(.horizontal, Space.md)
         .padding(.top, Space.xs)
         .padding(.bottom, Space.xxs)
-        .background(Color.surface)
-        // Clean edge where scrolling content meets the bar; not needed when only the header shows.
-        .overlay(alignment: .top) {
-            if !isCollapsed { Hairline() }
-        }
         .sensoryFeedback(.selection, trigger: selection)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tab-bar")
@@ -67,7 +67,8 @@ struct PlanditTabBar: View {
 }
 
 
-/// The labeled planner action: emerald fill with ink content, the primary action on every screen.
+/// The planner action, drawn like the tabs (icon over label, ink) so the bar reads as one row.
+/// It's an action, not a tab, so it never shows the selected pill.
 private struct PlanButton: View {
     let action: () -> Void
     @State private var taps = 0
@@ -78,33 +79,22 @@ private struct PlanButton: View {
             action()
         } label: {
             VStack(spacing: Space.xxs) {
-                Icon(.plus, size: 20)
+                Icon(.plus, size: 22)
                 Text("Plan")
                     .font(.manrope(.semiBold, size: 13))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
             }
-            .foregroundStyle(Color.onEmerald)
+            .foregroundStyle(Color.ink)
             .frame(maxWidth: .infinity, minHeight: 52)
-            .background(Color.emerald, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             .contentShape(Rectangle())
         }
-        .buttonStyle(PlanButtonStyle())
-        .padding(.horizontal, Space.xxs)
+        .buttonStyle(.plain)
         .accessibilityLabel("Plan a day")
         .accessibilityIdentifier("plan-button")
         .accessibilityShowsLargeContentViewer {
             Label("Plan a day", image: "Icons/\(Lucide.plus.rawValue)")
         }
         .sensoryFeedback(.impact(weight: .light), trigger: taps)
-    }
-}
-
-private struct PlanButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .brightness(configuration.isPressed ? -0.05 : 0)
-            .animation(.snappy(duration: 0.2), value: configuration.isPressed)
     }
 }

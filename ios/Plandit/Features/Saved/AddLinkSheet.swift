@@ -10,19 +10,8 @@ struct PickedVideo: Transferable {
         FileRepresentation(contentType: .movie) { video in
             SentTransferredFile(video.url)
         } importing: { received in
-            let mediaStore = TemporaryMediaStore()
-            try mediaStore.validate(received.file)
-            try FileManager.default.createDirectory(
-                at: mediaStore.root,
-                withIntermediateDirectories: true
-            )
-            let fileExtension = received.file.pathExtension.isEmpty
-                ? "mov"
-                : received.file.pathExtension
-            let destination = mediaStore.root
-                .appending(path: "Picker-\(UUID().uuidString).\(fileExtension)")
-            try FileManager.default.copyItem(at: received.file, to: destination)
-            return PickedVideo(url: destination)
+            // Staged like a shared video: checked, and its 24 hours count from now, not from filming.
+            PickedVideo(url: try TemporaryMediaStore().stage(received.file))
         }
     }
 }
@@ -44,16 +33,14 @@ struct AddLinkSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.md) {
-                    VStack(alignment: .leading, spacing: Space.xs) {
-                        Text("Add a link").font(.sectionHeading).foregroundStyle(.ink)
-                        Text("Paste a TikTok or Instagram Reel link. We'll add the place to your map with its price and hours.")
-                            .font(.bodyText)
-                            .foregroundStyle(.inkMuted)
-                    }
+                    Text("Paste a TikTok or Instagram post or Reel link. We'll add the place to your map with its price and hours.")
+                        .font(.bodyText)
+                        .foregroundStyle(.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text("Link").font(.label).foregroundStyle(.ink)
-                        TextField("tiktok.com/@creator/video/…", text: $text)
+                        TextField("TikTok or Instagram link", text: $text)
                             .font(.bodyText)
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
@@ -73,6 +60,7 @@ struct AddLinkSheet: View {
                             Text(errorMessage)
                                 .font(.metadata)
                                 .foregroundStyle(.error)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         PasteButton(payloadType: String.self) { strings in
                             text = strings.first ?? ""
@@ -82,6 +70,12 @@ struct AddLinkSheet: View {
                         .tint(Color.ink)
                     }
 
+                    // Right under the field, so the keyboard never covers it (W-11).
+                    Button("Save to Plandit", action: save)
+                        .buttonStyle(.primary)
+                        .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityIdentifier("save-social-link")
+
                     HStack(spacing: Space.sm) {
                         Rectangle().fill(Color.border).frame(height: 1)
                         Text("or").font(.metadata).foregroundStyle(.inkMuted)
@@ -90,19 +84,17 @@ struct AddLinkSheet: View {
 
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text("Use a video").font(.label).foregroundStyle(.ink)
-                        Text("If the link does not include enough detail, choose a video you are allowed to share. Plandit reads it on this device and deletes the temporary copy.")
+                        Text("If the link doesn't include enough detail, choose a video you are allowed to share. Plandit reads it on this device and deletes the temporary copy.")
                             .font(.bodyText)
                             .foregroundStyle(.inkMuted)
-                        PhotosPicker(
+                            .fixedSize(horizontal: false, vertical: true)
+                        VideoSourceButtons(
                             selection: $selectedVideo,
-                            matching: .videos,
-                            photoLibrary: .shared()
-                        ) {
-                            Label("Choose from Photos", systemImage: "video")
-                        }
-                        .buttonStyle(.secondary)
-                        .disabled(isProcessingVideo)
-                        .accessibilityIdentifier("choose-video-photos")
+                            isChoosingFile: $isChoosingVideo,
+                            isDisabled: isProcessingVideo,
+                            photosIdentifier: "choose-video-photos",
+                            filesIdentifier: "choose-video-files"
+                        )
 
                         if isProcessingVideo {
                             HStack(spacing: Space.xs) {
@@ -112,38 +104,23 @@ struct AddLinkSheet: View {
                             .font(.metadata)
                             .foregroundStyle(.inkMuted)
                         }
-
-                        Button {
-                            isChoosingVideo = true
-                        } label: {
-                            Text("Choose from Files")
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isProcessingVideo)
                     }
                 }
                 .padding(Space.lg)
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color.surface)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: Space.sm) {
-                    Button("Save to Plandit", action: save)
-                        .buttonStyle(.primary)
-                        .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .accessibilityIdentifier("save-social-link")
-
+            .navigationTitle("Add a link")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .buttonStyle(.secondary)
                         .accessibilityIdentifier("cancel-add-link")
                 }
-                .padding(.horizontal, Space.lg)
-                .padding(.vertical, Space.sm)
-                .background(Color.surface)
-                .overlay(alignment: .top) { Hairline() }
             }
         }
-        .presentationDetents([.medium, .large])
+        // Full height, so nothing starts below the sheet's edge mid-sentence (W-11).
+        .presentationDetents([.large])
         .presentationBackground(Color.surface)
         .onChange(of: selectedVideo) { _, item in
             guard let item else { return }
@@ -183,7 +160,7 @@ struct AddLinkSheet: View {
 
     private func save() {
         guard let url = LinkParser.firstWebURL(in: text) else {
-            errorMessage = "Paste a TikTok video or Instagram Reel link."
+            errorMessage = "Paste a link to a TikTok or an Instagram post or Reel."
             return
         }
         do {

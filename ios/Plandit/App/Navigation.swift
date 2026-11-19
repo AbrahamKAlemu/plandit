@@ -88,6 +88,21 @@ final class SheetRouter {
             savedPath = [id]
         }
     }
+
+    /// Goes up each time new shares are shown, so the sheet rises from its lowest height and Saved
+    /// shows everything, newest first (PRC-1).
+    private(set) var sharesShown = 0
+
+    /// What the share sheet sent: one share opens its post, several open Saved. None does nothing.
+    func showShares(_ ids: [UUID]) {
+        guard let first = ids.first else { return }
+        if ids.count == 1 {
+            showPost(first)
+        } else {
+            show(.saved)
+        }
+        sharesShown += 1
+    }
 }
 
 /// Detents for the always-on sheet: a peek that shows the header + tab bar, half, and full.

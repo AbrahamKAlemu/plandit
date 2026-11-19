@@ -33,7 +33,15 @@ final class PlanditStore {
     @ObservationIgnored var events: ((UsageEvent) -> Void)?
 
     @ObservationIgnored private let extractor: any PlaceExtracting
-    @ObservationIgnored private let videoExtractor: VideoEvidenceExtractor
+    @ObservationIgnored private let videoExtractor: any VideoEvidenceReading
+    /// Where shared videos wait to be read (`TemporaryMedia/` in the App Group container).
+    @ObservationIgnored private let mediaStore: TemporaryMediaStore
+    /// How long a failed lookup waits before its one automatic retry (PRC-3).
+    @ObservationIgnored private let extractionRetryDelay: Duration
+    /// When each post started looking for its place, for the "Still looking" line (PRC-2).
+    @ObservationIgnored private(set) var findingStartedAt: [UUID: Date] = [:]
+    /// Goes up each time a place is added to Saved, by an exact match or a pick: the success haptic (PRC-7).
+    private(set) var placesAdded = 0
     @ObservationIgnored private let routes: any RouteProviding
     /// Apple Maps answers by mode and place pair, so a leg's options load once.
     @ObservationIgnored private var liveRoutes: [String: RouteInfo] = [:]
@@ -41,6 +49,8 @@ final class PlanditStore {
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
     /// Posts whose extraction or evidence lookup is still running; never started twice.
     @ObservationIgnored private var inFlight: Set<UUID> = []
+    /// Video posts being read on this phone right now.
+    @ObservationIgnored private var readingVideos: Set<UUID> = []
     /// Closed with its account session: no write reaches the file, no hook fires.
     @ObservationIgnored private(set) var isClosed = false
 
@@ -52,7 +62,9 @@ final class PlanditStore {
         visited: [Place],
         extractor: any PlaceExtracting = FixturePlaceExtractor(),
         storage: SnapshotStore? = nil,
-        videoExtractor: VideoEvidenceExtractor = VideoEvidenceExtractor(),
+        videoExtractor: any VideoEvidenceReading = VideoEvidenceExtractor(),
+        mediaStore: TemporaryMediaStore = TemporaryMediaStore(),
+        extractionRetryDelay: Duration = .seconds(2),
         events: ((UsageEvent) -> Void)? = nil,
         routes: any RouteProviding = RouteService()
     ) {
@@ -65,10 +77,10 @@ final class PlanditStore {
         self.extractor = extractor
         self.storage = storage
         self.videoExtractor = videoExtractor
+        self.mediaStore = mediaStore
+        self.extractionRetryDelay = extractionRetryDelay
         self.events = events
-        for post in saved where post.status == .processing {
-            startExtraction(post.id)
-        }
+        resumeInterruptedLookups()
     }
 
     /// An account's store from its snapshot (local file or cloud copy).
@@ -103,11 +115,30 @@ final class PlanditStore {
         legPaths = [:]
         persistNow()
         rollOverIfNeeded()
-        for post in saved where post.status == .processing {
-            startExtraction(post.id)
-        }
+        resumeInterruptedLookups(convertsVideos: false)
         Task { await loadRoutes() }
     }
+
+    /// Posts left looking for their place (the app quit, or another phone's copy arrived): a link
+    /// looks again. At launch, a video asks to be shared again, since its copy may be gone (PRC-8).
+    /// After a sync it's left looking: this phone may be reading it, or the phone that sent it may.
+    private func resumeInterruptedLookups(convertsVideos: Bool = true) {
+        for post in saved where post.status == .processing {
+            if post.platform == .video {
+                guard convertsVideos, !readingVideos.contains(post.id), !inFlight.contains(post.id) else { continue }
+                updateAndPersist(post.id) {
+                    $0.status = .needsEvidence
+                    $0.failureMessage = Self.shareVideoAgainMessage
+                }
+            } else {
+                startExtraction(post.id)
+            }
+        }
+    }
+
+    static let shareVideoAgainMessage = "Share the video again or add the place's name."
+    /// After the automatic retry also failed (PRC-3).
+    static let lookupFailedMessage = "The search didn't finish. Try again, or add the place's name or address."
 
     /// Detaches the store from its account: pending writes are dropped and later ones (a late
     /// extraction result, say) never touch the file or the hooks.
@@ -120,7 +151,7 @@ final class PlanditStore {
 
     /// What the user left last time, rolled over to today; the sample data on first launch
     /// or when launched with `-resetData`.
-    static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = FixturePlaceExtractor()) -> PlanditStore {
+    static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = launchExtractor()) -> PlanditStore {
         if CommandLine.arguments.contains("-resetData") { storage.reset() }
         let resetsSavedData = CommandLine.arguments.contains("-resetSavedData")
         guard let snapshot = storage.load() else {
@@ -406,12 +437,26 @@ final class PlanditStore {
 
     /// Pulls in anything the share extension queued while the app was in the background.
     /// Returns the ids of the posts those shares map to, newest last.
+    /// Links and videos alike: each share is acknowledged only once its post is saved, so a share
+    /// is never lost and never imported twice. Every lookup starts at once and runs side by side.
     @discardableResult
     func ingestPendingShares() -> [UUID] {
         var ids: [UUID] = []
         for share in ShareInbox.pending() {
             do {
-                ids.append(try save(url: share.url, sharedText: share.sharedText))
+                if let fileName = share.videoFileName {
+                    // The post takes the share's id, so a share that comes back (the app quit
+                    // before acknowledging it) finds its post instead of making a second one.
+                    if post(id: share.id) == nil {
+                        ids.append(try importSharedVideo(id: share.id, fileURL: mediaStore.file(named: fileName), receivedAt: share.receivedAt))
+                    } else {
+                        if let leftover = mediaStore.file(named: fileName) { try? mediaStore.remove(leftover) }
+                        if !ids.contains(share.id) { ids.append(share.id) }
+                    }
+                } else if let url = share.url {
+                    let id = try save(url: url, sharedText: share.sharedText, savedAt: share.receivedAt)
+                    if !ids.contains(id) { ids.append(id) }
+                }
                 ShareInbox.acknowledge(share.id)
             } catch {
                 savedErrorMessage = error.localizedDescription
@@ -420,8 +465,66 @@ final class PlanditStore {
         return ids
     }
 
+    /// A video from the share sheet becomes a post right away, in `processing`, and is read on this
+    /// phone in the background. If it can't be read (or it's gone), the post stays and asks for the
+    /// place's name instead of disappearing (PRC-4). The file is deleted once it's read; until then
+    /// it's in `Reading/`, where the 24-hour cleanup can't reach it.
     @discardableResult
-    func save(url: URL, sharedText: String? = nil) throws -> UUID {
+    func importSharedVideo(id: UUID = UUID(), fileURL: URL?, receivedAt: Date = .now) throws -> UUID {
+        let sourceURL = URL(string: "plandit-video://\(id.uuidString)")!
+        let file = fileURL.flatMap { try? mediaStore.claimForReading($0) }
+        let post = SavedPost(
+            id: id,
+            url: sourceURL,
+            canonicalURL: sourceURL,
+            platform: .video,
+            savedAt: receivedAt,
+            status: file == nil ? .needsEvidence : .processing,
+            failureMessage: file == nil ? Self.shareVideoAgainMessage : nil
+        )
+        var updated = saved
+        updated.insert(post, at: 0)
+        do {
+            try persistSaved(updated)
+        } catch {
+            // Not saved, so the share stays queued: put its video back for the next try.
+            if let file, let fileURL { try? FileManager.default.moveItem(at: file, to: fileURL) }
+            throw error
+        }
+        saved = updated
+        events?(.linkSaved)
+        if let file {
+            readingVideos.insert(id)
+            findingStartedAt[id] = .now
+            Task { await readSharedVideo(postID: id, fileURL: file) }
+        }
+        return id
+    }
+
+    private func readSharedVideo(postID: UUID, fileURL: URL) async {
+        defer {
+            readingVideos.remove(postID)
+            try? mediaStore.remove(fileURL)
+        }
+        do {
+            try await applyVideoEvidence(postID: postID, fileURL: fileURL)
+        } catch {
+            updateAndPersist(postID) {
+                $0.status = .needsEvidence
+                $0.failureMessage = Self.videoFailureMessage(error)
+            }
+        }
+    }
+
+    /// What a video post says when its video couldn't be read: our own reasons as they are; a
+    /// system error (the file vanished, say) never reaches the synced post, it asks for the video again.
+    private static func videoFailureMessage(_ error: any Error) -> String {
+        (error as? VideoEvidenceError)?.errorDescription ?? shareVideoAgainMessage
+    }
+
+    /// `savedAt` is when it was shared, for a link from the share sheet; now, for one added in the app.
+    @discardableResult
+    func save(url: URL, sharedText: String? = nil, savedAt: Date = .now) throws -> UUID {
         let supported = try SupportedSocialURL(url)
         if let index = saved.firstIndex(where: { $0.canonicalURL == supported.canonicalURL }) {
             let existing = saved[index]
@@ -440,8 +543,10 @@ final class PlanditStore {
             url: url,
             canonicalURL: supported.canonicalURL,
             platform: supported.platform,
+            // A TikTok link names its creator, so the post can show them while it waits (PRC-2).
+            creatorHandle: supported.canonicalURL.pathComponents.first { $0.hasPrefix("@") && $0.count > 1 },
             caption: sharedText,
-            savedAt: .now,
+            savedAt: savedAt,
             status: .processing
         )
         var updated = saved
@@ -454,6 +559,19 @@ final class PlanditStore {
     }
 
     func retryExtraction(_ id: UUID) {
+        guard let post = post(id: id) else { return }
+        // A video post has no link to look up again: search what was read from it, or ask.
+        if post.platform == .video {
+            guard let evidence = post.caption, !evidence.isEmpty else {
+                updateAndPersist(id) {
+                    $0.status = .needsEvidence
+                    $0.failureMessage = Self.shareVideoAgainMessage
+                }
+                return
+            }
+            submitEvidence(postID: id, text: evidence)
+            return
+        }
         guard updateAndPersist(id, mutation: {
             $0.status = .processing
             $0.failureMessage = nil
@@ -481,7 +599,10 @@ final class PlanditStore {
             post.status = .ready
             post.candidates = []
         }
-        if confirmed { events?(.placeSaved) }
+        if confirmed {
+            events?(.placeSaved)
+            placesAdded += 1
+        }
         return confirmed
     }
 
@@ -491,6 +612,7 @@ final class PlanditStore {
             $0.status = .processing
             $0.failureMessage = nil
         }) else { return }
+        findingStartedAt[postID] = .now
         Task { await resolveEvidence(postID: postID, text: text) }
     }
 
@@ -511,6 +633,8 @@ final class PlanditStore {
         try persistSaved(updated)
         saved = updated
 
+        readingVideos.insert(id)
+        defer { readingVideos.remove(id) }
         do {
             try await applyVideoEvidence(postID: id, fileURL: fileURL)
         } catch {
@@ -530,40 +654,48 @@ final class PlanditStore {
         }) else {
             throw SavedPlacePersistenceError()
         }
+        readingVideos.insert(postID)
+        defer { readingVideos.remove(postID) }
         do {
             try await applyVideoEvidence(postID: postID, fileURL: fileURL)
         } catch {
             updateAndPersist(postID) {
                 $0.status = .needsEvidence
-                $0.failureMessage = error.localizedDescription
+                $0.failureMessage = Self.videoFailureMessage(error)
             }
             throw error
         }
     }
 
-    func removeExpiredTemporaryMedia() {
-        do {
-            try TemporaryMediaStore().removeExpiredFiles(
-                olderThan: Date().addingTimeInterval(-24 * 60 * 60)
-            )
-        } catch {
-            assertionFailure("Temporary media cleanup failed: \(error)")
-        }
+    /// Deletes videos that waited more than 24 hours without being read (SHR-3).
+    func removeExpiredTemporaryMedia(now: Date = Date()) {
+        mediaStore.removeExpiredFiles(now: now)
     }
 
     private func startExtraction(_ id: UUID) {
         guard inFlight.insert(id).inserted else { return }
+        findingStartedAt[id] = .now
         Task { await extract(id) }
     }
 
+    /// Looks the post up. A network error or timeout gets one more try after a short wait, before
+    /// the post says it couldn't find a place (PRC-3).
     private func extract(_ id: UUID) async {
         defer { inFlight.remove(id) }
         guard let post = post(id: id) else { return }
         do {
-            let result = try await extractor.extract(from: post.url, sharedText: post.caption)
+            let result: ExtractionResult
+            do {
+                result = try await extractor.extract(from: post.url, sharedText: post.caption)
+            } catch let error where !(error is DevelopmentSocialEvidenceError) && !(error is CancellationError) {
+                try await Task.sleep(for: extractionRetryDelay)
+                guard let current = self.post(id: id), current.status == .processing else { return }
+                result = try await extractor.extract(from: current.url, sharedText: current.caption)
+            }
             let updated = applyExtractionResult(result, to: id)
             if updated, result.autoConfirmedCandidateID != nil {
                 events?(.placeSaved)
+                placesAdded += 1
             }
         } catch let error as DevelopmentSocialEvidenceError {
             updateAndPersist(id) {
@@ -573,7 +705,7 @@ final class PlanditStore {
         } catch {
             updateAndPersist(id) {
                 $0.status = .failed
-                $0.failureMessage = "We couldn't read this source. Add details or try again."
+                $0.failureMessage = Self.lookupFailedMessage
             }
         }
     }
@@ -647,6 +779,7 @@ final class PlanditStore {
             }
             if updated, result.autoConfirmedCandidateID != nil {
                 events?(.placeSaved)
+                placesAdded += 1
             }
         } catch {
             updateAndPersist(postID) {
@@ -993,3 +1126,52 @@ final class PlanditStore {
         onChange?(snapshot)
     }
 }
+
+extension PlanditStore {
+    /// The extractor a launched app uses. Debug builds take `-fakeExtraction slow|fail|match|pick`,
+    /// so UI tests drive the finding-the-place screens without the network.
+    static func launchExtractor(_ arguments: [String] = CommandLine.arguments) -> any PlaceExtracting {
+#if DEBUG
+        if let index = arguments.firstIndex(of: "-fakeExtraction"), index + 1 < arguments.count,
+           let mode = LaunchFakeExtractor.Mode(rawValue: arguments[index + 1]) {
+            return LaunchFakeExtractor(mode: mode)
+        }
+#endif
+        return FixturePlaceExtractor()
+    }
+}
+
+#if DEBUG
+/// UI-test stand-in for the backend and MapKit. `slow` takes 30 s, then offers three places;
+/// `fail` always times out; `match` adds Levain Bakery on its own; `pick` offers three places.
+struct LaunchFakeExtractor: PlaceExtracting {
+    enum Mode: String, Sendable { case slow, fail, match, pick }
+    let mode: Mode
+
+    func extract(from url: URL, sharedText: String?) async throws -> ExtractionResult {
+        let creator = url.pathComponents.first { $0.hasPrefix("@") }
+        switch mode {
+        case .fail:
+            throw URLError(.timedOut)
+        case .slow:
+            try await Task.sleep(for: .seconds(30))
+            return ExtractionResult(creatorHandle: creator, candidates: Self.three)
+        case .pick:
+            return ExtractionResult(creatorHandle: creator, candidates: Self.three)
+        case .match:
+            let levain = Self.three[0]
+            return ExtractionResult(creatorHandle: creator, candidates: [levain], autoConfirmedCandidateID: levain.id)
+        }
+    }
+
+    func resolve(evidence: String, platform: SourcePlatform) async throws -> ExtractionResult {
+        ExtractionResult(caption: evidence, candidates: Self.three)
+    }
+
+    private static let three: [PlaceCandidate] = [
+        PlaceCandidate(id: "fake:levain", place: SampleData.levain, confidence: .high, reason: "Name in the caption", estimatedCost: 6),
+        PlaceCandidate(id: "fake:los-tacos", place: SampleData.losTacos, confidence: .medium, reason: "Name in the caption", estimatedCost: 12),
+        PlaceCandidate(id: "fake:high-line", place: SampleData.highLine, confidence: .low, reason: "Name in the caption", estimatedCost: 0),
+    ]
+}
+#endif
