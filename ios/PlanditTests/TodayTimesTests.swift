@@ -242,6 +242,30 @@ import XCTest
         XCTAssertEqual(update.leg.miles, planned.miles)
     }
 
+    // MARK: - Undo and travel
+
+    func testATravelChangeClearsAnEarlierUndo() async throws {
+        let store = makeStore()
+        let leg = try XCTUnwrap(store.today.legs.last { store.today.state(of: $0) == .upcoming })
+        await store.loadTravelOptions(forLeg: leg.id)
+        let stop = try XCTUnwrap(store.today.stops.last)
+
+        store.setTime(ofStop: stop.id, start: stop.start.addingTimeInterval(1800), durationMinutes: stop.durationMinutes, moveLaterStops: true)
+        XCTAssertNotNil(store.undo)
+        let drive = try XCTUnwrap(store.travelOptions(forLeg: leg.id).first { $0.leg.mode == .drive && $0.leg.mode != leg.mode })
+        store.chooseTravel(drive)
+        XCTAssertNil(store.undo, "Undo can't put back a day from before the trip changed")
+        store.undoLastChange()
+        XCTAssertEqual(store.today.legs.first { $0.id == leg.id }?.mode, .drive)
+
+        store.setTime(ofStop: stop.id, start: stop.start, durationMinutes: stop.durationMinutes, moveLaterStops: true)
+        XCTAssertNotNil(store.undo)
+        store.chooseTravelForRestOfDay(.walk)
+        XCTAssertNil(store.undo)
+        store.undoLastChange()
+        XCTAssertEqual(store.today.legs.first { $0.id == leg.id }?.mode, .walk)
+    }
+
     func testRestOfTheDayKeepsTheTimesOfTripsAlreadyMadeThatWay() async throws {
         let store = makeStore()
         let ahead = store.today.legs.filter { store.today.state(of: $0) != .completed }

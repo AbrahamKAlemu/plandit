@@ -248,6 +248,7 @@ final class PlanditStore {
     /// Makes this trip this way and moves the rest of the day to match.
     func chooseTravel(_ option: TravelOption) {
         guard today.legs.contains(where: { $0.id == option.leg.id }) else { return }
+        forgetUndo()
         today.setLeg(option.leg)
         legPaths[option.leg.id] = nil
         persist()
@@ -271,6 +272,7 @@ final class PlanditStore {
     /// made this way keep their time (only marked as the user's pick), so the timeline doesn't
     /// jump to Apple Maps' newer times; only trips that change how they're made get a new time.
     func chooseTravelForRestOfDay(_ mode: TravelMode) {
+        forgetUndo()
         for (index, leg) in today.legs.enumerated() where today.state(of: leg) != .completed {
             if leg.mode == mode {
                 today.legs[index].isChosen = true
@@ -791,6 +793,12 @@ final class PlanditStore {
         self.undo = nil
         persist()
         Task { await loadRoutes() }
+    }
+
+    /// For a change that has no undo of its own: the last one's snapshot predates it, so undoing
+    /// would quietly take this change back too. Clearing it also hides the undo bar.
+    private func forgetUndo() {
+        undo = nil
     }
 
     func dismissUndo(_ id: UUID) {
