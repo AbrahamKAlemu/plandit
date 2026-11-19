@@ -236,12 +236,14 @@ private struct HiddenWhenSheetCollapsed: ViewModifier {
 
 /// Lifts a floating bar off the content scrolling under it. Stronger in dark mode, where a light
 /// shadow disappears into the dark surface; the border still draws the edge there.
+/// Goes on the bar's filled background shape, so its text casts no shadow. Not with a
+/// `compositingGroup()` instead: with one, the app never went idle while a field in a sheet
+/// over Today had the keyboard up.
 private struct FloatingShadow: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
-            .compositingGroup()
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.5 : 0.12), radius: 12, y: 4)
     }
 }
@@ -280,6 +282,7 @@ extension View {
     }
 
     /// The soft shadow under what floats over a sheet's content: the tab bar and the undo bar.
+    /// Put it on the bar's filled background shape.
     func floatingShadow() -> some View {
         modifier(FloatingShadow())
     }
