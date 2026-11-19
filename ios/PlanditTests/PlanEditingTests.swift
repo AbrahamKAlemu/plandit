@@ -358,4 +358,41 @@ import XCTest
         store.removeStop(store.today.stops[3].id)
         assertConsistent(store.today)
     }
+
+    // MARK: - Sending the plan
+
+    func testMessageWithTravelPricesAndANote() {
+        let plan = cleanDay()
+        let text = plan.message(PlanMessageOptions(note: " Who's in? ", showPrices: true, showTravel: true))
+        XCTAssertTrue(text.hasPrefix("Who's in?\n\n\(plan.title)"))
+        XCTAssertTrue(text.contains("Meet \(plan.stops[0].start.shortTime) at The Hungarian Pastry Shop, 1030 Amsterdam Ave"))
+        XCTAssertTrue(text.contains("   ↓ 35 min subway (4 and 7 trains, $2.90)"), text)
+        XCTAssertTrue(text.contains("   ↓ 28 min bus (M4 bus, $2.90)"), text)
+        XCTAssertTrue(text.contains("About \(plan.totalCost.wholeDollarsText) per person, including $5.80 in subway fares. Done by"))
+        XCTAssertEqual(text.components(separatedBy: "↓").count - 1, plan.stops.count - 1, "one travel line between each pair")
+    }
+
+    func testMessageWithoutPrices() {
+        let text = cleanDay().message(PlanMessageOptions(showPrices: false, showTravel: true))
+        XCTAssertFalse(text.contains("$"), text)
+        XCTAssertFalse(text.contains("per person"))
+        XCTAssertTrue(text.contains("Done by"))
+    }
+
+    func testMessageWithOnlyWhatsLeft() {
+        let plan = cleanDay() // the pastry shop is done, the Met is underway
+        let text = plan.message(PlanMessageOptions(showTravel: false, onlyWhatsLeft: true))
+        XCTAssertFalse(text.contains("Hungarian Pastry"))
+        XCTAssertTrue(text.contains("Next: \(plan.stops[1].start.shortTime) at The Met"))
+        let left = plan.stops[1...].reduce(0) { $0 + $1.estimatedCost } + 2.90 // the subway after the Met
+        XCTAssertTrue(text.contains("About \(left.wholeDollarsText) more per person, including $2.90 in subway fares."), text)
+    }
+
+    func testDriveAndWalkTravelLines() {
+        let walk = TravelLeg(fromStopID: UUID(), toStopID: UUID(), mode: .walk, minutes: 22, miles: 1.1)
+        XCTAssertEqual(walk.messageText(showPrice: true), "22 min walk")
+        let drive = TravelLeg.estimate(.drive, miles: 2, fromStopID: UUID(), toStopID: UUID())
+        XCTAssertEqual(drive.messageText(showPrice: true), "\(drive.minutes.durationText) drive (about $11)")
+        XCTAssertEqual(drive.messageText(showPrice: false), "\(drive.minutes.durationText) drive")
+    }
 }

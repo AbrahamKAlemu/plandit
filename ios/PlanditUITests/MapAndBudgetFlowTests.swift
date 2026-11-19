@@ -119,9 +119,13 @@ final class MapAndBudgetFlowTests: XCTestCase {
         // Drag the High Line below Los Tacos.
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS ', was '")).firstMatch.exists,
                        "nothing moves until you drag")
-        // The drag handle reads "Reorder " plus the row's label ("The High Line, stop 3, 1:20 PM"), so match the start, up to the comma ("Los Tacos No. 1" must not match "No. 10").
-        let highLine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder The High Line,'")).firstMatch
-        let tacos = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder Los Tacos No. 1,'")).firstMatch
+        // The drag handle reads "Reorder The High Line" (or "Reorder " plus the whole row label on some iOS
+        // versions), so match the name exactly or up to the comma ("Los Tacos No. 1" must not match "No. 10").
+        func handle(_ name: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "Reorder \(name)", "Reorder \(name),")).firstMatch
+        }
+        let highLine = handle("The High Line")
+        let tacos = handle("Los Tacos No. 1")
         XCTAssertTrue(highLine.waitForExistence(timeout: 3))
         highLine.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.6, thenDragTo: tacos.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.2)))
@@ -171,22 +175,52 @@ final class MapAndBudgetFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Directions to Joe'")).firstMatch.exists, "directions come back for the next stop")
     }
 
-    @MainActor func testDoneHereCanBeUndone() {
+    @MainActor func testStatusCanBeSetAndUndone() {
         let app = launch()
         let met = app.buttons.containing(NSPredicate(format: "label CONTAINS 'The Met'")).firstMatch
         XCTAssertTrue(met.waitForExistence(timeout: 5))
         scrollTo(met, in: app)
         met.tap()
 
-        let done = app.buttons["Done here"]
-        XCTAssertTrue(done.waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["not-here-yet"].exists, "the stop you're at can go back to planned")
-        done.tap()
-        XCTAssertTrue(app.buttons["not-done-yet"].waitForExistence(timeout: 3))
+        let status = app.segmentedControls["stop-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 3))
+        XCTAssertTrue(status.buttons["I'm here"].isSelected)
+        status.buttons["Done"].tap()
+        XCTAssertTrue(status.buttons["Done"].isSelected)
         XCTAssertEqual(app.staticTexts["undo-message"].label, "The Met is done")
+
+        // Tapped by mistake: one tap back, or Undo.
+        status.buttons["I'm here"].tap()
+        XCTAssertTrue(status.buttons["I'm here"].isSelected)
+        status.buttons["Planned"].tap()
+        XCTAssertTrue(status.buttons["Planned"].isSelected)
         app.buttons["undo-button"].tap()
-        XCTAssertTrue(app.buttons["not-here-yet"].waitForExistence(timeout: 3), "back to underway")
-        XCTAssertFalse(app.buttons["undo-button"].exists)
+        XCTAssertTrue(status.buttons["I'm here"].waitForExistence(timeout: 2))
+        XCTAssertTrue(status.buttons["I'm here"].isSelected, "Undo puts it back")
+    }
+
+    @MainActor func testSendingThePlan() {
+        let app = launch()
+        let send = app.buttons["send-plan"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        scrollTo(send, in: app)
+        send.tap()
+        XCTAssertTrue(app.navigationBars["Send plan"].waitForExistence(timeout: 3))
+        let preview = app.staticTexts["send-preview"]
+        XCTAssertTrue(preview.label.contains("Next: "), "halfway through the day it starts with what's left")
+        XCTAssertFalse(preview.label.contains("Hungarian Pastry"))
+        XCTAssertTrue(preview.label.contains("↓"), "how to get between stops")
+        XCTAssertTrue(preview.label.contains("$"))
+
+        app.switches["send-prices"].switches.firstMatch.tap()
+        XCTAssertFalse(app.staticTexts["send-preview"].label.contains("$"))
+
+        let note = app.textFields["send-note"]
+        note.tap()
+        note.typeText("Who's in?")
+        XCTAssertTrue(app.staticTexts["send-preview"].label.hasPrefix("Who's in?"))
+        XCTAssertTrue(app.buttons["send-share"].exists)
+        XCTAssertTrue(app.buttons["send-copy"].exists)
     }
 
     @MainActor func testRemovingAStopInEditPlanAndUndoing() {
@@ -209,6 +243,21 @@ final class MapAndBudgetFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch.exists)
         app.buttons["undo-button"].tap()
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch.waitForExistence(timeout: 3))
+    }
+
+    @MainActor func testRemoveFromPlanOnTheStopScreen() {
+        let app = launch()
+        let stop = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch
+        XCTAssertTrue(stop.waitForExistence(timeout: 5))
+        scrollTo(stop, in: app)
+        stop.tap()
+        let remove = app.buttons["remove-from-plan"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        for _ in 0..<4 { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(remove.isHittable, "Remove from plan can be tapped")
+        remove.tap()
+        XCTAssertTrue(app.staticTexts["undo-message"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos'")).firstMatch.exists)
     }
 
     @MainActor func testChangingAStopsCost() {

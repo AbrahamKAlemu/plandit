@@ -93,8 +93,14 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         app.textFields["place-search-name"].tap()
         app.textFields["place-search-name"].typeText("Levain Bakery")
         XCTAssertTrue(search.isEnabled)
-        app.textFields["place-search-address"].tap()
-        app.textFields["place-search-address"].typeText("167 W 74th St")
+        let address = app.textFields["place-search-address"]
+        address.tap()
+        // Moving focus between fields can lag a moment; typing before it lands fails.
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        if XCTWaiter.wait(for: [expectation(for: focused, evaluatedWith: address)], timeout: 2) != .completed {
+            address.tap()
+        }
+        address.typeText("167 W 74th St")
         search.tap()
 
         XCTAssertTrue(app.staticTexts["Places found"].waitForExistence(timeout: 5))

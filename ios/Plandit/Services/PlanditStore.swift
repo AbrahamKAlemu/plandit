@@ -907,7 +907,8 @@ final class PlanditStore {
     /// "Not here yet": back to planned. Stops before it stay done; nothing is underway.
     func leave(_ stopID: UUID) {
         guard let index = stopIndex(id: stopID) else { return }
-        remember("Not at \(today.stops[index].place.name) yet")
+        let name = today.stops[index].place.name
+        remember(today.stops[index].status == .done ? "\(name) is back to planned" : "Not at \(name) yet")
         setStatuses(doneThrough: index - 1, now: nil)
     }
 
