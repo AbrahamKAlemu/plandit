@@ -127,4 +127,21 @@ final class UserStatsTests: XCTestCase {
         }
         XCTAssertFalse(plan(cost: 80).isOverBudget, "no budget recorded, so never marked over")
     }
+
+    /// A corrupted snapshot can carry any Double. The row must not crash Profile; it shows $0 and no mark.
+    @MainActor func testPastPlanRowSurvivesImpossibleCosts() {
+        let date = Date.now
+        for cost in [1e19, -1e19, .nan, .infinity, -.infinity] {
+            let row = plan(date, cost: cost, budget: 60)
+            XCTAssertEqual(row.summaryText, "\(date.shortDay) · 3 stops · $0 per person", "cost \(cost)")
+            XCTAssertNil(row.budgetMark, "cost \(cost): no mark from a cost we can't read")
+            XCTAssertFalse(row.isOverBudget, "cost \(cost)")
+        }
+        for budget in [1e19, .nan, .infinity] {
+            let row = plan(date, cost: 38, budget: budget)
+            XCTAssertEqual(row.summaryText, "\(date.shortDay) · 3 stops · $38 per person", "budget \(budget)")
+            XCTAssertNil(row.budgetMark, "budget \(budget): no mark from a budget we can't read")
+            XCTAssertFalse(row.isOverBudget, "budget \(budget)")
+        }
+    }
 }
