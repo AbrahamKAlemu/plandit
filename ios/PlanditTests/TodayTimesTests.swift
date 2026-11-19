@@ -94,31 +94,95 @@ import XCTest
 
     // MARK: - Timeline and travel sheet
 
-    func testTravelSheetShowsTheTripAsPlannedOnceAppleMapsAnswers() async {
+    func testTravelSheetShowsTheTripAsPlannedOnceAppleMapsAnswers() async throws {
         let store = makeStore()
         for leg in store.today.legs where store.today.state(of: leg) != .completed {
             await store.loadTravelOptions(forLeg: leg.id)
-            let shown = TravelOptionsSheet.options(store.travelOptions(forLeg: leg.id), planned: leg)
-            let selected = shown.first { $0.leg.mode == leg.mode }
-            XCTAssertEqual(selected?.leg.minutes, leg.minutes, "the picked way shows the timeline's \(leg.minutes) min")
-            XCTAssertEqual(selected?.leg, leg)
-            XCTAssertEqual(store.previewTravel(selected!).stops.map(\.start), store.today.stops.map(\.start),
+            let rows = TravelOptionsSheet.rows(store.travelOptions(forLeg: leg.id), planned: leg)
+            let planned = try XCTUnwrap(rows.first(where: \.isPlanned))
+            XCTAssertEqual(planned.option.leg.mode, leg.mode)
+            XCTAssertEqual(planned.option.leg.minutes, leg.minutes, "the picked way shows the timeline's \(leg.minutes) min")
+            XCTAssertEqual(planned.source, "In your plan", "the plan's time isn't Apple Maps'")
+            XCTAssertEqual(store.previewTravel(planned.option).stops.map(\.start), store.today.stops.map(\.start),
                            "its arrival time is the one on the timeline")
-            XCTAssertTrue(shown.filter { $0.leg.mode != leg.mode }.allSatisfy(\.isLive), "the other ways still use Apple Maps")
+
+            // Apple Maps' time for the same way: offered under the row when it differs, never applied.
+            let live = try XCTUnwrap(store.travelOptions(forLeg: leg.id).first { $0.leg.mode == leg.mode })
+            XCTAssertTrue(live.isLive)
+            if live.leg.minutes == leg.minutes {
+                XCTAssertNil(planned.update)
+            } else {
+                XCTAssertEqual(planned.update, live, "\(leg.minutes) min planned, Apple Maps says \(live.leg.minutes)")
+            }
+
+            let others = rows.filter { !$0.isPlanned }
+            XCTAssertEqual(others.count, TravelMode.choices.count - 1)
+            XCTAssertTrue(others.allSatisfy { $0.option.isLive && $0.source == "From Apple Maps" && $0.update == nil },
+                          "the other ways use Apple Maps and say so")
         }
     }
 
     func testTravelSheetMatchesTheTimelineAfterChoosingAnAppleMapsTime() async throws {
         let store = makeStore()
-        let leg = try XCTUnwrap(store.today.legs.first { store.today.state(of: $0) == .upcoming })
+        let leg = try XCTUnwrap(store.today.legs.first { store.today.state(of: $0) == .upcoming && $0.mode != .subway })
         await store.loadTravelOptions(forLeg: leg.id)
-        let subway = try XCTUnwrap(store.travelOptions(forLeg: leg.id).first { $0.leg.mode == .subway && $0.leg.mode != leg.mode })
+        let subway = try XCTUnwrap(store.travelOptions(forLeg: leg.id).first { $0.leg.mode == .subway })
+        XCTAssertTrue(subway.isLive)
         store.chooseTravel(subway)
 
         let planned = try XCTUnwrap(store.today.legs.first { $0.id == leg.id })
-        let shown = TravelOptionsSheet.options(store.travelOptions(forLeg: leg.id), planned: planned)
-        XCTAssertEqual(shown.first { $0.leg.mode == .subway }?.leg.minutes, planned.minutes)
-        XCTAssertEqual(shown.first { $0.leg.mode == .subway }?.isLive, true, "a time picked from Apple Maps still says so")
+        let row = try XCTUnwrap(TravelOptionsSheet.rows(store.travelOptions(forLeg: leg.id), planned: planned).first(where: \.isPlanned))
+        XCTAssertEqual(row.option.leg.mode, .subway)
+        XCTAssertEqual(row.option.leg.minutes, planned.minutes)
+        XCTAssertNil(row.update, "nothing newer to offer: the plan already has Apple Maps' time")
         assertTimesAgree(store, "after choosing the subway")
+    }
+
+    func testOnlyTheAppleMapsLineMovesTheDay() async throws {
+        let store = makeStore()
+        let leg = try XCTUnwrap(store.today.legs.first { store.today.state(of: $0) == .upcoming })
+        await store.loadTravelOptions(forLeg: leg.id)
+        let before = store.today.stops.map(\.start)
+        let row = try XCTUnwrap(TravelOptionsSheet.rows(store.travelOptions(forLeg: leg.id), planned: leg).first(where: \.isPlanned))
+
+        // Tapping the way it's already planned: the user's pick now, same time, nothing moves.
+        store.chooseTravel(row.option)
+        let kept = try XCTUnwrap(store.today.legs.first { $0.id == leg.id })
+        XCTAssertTrue(kept.isChosen)
+        XCTAssertEqual(kept.minutes, leg.minutes)
+        XCTAssertEqual(store.today.stops.map(\.start), before)
+
+        // "Apple Maps now says…": that time, and the stops after the trip move with it.
+        let update = try XCTUnwrap(row.update, "Apple Maps' time differs from the plan's")
+        store.chooseTravel(update)
+        XCTAssertEqual(store.today.legs.first { $0.id == leg.id }?.minutes, update.leg.minutes)
+        let destination = try XCTUnwrap(store.today.stops.firstIndex { $0.id == leg.toStopID })
+        let moved = TimeInterval((update.leg.minutes - leg.minutes) * 60)
+        XCTAssertEqual(store.today.stops[destination].start, before[destination].addingTimeInterval(moved))
+        assertTimesAgree(store, "after taking Apple Maps' time")
+    }
+
+    func testRestOfTheDayKeepsTheTimesOfTripsAlreadyMadeThatWay() async throws {
+        let store = makeStore()
+        let ahead = store.today.legs.filter { store.today.state(of: $0) != .completed }
+        for leg in ahead { await store.loadTravelOptions(forLeg: leg.id) }
+        let walks = ahead.filter { $0.mode == .walk }
+        let others = ahead.filter { $0.mode != .walk }
+        XCTAssertFalse(walks.isEmpty)
+        XCTAssertFalse(others.isEmpty)
+
+        store.chooseTravelForRestOfDay(.walk)
+
+        for walk in walks {
+            let now = try XCTUnwrap(store.today.legs.first { $0.id == walk.id })
+            XCTAssertEqual(now.minutes, walk.minutes, "a walk keeps its \(walk.minutes) min rather than taking Apple Maps' time")
+            XCTAssertTrue(now.isChosen)
+        }
+        for other in others {
+            let now = try XCTUnwrap(store.today.legs.first { $0.id == other.id })
+            XCTAssertEqual(now.mode, .walk)
+            XCTAssertTrue(now.isChosen)
+        }
+        assertTimesAgree(store, "walking the rest of the day")
     }
 }

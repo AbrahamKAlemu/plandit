@@ -267,9 +267,15 @@ final class PlanditStore {
         persist()
     }
 
-    /// Every trip still ahead goes this way: "Drive everywhere", "Take the subway".
+    /// Every trip still ahead goes this way: "Drive everywhere", "Take the subway". Trips already
+    /// made this way keep their time (only marked as the user's pick), so the timeline doesn't
+    /// jump to Apple Maps' newer times; only trips that change how they're made get a new time.
     func chooseTravelForRestOfDay(_ mode: TravelMode) {
-        for leg in today.legs where today.state(of: leg) != .completed {
+        for (index, leg) in today.legs.enumerated() where today.state(of: leg) != .completed {
+            if leg.mode == mode {
+                today.legs[index].isChosen = true
+                continue
+            }
             guard let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { continue }
             let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
             today.setLeg(Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place))

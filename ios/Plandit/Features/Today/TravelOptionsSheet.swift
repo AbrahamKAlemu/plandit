@@ -37,32 +37,39 @@ struct TravelOptionsSheet: View {
     }
 
     private func content(leg: TravelLeg, from: PlanStop, to: PlanStop) -> some View {
-        let options = Self.options(store.travelOptions(forLeg: leg.id), planned: leg)
+        let rows = Self.rows(store.travelOptions(forLeg: leg.id), planned: leg)
         let upcomingTrips = store.today.legs.filter { store.today.state(of: $0) != .completed }.count
+        let alreadyLate = Set(store.today.stopsArrivingAfterClose().map(\.id))
         return ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
                 VStack(alignment: .leading, spacing: Space.xxs) {
                     Text("\(from.place.name) to \(to.place.name)")
                         .font(.cardHeading)
                         .foregroundStyle(.ink)
-                    Text(sourceLine(options))
-                        .font(.metadata)
-                        .foregroundStyle(.inkMuted)
-                        .accessibilityIdentifier("travel-source")
+                    if isLoading {
+                        Text("Getting times from Apple Maps…")
+                            .font(.metadata)
+                            .foregroundStyle(.inkMuted)
+                            .accessibilityIdentifier("travel-source")
+                    }
                 }
 
                 VStack(spacing: 0) {
-                    ForEach(options) { option in
+                    ForEach(rows) { row in
                         OptionRow(
-                            option: option,
-                            isSelected: option.leg.mode == leg.mode,
-                            preview: store.previewTravel(option),
-                            alreadyLate: Set(store.today.stopsArrivingAfterClose().map(\.id)),
+                            row: row,
+                            preview: store.previewTravel(row.option),
+                            alreadyLate: alreadyLate,
                             destination: to
                         ) {
-                            withAnimation(.snappy) { store.chooseTravel(option) }
+                            withAnimation(.snappy) { store.chooseTravel(row.option) }
                         }
-                        if option.id != options.last?.id { Hairline() }
+                        if let update = row.update {
+                            LiveTimeButton(update: update, preview: store.previewTravel(update), destination: to) {
+                                withAnimation(.snappy) { store.chooseTravel(update) }
+                            }
+                        }
+                        if row.id != rows.last?.id { Hairline() }
                     }
                 }
                 .planditCard(padding: Space.sm)
@@ -103,19 +110,36 @@ struct TravelOptionsSheet: View {
         .scrollIndicators(.hidden)
     }
 
-    /// The way the trip is planned shows the plan's own time, so it matches the timeline and the
-    /// stop times; the other ways show Apple Maps times when they've loaded. Picking another way is
-    /// what moves the day, never opening this sheet.
-    static func options(_ options: [PlanditStore.TravelOption], planned: TravelLeg) -> [PlanditStore.TravelOption] {
-        options.map { option in
-            guard option.leg.mode == planned.mode else { return option }
-            return PlanditStore.TravelOption(leg: planned, isLive: option.isLive && option.leg.minutes == planned.minutes)
+    /// One way of making the trip, as the sheet shows it.
+    struct Row: Identifiable, Equatable {
+        /// The time, cost and arrival shown, and what picking the row does.
+        var option: PlanditStore.TravelOption
+        /// The way the trip is planned now.
+        var isPlanned: Bool
+        /// The planned way only: Apple Maps' time when it differs from the plan's. Picking it is the
+        /// only way that time reaches the day.
+        var update: PlanditStore.TravelOption?
+        var id: TravelMode { option.id }
+
+        /// Where the row's time comes from.
+        var source: String {
+            if isPlanned { return "In your plan" }
+            return option.isLive ? "From Apple Maps" : "Estimate"
         }
     }
 
-    private func sourceLine(_ options: [PlanditStore.TravelOption]) -> String {
-        if options.contains(where: \.isLive) { return "Times from Apple Maps" }
-        return isLoading ? "Getting times from Apple Maps…" : "Estimated times"
+    /// The way the trip is planned shows the plan's own time, so it matches the timeline and the
+    /// stop times, with Apple Maps' newer time offered under it; the other ways show Apple Maps
+    /// times when they've loaded. Opening this sheet never moves the day. Picking the planned row
+    /// again keeps its time and marks it as the user's pick.
+    static func rows(_ options: [PlanditStore.TravelOption], planned: TravelLeg) -> [Row] {
+        options.map { option in
+            guard option.leg.mode == planned.mode else { return Row(option: option, isPlanned: false) }
+            var kept = planned
+            kept.isChosen = true
+            let update = option.isLive && option.leg.minutes != planned.minutes ? option : nil
+            return Row(option: PlanditStore.TravelOption(leg: kept, isLive: false), isPlanned: true, update: update)
+        }
     }
 
     private func restOfDayTitle(_ mode: TravelMode) -> String {
@@ -128,14 +152,16 @@ struct TravelOptionsSheet: View {
 }
 
 private struct OptionRow: View {
-    let option: PlanditStore.TravelOption
-    let isSelected: Bool
+    let row: TravelOptionsSheet.Row
     /// The day if this option were picked.
     let preview: DayPlan
     /// Stops that are late whatever you pick; only new problems get a warning.
     let alreadyLate: Set<UUID>
     let destination: PlanStop
     let choose: () -> Void
+
+    private var option: PlanditStore.TravelOption { row.option }
+    private var isSelected: Bool { row.isPlanned }
 
     var body: some View {
         Button(action: choose) {
@@ -146,6 +172,10 @@ private struct OptionRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.leg.mode.label).font(.manrope(.bold, size: 16)).foregroundStyle(.ink)
                     Text(detail).font(.metadata).foregroundStyle(.inkMuted)
+                    Text(row.source)
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .accessibilityIdentifier("travel-source-\(option.leg.mode.rawValue)")
                     if let warning {
                         HStack(spacing: Space.xxs) {
                             Icon(.circleAlert, size: 14)
@@ -189,6 +219,39 @@ private struct OptionRow: View {
         let late = preview.stopsArrivingAfterClose().filter { !alreadyLate.contains($0.id) }
         guard let first = late.first else { return nil }
         return late.count == 1 ? "You'd get to \(first.place.name) after it closes" : "You'd miss \(late.count) stops' closing times"
+    }
+}
+
+/// Under the planned way, when Apple Maps' time for it has changed: "Apple Maps now says 24 min".
+/// Tapping it uses that time and moves the stops after the trip.
+private struct LiveTimeButton: View {
+    let update: PlanditStore.TravelOption
+    /// The day with Apple Maps' time.
+    let preview: DayPlan
+    let destination: PlanStop
+    let apply: () -> Void
+
+    var body: some View {
+        Button(action: apply) {
+            HStack(spacing: Space.xxs) {
+                Icon(.clock, size: 14)
+                Text("Apple Maps now says \(update.leg.minutes) min")
+                Spacer(minLength: 0)
+            }
+            .font(.label)
+            .foregroundStyle(.ink)
+            .padding(.leading, 32 + Space.sm)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(hint)
+        .accessibilityIdentifier("travel-live-time")
+    }
+
+    private var hint: String {
+        guard let arrive = preview.stop(id: destination.id)?.start.shortTime else { return "Uses this time for the trip" }
+        return "Uses this time for the trip, so you'd arrive at \(arrive)"
     }
 }
 
