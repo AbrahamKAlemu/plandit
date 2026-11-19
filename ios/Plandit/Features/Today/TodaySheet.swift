@@ -178,26 +178,18 @@ private struct PlanSummary: View {
                     .contentTransition(.numericText())
             }
 
-            // Side by side, or one under the other from XXL text up, so nothing is cut off.
-            let layout = isStacked
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.sm))
-                : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
-            layout {
-                SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption, isStacked: isStacked)
-                divider
-                Button(action: showBudget) {
-                    SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true, isStacked: isStacked)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Shows where the money goes and lets you change it")
-                .accessibilityIdentifier("budget-metric")
-                if let travel = TodaySummaryText.travel(plan) {
-                    divider
-                    SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption,
-                                  accessibilityLabel: travel.accessibilityLabel, isStacked: isStacked)
+            // Side by side when every value fits on one line at full size; otherwise one under the
+            // other, so nothing is cut off. Always stacked from XXL text up.
+            Group {
+                if typeSize >= .xxLarge {
+                    stacked
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        sideBySide
+                        stacked
+                    }
                 }
             }
-            .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, Space.sm)
             .planditCard(padding: 0)
         }
@@ -205,9 +197,32 @@ private struct PlanSummary: View {
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private var isStacked: Bool { typeSize >= .xxLarge }
+    private var sideBySide: some View {
+        HStack(alignment: .top, spacing: 0) { metrics(isStacked: false) }
+            .fixedSize(horizontal: false, vertical: true)
+    }
 
-    private var divider: some View {
+    private var stacked: some View {
+        VStack(alignment: .leading, spacing: Space.sm) { metrics(isStacked: true) }
+    }
+
+    @ViewBuilder private func metrics(isStacked: Bool) -> some View {
+        SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption, isStacked: isStacked)
+        divider(isStacked: isStacked)
+        Button(action: showBudget) {
+            SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true, isStacked: isStacked)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows where the money goes and lets you change it")
+        .accessibilityIdentifier("budget-metric")
+        if let travel = TodaySummaryText.travel(plan) {
+            divider(isStacked: isStacked)
+            SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption,
+                          accessibilityLabel: travel.accessibilityLabel, isStacked: isStacked)
+        }
+    }
+
+    private func divider(isStacked: Bool) -> some View {
         Rectangle().fill(Color.border).frame(width: isStacked ? nil : 1, height: isStacked ? 1 : nil)
     }
 
@@ -287,7 +302,8 @@ private struct SummaryMetric: View {
     var showsChevron = false
     /// What VoiceOver reads instead of the value and caption run together.
     var accessibilityLabel: String?
-    /// One under the other, full width: nothing has to shrink or fit on one line.
+    /// One under the other, full width. Side by side, the value keeps its full size on one line
+    /// (the summary stacks the tiles when that doesn't fit) and the caption wraps under it.
     var isStacked = false
 
     var body: some View {
@@ -298,17 +314,17 @@ private struct SummaryMetric: View {
                     .font(.manrope(.bold, size: 17))
                     .foregroundStyle(.ink)
                     .contentTransition(.numericText())
-                    .lineLimit(isStacked ? nil : 1)
-                    .minimumScaleFactor(isStacked ? 1 : 0.8)
+                    .fixedSize(horizontal: !isStacked, vertical: false)
                 if showsChevron {
                     Icon(.chevronRight, size: 14).foregroundStyle(.inkMuted)
                 }
             }
-            // A longer caption ("1 subway, 1 bus") takes a second line rather than being cut off.
+            // A longer caption ("1 subway, 1 bus") wraps rather than being cut off. Its ideal width
+            // is zero so only the values decide whether the tiles fit side by side.
             Text(caption)
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
-                .lineLimit(isStacked ? nil : 2)
+                .frame(minWidth: 0, idealWidth: isStacked ? nil : 0, maxWidth: .infinity, alignment: .leading)
         }
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
