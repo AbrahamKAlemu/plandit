@@ -90,6 +90,26 @@ struct Chip: View {
     }
 }
 
+extension View {
+    /// The small outlined control used by Filter, Sort and Edit, with a 44 pt tap area. Put it on the
+    /// label and give the button `.buttonStyle(.plain)`: the outline is the button's shape, so iOS
+    /// doesn't draw a second one around it when Button Shapes is on.
+    func outlinedControl(isActive: Bool = false) -> some View {
+        self
+            .font(.label)
+            .foregroundStyle(isActive ? Color.emeraldDeep : Color.ink)
+            .padding(.horizontal, Space.sm)
+            .frame(minHeight: 36)
+            .background(isActive ? Color.emeraldTint : Color.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                    .strokeBorder(isActive ? Color.emeraldDeep : Color.border)
+            )
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+    }
+}
+
 /// Icon + metadata text, e.g. a price, duration or distance.
 struct MetaLabel: View {
     let icon: Lucide

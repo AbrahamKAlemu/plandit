@@ -194,20 +194,13 @@ struct SavedMenuControl<Option: Hashable>: View {
             }
         } label: {
             HStack(spacing: Space.xxs) {
-                Text(title).font(.label)
+                Text(title)
                 Icon(.chevronDown, size: 16)
             }
-            .foregroundStyle(isActive ? Color.emeraldDeep : Color.ink)
-            .padding(.horizontal, Space.sm)
-            .frame(minHeight: 36)
-            .background(isActive ? Color.emeraldTint : Color.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .strokeBorder(isActive ? Color.emeraldDeep : Color.border)
-            )
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .outlinedControl(isActive: isActive)
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuOrder(.fixed)
         .accessibilityLabel(accessibilityName)
         .accessibilityValue(optionLabel(selection))
