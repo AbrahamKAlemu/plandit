@@ -244,9 +244,16 @@ final class ShareIntakeTests: XCTestCase {
         guard let taken = queued.first else { return XCTFail("The share should be queued") }
         for share in queued { ShareInbox.acknowledge(share.id) }
 
-        flow.undo()
+        XCTAssertFalse(flow.undo(), "too late: the sheet stays open")
+        XCTAssertEqual(flow.state, .alreadyTaken, "and says Plandit already has it")
         XCTAssertTrue(ShareInbox.pending().isEmpty)
         XCTAssertFalse(ShareInbox.remove(taken.id, mediaStore: mediaStore))
+    }
+
+    @MainActor func testUndoInTimeClosesTheSheet() async {
+        let flow = await share([NSItemProvider(object: URL(string: "https://www.tiktok.com/@a/video/2")! as NSURL)])
+        XCTAssertTrue(flow.undo())
+        XCTAssertNotEqual(flow.state, .alreadyTaken)
     }
 
     // MARK: - SHR-6 the same link twice

@@ -176,7 +176,11 @@ final class ShareFlow {
         case saving
         case saved(ShareSummary)
         case problem(ShareProblem)
+        /// Undo came too late: Plandit had already taken the share.
+        case alreadyTaken
     }
+
+    static let alreadyTakenMessage = "Plandit already has this one. You can remove it in Saved."
 
     private(set) var state: State = .saving
     /// The queued share this sheet added, which Undo takes back. Nil when the link was already
@@ -212,12 +216,14 @@ final class ShareFlow {
         state = .saved(ShareSummary(result))
     }
 
-    /// Takes the share back, with any video it copied, before the app sees it.
-    func undo() {
-        if let addedShareID {
-            ShareInbox.remove(addedShareID, mediaStore: intake.mediaStore)
-        }
-        addedShareID = nil
+    /// Takes the share back, with any video it copied, before the app sees it. Returns false when
+    /// Plandit took it first: the sheet then says so and stays open (`alreadyTaken`).
+    @discardableResult
+    func undo() -> Bool {
+        defer { addedShareID = nil }
+        guard let addedShareID, !ShareInbox.remove(addedShareID, mediaStore: intake.mediaStore) else { return true }
+        state = .alreadyTaken
+        return false
     }
 }
 

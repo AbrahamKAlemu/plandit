@@ -52,13 +52,21 @@ final class ShareViewController: UIViewController {
         extensionContext?.completeRequest(returningItems: nil)
     }
 
+    /// Takes the share back and closes, or, when Plandit already took it, says so and waits for Close.
     private func undo() {
+        guard !isFinished else { return }
+        autoClose?.cancel()
+        guard flow.undo() else {
+            UIAccessibility.post(notification: .announcement, argument: ShareFlow.alreadyTakenMessage)
+            return
+        }
         guard finish() else { return }
-        flow.undo()
         extensionContext?.cancelRequest(withError: CocoaError(.userCancelled))
     }
 
     private func cancel() {
+        // After a late Undo the share stands, so Close completes it.
+        if flow.state == .alreadyTaken { return complete() }
         guard finish() else { return }
         extensionContext?.cancelRequest(withError: CocoaError(.userCancelled))
     }

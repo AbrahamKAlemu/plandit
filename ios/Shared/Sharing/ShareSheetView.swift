@@ -24,6 +24,16 @@ struct ShareSheetView: View {
                 Spacer(minLength: 0)
             case .saved(let summary):
                 saved(summary)
+            case .alreadyTaken:
+                savedHeading
+                Text(ShareFlow.alreadyTakenMessage)
+                    .font(.bodyText)
+                    .foregroundStyle(.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Close", action: onClose)
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("share-close")
             case .problem(let problem):
                 Text(problem.title)
                     .font(.sectionHeading)
@@ -47,8 +57,7 @@ struct ShareSheetView: View {
         .tint(Color.emeraldDeep)
     }
 
-    @ViewBuilder
-    private func saved(_ summary: ShareSummary) -> some View {
+    private var savedHeading: some View {
         HStack(spacing: Space.xs) {
             Icon(.circleCheck, size: 22)
                 .foregroundStyle(.emeraldDeep)
@@ -58,6 +67,11 @@ struct ShareSheetView: View {
                 .foregroundStyle(.ink)
                 .accessibilityAddTraits(.isHeader)
         }
+    }
+
+    @ViewBuilder
+    private func saved(_ summary: ShareSummary) -> some View {
+        savedHeading
 
         VStack(alignment: .leading, spacing: Space.xs) {
             HStack(spacing: Space.xs) {

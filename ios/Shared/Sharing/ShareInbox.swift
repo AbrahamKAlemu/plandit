@@ -20,7 +20,7 @@ nonisolated enum AppGroup {
 /// Something shared into Plandit from TikTok, Instagram, Photos, Files or any app's share sheet:
 /// a link, or a video the extension copied into `TemporaryMedia/` (named by `videoFileName`).
 /// 1.0 queued links only (`url` always set, no `videoFileName`); those entries still decode.
-struct IncomingShare: Codable, Identifiable, Hashable {
+nonisolated struct IncomingShare: Codable, Identifiable, Hashable, Sendable {
     var id = UUID()
     var url: URL?
     var sharedText: String?
@@ -42,20 +42,22 @@ struct IncomingShare: Codable, Identifiable, Hashable {
 }
 
 /// Hand-off queue: the share extension enqueues, and the app acknowledges only after durable import.
-enum ShareInbox {
+nonisolated enum ShareInbox {
     private static let key = "plandit.pendingShares"
 
     /// Queues a share and returns what's stored for it. A link that's already waiting isn't queued
     /// twice: the waiting share comes back, and `isNew` is false.
     @discardableResult
     static func enqueue(_ share: IncomingShare) -> (share: IncomingShare, isNew: Bool) {
-        var queue = pending()
-        if let url = share.url, let waiting = queue.first(where: { $0.url == url }) {
-            return (waiting, false)
+        withLock {
+            var queue = pending()
+            if let url = share.url, let waiting = queue.first(where: { $0.url == url }) {
+                return (waiting, false)
+            }
+            queue.append(share)
+            write(queue)
+            return (share, true)
         }
-        queue.append(share)
-        write(queue)
-        return (share, true)
     }
 
     static func pending() -> [IncomingShare] {
@@ -64,20 +66,40 @@ enum ShareInbox {
     }
 
     static func acknowledge(_ id: UUID) {
-        write(pending().filter { $0.id != id })
+        withLock {
+            write(pending().filter { $0.id != id })
+        }
     }
 
     /// Undo from the share sheet: takes the share back before the app sees it, and deletes the
     /// video it copied. Returns false when the app already took it.
     @discardableResult
     static func remove(_ id: UUID, mediaStore: TemporaryMediaStore?) -> Bool {
-        let queue = pending()
-        guard let share = queue.first(where: { $0.id == id }) else { return false }
-        write(queue.filter { $0.id != id })
-        if let name = share.videoFileName, let file = mediaStore?.file(named: name) {
+        let removed: IncomingShare? = withLock {
+            let queue = pending()
+            guard let share = queue.first(where: { $0.id == id }) else { return nil }
+            write(queue.filter { $0.id != id })
+            return share
+        }
+        guard let removed else { return false }
+        if let name = removed.videoFileName, let file = mediaStore?.file(named: name) {
             try? mediaStore?.remove(file)
         }
         return true
+    }
+
+    /// The app and the share extension both change the queue, each in its own process, so every
+    /// read-change-write holds a file lock in the App Group container. Without the lock file
+    /// (it couldn't be opened) the change goes ahead unlocked, as before.
+    /// Not reentrant: `body` must not call `enqueue`, `acknowledge` or `remove`.
+    private static func withLock<T>(_ body: () -> T) -> T {
+        let folder = AppGroup.containerURL ?? FileManager.default.temporaryDirectory
+        let descriptor = open(folder.appending(path: "ShareInbox.lock").path, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { return body() }
+        defer { close(descriptor) }
+        while flock(descriptor, LOCK_EX) != 0, errno == EINTR {}
+        defer { flock(descriptor, LOCK_UN) }
+        return body()
     }
 
     private static func write(_ queue: [IncomingShare]) {
@@ -91,7 +113,7 @@ enum ShareInbox {
 #if DEBUG
     /// UI tests: `-seedShares 1` (up to 3) queues that many TikTok shares once per launch, as if
     /// they'd come through the share sheet while Plandit was closed.
-    private static var didSeed = false
+    nonisolated(unsafe) private static var didSeed = false
 
     static func seedFromLaunchArguments(_ arguments: [String] = CommandLine.arguments) {
         guard !didSeed, let index = arguments.firstIndex(of: "-seedShares"), index + 1 < arguments.count,

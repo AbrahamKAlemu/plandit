@@ -324,6 +324,33 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertEqual(s.saved.count, 1)
     }
 
+    // MARK: - The queue is shared by two processes (nice-to-have 9)
+
+    /// The extension queues while the app acknowledges: no share is lost to the other's write.
+    /// (Threads stand in for the two processes; the lock is a file lock, which covers both.)
+    func testSharesQueuedAtOnceAreAllKept() {
+        let count = 60
+        DispatchQueue.concurrentPerform(iterations: count) { n in
+            ShareInbox.enqueue(IncomingShare(url: URL(string: "https://www.tiktok.com/@a/video/\(7_400_000_000_000_000_000 + n)")!))
+        }
+        XCTAssertEqual(ShareInbox.pending().count, count)
+    }
+
+    /// Acknowledging one share while others are queued keeps the others.
+    func testAcknowledgingWhileQueuingKeepsTheRest() {
+        let first = (0..<30).map { IncomingShare(url: URL(string: "https://www.tiktok.com/@a/video/\(7_400_000_000_000_000_100 + $0)")!) }
+        for share in first { ShareInbox.enqueue(share) }
+        DispatchQueue.concurrentPerform(iterations: 60) { n in
+            if n < 30 {
+                ShareInbox.acknowledge(first[n].id)
+            } else {
+                ShareInbox.enqueue(IncomingShare(url: URL(string: "https://www.tiktok.com/@a/video/\(7_400_000_000_000_000_200 + n)")!))
+            }
+        }
+        XCTAssertEqual(ShareInbox.pending().count, 30)
+        XCTAssertTrue(ShareInbox.pending().allSatisfy { share in !first.contains { $0.id == share.id } })
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))
