@@ -31,6 +31,39 @@ added to the brief as D requirements.
   past midnight leaves times that a Time sheet changes again when opened (`DayPlan.shiftStops` applies
   the evening rule from each stop's own date).
 
+## Resume here (paused November 18, evening, for an account switch)
+
+Branches (local only, nothing pushed), stacked in this order on main e81d1d0:
+
+| PR | Branch | Head |
+|---|---|---|
+| 1 docs | `app-polish/docs` | 3687b8c (then cherry-pick 92200c8's successors from `feature/app-polish`: af627d3, f11fdeb and this note) |
+| 2 bar and Profile | `app-polish/a-bar-profile` | 8037c1d |
+| 3 Saved | `app-polish/d-saved-list` | 79d2764 |
+| 4 tutorial | `app-polish/e-tutorial` | 7153a98 |
+| 5 Today | `app-polish/c-today` | 046cde3 (reviewed twice, done) |
+| 6 share | `app-polish/b-share` | d17cb7e (on 046cde3) |
+
+Slice B review fixes committed on d17cb7e: findings 1 to 11, 13, 14 and the persona wording. Finding 12
+(fix a shared video post in place) moved to 1.0.2. On d17cb7e the 413 unit tests pass; the UI tests and the PlanditShare build haven't run yet
+(rerun with the scratchpad's `b-tools/full.sh`, or the README's test command on a `git archive` export).
+
+Left, in order (Abraham approved push, PRs and TestFlight on November 18):
+
+1. Full suite on d17cb7e from a `git archive` export (unit, UI, PlanditShare build).
+2. Persona agents on B's new strings: "Plandit already has this one. You can remove it in Saved.",
+   "Street, neighborhood or city", "Name, like Levain Bakery", "This can take a minute or two.", and
+   the reworded share problems.
+3. One final independent review of the whole stack (`git diff e81d1d0..app-polish/b-share`) at xhigh,
+   alongside one walk of the changed screens (iPhone 17 Pro, SE, iPad, dark, large text). Fix must-fix only.
+4. Cherry-pick the docs commits onto `app-polish/docs` and rebase the stack.
+5. Push the 6 branches and open 6 stacked PRs (each based on the one before).
+6. Bump to 1.0.1 as the last commit of the share PR, then `ios/scripts/testflight.sh` from the top of
+   the stack so Abraham can test sharing, the haptic and VoiceOver on a phone before merging.
+
+Deferred to 1.0.2: finding 12 above; the drive and bus Eldad findings; the sync data-loss issue
+(needs Abraham's yes to open); the GitHub issue for Eldad (needs a yes).
+
 ## Documents
 
 - [Brief](01-brief.md) and [brief reviews](01-brief_reviews.md)
