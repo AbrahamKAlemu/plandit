@@ -66,17 +66,6 @@ struct PlanditTabBar: View {
     }
 }
 
-/// Empty space exactly as tall as the tab bar, at the current text size. The sheet's tab bar sits
-/// over its tabs' content without shrinking it, so content that must stay above the bar without
-/// scrolling (the empty Today) ends with this.
-struct TabBarSpace: View {
-    var body: some View {
-        PlanditTabBar(selection: .constant(.today))
-            .hidden()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}
 
 /// The labeled planner action: emerald fill with ink content, the primary action on every screen.
 private struct PlanButton: View {

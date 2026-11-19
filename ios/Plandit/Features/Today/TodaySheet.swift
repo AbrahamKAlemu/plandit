@@ -25,17 +25,14 @@ struct TodaySheet: View {
             if plan.stops.isEmpty {
                 // Sized to the space above the tab bar rather than scrolled, so the next step is
                 // never cut off at half height: the icon goes first when the sheet is short. The
-                // tab bar covers the bottom of this view, so its height is set aside first.
-                VStack(spacing: 0) {
-                    ViewThatFits(in: .vertical) {
-                        emptyToday(showsIcon: true)
-                        emptyToday(showsIcon: false)
-                        ScrollView { emptyToday(showsIcon: false) }
-                            .scrollIndicators(.hidden)
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    TabBarSpace()
+                // tab bar sits below the sheet's stacks (SheetContainer), so this space ends at it.
+                ViewThatFits(in: .vertical) {
+                    emptyToday(showsIcon: true)
+                    emptyToday(showsIcon: false)
+                    ScrollView { emptyToday(showsIcon: false) }
+                        .scrollIndicators(.hidden)
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("empty-today")
                 .hiddenWhenSheetCollapsed()
