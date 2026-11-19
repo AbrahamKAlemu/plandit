@@ -147,23 +147,35 @@ private struct PlanSummary: View {
                     .contentTransition(.numericText())
             }
 
-            HStack(spacing: 0) {
-                SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption)
-                Rectangle().fill(Color.border).frame(width: 1)
+            // Side by side, or one under the other from XXL text up, so nothing is cut off.
+            let layout = isStacked
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.sm))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
+            layout {
+                SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption, isStacked: isStacked)
+                divider
                 Button(action: showBudget) {
-                    SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true)
+                    SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true, isStacked: isStacked)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Shows where the money goes and lets you change it")
                 .accessibilityIdentifier("budget-metric")
-                Rectangle().fill(Color.border).frame(width: 1)
+                divider
                 let travel = TodaySummaryText.travel(plan)
-                SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption)
+                SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption, isStacked: isStacked)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, Space.sm)
             .planditCard(padding: 0)
         }
+    }
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var isStacked: Bool { typeSize >= .xxLarge }
+
+    private var divider: some View {
+        Rectangle().fill(Color.border).frame(width: isStacked ? nil : 1, height: isStacked ? 1 : nil)
     }
 
     private var stopsLine: String {
@@ -237,6 +249,8 @@ private struct SummaryMetric: View {
     let value: String
     let caption: String
     var showsChevron = false
+    /// One under the other, full width: nothing has to shrink or fit on one line.
+    var isStacked = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -246,16 +260,19 @@ private struct SummaryMetric: View {
                     .font(.manrope(.bold, size: 17))
                     .foregroundStyle(.ink)
                     .contentTransition(.numericText())
+                    .lineLimit(isStacked ? nil : 1)
+                    .minimumScaleFactor(isStacked ? 1 : 0.8)
                 if showsChevron {
                     Icon(.chevronRight, size: 14).foregroundStyle(.inkMuted)
                 }
             }
+            // A longer caption ("1 subway, 1 bus") takes a second line rather than being cut off.
             Text(caption)
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
+                .lineLimit(isStacked ? nil : 2)
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Space.sm)
         .accessibilityElement(children: .combine)
