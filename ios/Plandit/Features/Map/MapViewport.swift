@@ -36,9 +36,9 @@ enum Manhattan {
 
 extension Manhattan {
     /// What Profile's map frames: the places you've been, which are its pins, or the whole island
-    /// before there are any.
+    /// until there are two. One place alone would zoom Profile to street level.
     static func profileFocus(visited: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
-        visited.isEmpty ? outline : visited
+        visited.count < 2 ? outline : visited
     }
 }
 

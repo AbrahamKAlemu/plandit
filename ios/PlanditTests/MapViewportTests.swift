@@ -112,10 +112,12 @@ final class MapViewportTests: XCTestCase {
         XCTAssertLessThanOrEqual(center.longitude, allowed.center.longitude + allowed.span.longitudeDelta / 2 + 1e-9)
     }
 
-    @MainActor func testProfileFramesVisitedPlacesOrManhattanBeforeThereAreAny() {
+    @MainActor func testProfileFramesVisitedPlacesOrManhattanUntilThereAreTwo() {
         let visited = [SampleData.hungarianPastry, SampleData.losTacos].map(\.coordinate)
         XCTAssertEqual(Manhattan.profileFocus(visited: visited).map(\.latitude), visited.map(\.latitude))
         XCTAssertEqual(Manhattan.profileFocus(visited: []).map(\.latitude), Manhattan.outline.map(\.latitude))
+        XCTAssertEqual(Manhattan.profileFocus(visited: Array(visited.prefix(1))).map(\.latitude), Manhattan.outline.map(\.latitude),
+                       "one place would zoom Profile to street level")
     }
 
     @MainActor func testVisitedPinsThatFitTheFarthestZoomAreAllAboveTheSheetAtHalfHeight() {
