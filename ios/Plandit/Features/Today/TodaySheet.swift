@@ -205,6 +205,7 @@ private struct PlanSummary: View {
 
     @ViewBuilder private func metrics(isStacked: Bool) -> some View {
         SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption, isStacked: isStacked)
+            .accessibilityIdentifier("time-metric")
         divider(isStacked: isStacked)
         Button(action: showBudget) {
             SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true, isStacked: isStacked)
@@ -216,6 +217,7 @@ private struct PlanSummary: View {
             divider(isStacked: isStacked)
             SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption,
                           accessibilityLabel: travel.accessibilityLabel, isStacked: isStacked)
+                .accessibilityIdentifier("travel-metric")
         }
     }
 

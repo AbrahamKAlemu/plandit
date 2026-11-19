@@ -55,6 +55,7 @@
 		517394DC5F645B2FC8A9F331 /* Manrope-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 607D379D700BA35A0A7195C5 /* Manrope-Medium.ttf */; };
 		51FD667350DBD3FECEB66BA0 /* TravelOptionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D23D940E83BF19D7F19169F9 /* TravelOptionsSheet.swift */; };
 		530F8011987F0C68715BD833 /* BudgetSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3964B1CA69E4FB130554B3A /* BudgetSheet.swift */; };
+		5330FD5F18384A7BC2C5A263 /* TodaySummaryFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FEF1FFD87F9585DECDA885B /* TodaySummaryFlowTests.swift */; };
 		55BE31FEE41C8AECBC9CD1DB /* TutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E199C158B266ABDD3CE2EE39 /* TutorialView.swift */; };
 		55C2D0288CE7C95364520F43 /* PlanEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6988A285D9FFB29E8A68A731 /* PlanEditing.swift */; };
 		597B4156DEE82DCE3FFD886F /* MapViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01FF2C6C1868147DCA4E006 /* MapViewportTests.swift */; };
@@ -231,6 +232,7 @@
 		59A277942AF5DD87C0431CAB /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
 		59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Manrope-Bold.ttf"; sourceTree = "<group>"; };
 		5B182A9731DBE43D727F7699 /* PlanFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanFlowTests.swift; sourceTree = "<group>"; };
+		5FEF1FFD87F9585DECDA885B /* TodaySummaryFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodaySummaryFlowTests.swift; sourceTree = "<group>"; };
 		607D379D700BA35A0A7195C5 /* Manrope-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Manrope-Medium.ttf"; sourceTree = "<group>"; };
 		61164B0D62F9EF8F1A480E2C /* Plandit.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Plandit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		634837C4E853C6B8E396996B /* PlaceCandidate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceCandidate.swift; sourceTree = "<group>"; };
@@ -400,6 +402,7 @@
 				C9684CCBD857D99564E0E021 /* SavedListFlowTests.swift */,
 				2C5FEF54EECEB97BC5504BCF /* SavedPlaceExtractionFlowTests.swift */,
 				1295EE53202C0571CABD26E3 /* SheetLayoutTests.swift */,
+				5FEF1FFD87F9585DECDA885B /* TodaySummaryFlowTests.swift */,
 				E82646EA5AF1FC9F99146C26 /* TutorialFlowTests.swift */,
 				47AC59B4BB383A03DDC1BF5A /* WelcomeFlowTests.swift */,
 			);
@@ -944,6 +947,7 @@
 				D94B07DCC51B027BA1F37667 /* SavedListFlowTests.swift in Sources */,
 				7591B46488F202359C0B3374 /* SavedPlaceExtractionFlowTests.swift in Sources */,
 				153496225968ED88756F6D19 /* SheetLayoutTests.swift in Sources */,
+				5330FD5F18384A7BC2C5A263 /* TodaySummaryFlowTests.swift in Sources */,
 				E4974AD7E5DE632C3BD56728 /* TutorialFlowTests.swift in Sources */,
 				64D3FAA53F2A3C9A0036975A /* WelcomeFlowTests.swift in Sources */,
 			);
