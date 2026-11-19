@@ -23,9 +23,12 @@ enum Manhattan {
     /// The farthest the map zooms out. MapKit clamps any camera beyond it.
     static let maximumDistance: CLLocationDistance = 80_000
 
+    /// Where the camera's center may go: about lat 40.62 to 40.94, lon −74.12 to −73.82.
+    static let centerBounds = MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.32, longitudeDelta: 0.30))
+
     /// Keeps panning and zooming around Manhattan for now.
     static let cameraBounds = MapCameraBounds(
-        centerCoordinateBounds: MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.32, longitudeDelta: 0.30)),
+        centerCoordinateBounds: centerBounds,
         minimumDistance: 300,
         maximumDistance: maximumDistance
     )
@@ -113,9 +116,15 @@ struct MapViewport: Equatable {
         let x = u * cos(angle) + v * sin(angle)
         let y = -u * sin(angle) + v * cos(angle)
 
+        // Keep the center where `cameraBounds` allows it; otherwise MapKit moves it on its own.
+        let allowed = Manhattan.centerBounds
+        let latitude = min(max(origin.latitude + y / metersPerLat, allowed.center.latitude - allowed.span.latitudeDelta / 2),
+                           allowed.center.latitude + allowed.span.latitudeDelta / 2)
+        let longitude = min(max(origin.longitude + x / metersPerLon, allowed.center.longitude - allowed.span.longitudeDelta / 2),
+                            allowed.center.longitude + allowed.span.longitudeDelta / 2)
+
         return MapCamera(
-            centerCoordinate: CLLocationCoordinate2D(latitude: origin.latitude + y / metersPerLat,
-                                                     longitude: origin.longitude + x / metersPerLon),
+            centerCoordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
             distance: metersPerPoint * Double(size.height) / Self.visibleHeightRatio,
             heading: heading,
             pitch: 0

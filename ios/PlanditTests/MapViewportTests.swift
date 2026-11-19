@@ -96,6 +96,22 @@ final class MapViewportTests: XCTestCase {
         XCTAssertEqual(offset.x, 0, accuracy: 1)
     }
 
+    @MainActor func testCameraCenterStaysWhereMapKitAllowsIt() {
+        // Coney Island and the Battery, framed above a half-height sheet: the center we'd compute
+        // falls south of the allowed region, and MapKit would move it somewhere we didn't frame.
+        let coneyIsland = CLLocationCoordinate2D(latitude: 40.5755, longitude: -73.9707)
+        let battery = CLLocationCoordinate2D(latitude: 40.7033, longitude: -74.0170)
+        var phoneViewport = viewport(phone, top: 62)
+        phoneViewport.bottomInset = SheetDetent.coveredHeight(.medium, screenHeight: phone.height)
+        let center = phoneViewport.camera(fitting: [coneyIsland, battery]).centerCoordinate
+
+        let allowed = Manhattan.centerBounds
+        XCTAssertGreaterThanOrEqual(center.latitude, allowed.center.latitude - allowed.span.latitudeDelta / 2 - 1e-9)
+        XCTAssertLessThanOrEqual(center.latitude, allowed.center.latitude + allowed.span.latitudeDelta / 2 + 1e-9)
+        XCTAssertGreaterThanOrEqual(center.longitude, allowed.center.longitude - allowed.span.longitudeDelta / 2 - 1e-9)
+        XCTAssertLessThanOrEqual(center.longitude, allowed.center.longitude + allowed.span.longitudeDelta / 2 + 1e-9)
+    }
+
     @MainActor func testProfileFramesVisitedPlacesOrManhattanBeforeThereAreAny() {
         let visited = [SampleData.hungarianPastry, SampleData.losTacos].map(\.coordinate)
         XCTAssertEqual(Manhattan.profileFocus(visited: visited).map(\.latitude), visited.map(\.latitude))
