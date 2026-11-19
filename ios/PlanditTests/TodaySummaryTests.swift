@@ -51,6 +51,7 @@ import XCTest
         XCTAssertEqual(TodaySummaryText.travel(day([.drive])).icon, .car)
         XCTAssertEqual(tile([.drive, .drive]), "2 drives")
         XCTAssertEqual(TodaySummaryText.travel(day([.subway, .drive])).caption, "1 subway, 1 drive")
+        XCTAssertEqual(TodaySummaryText.travel(day([.subway, .drive, .drive])).caption, "1 subway, 2 drives")
     }
 
     func testWalkingPlusTransitKeepsMilesWalked() {

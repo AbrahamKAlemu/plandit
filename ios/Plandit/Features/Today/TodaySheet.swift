@@ -219,28 +219,13 @@ enum TodaySummaryText {
     /// Nil when any trip is a walk, or there are no trips.
     private static func rides(_ legs: [TravelLeg]) -> Travel? {
         guard !legs.isEmpty, !legs.contains(where: { $0.mode == .walk }) else { return nil }
-        let counted = [TravelMode.subway, .bus, .drive].compactMap { mode -> (mode: TravelMode, count: Int)? in
-            let count = legs.filter { $0.mode == mode }.count
-            return count > 0 ? (mode, count) : nil
-        }
+        let counted = RideWording.counts(legs)
         // The icon follows the most common kind; ties go to the subway, then the bus.
         guard let most = counted.max(by: { $0.count < $1.count }) else { return nil }
         guard counted.count == 1 else {
-            let kinds = counted.map { "\($0.count) \(rideWord($0.mode))" }.joined(separator: ", ")
-            return Travel(icon: most.mode.icon, value: "\(legs.count) rides", caption: kinds)
+            return Travel(icon: most.mode.icon, value: "\(legs.count) rides", caption: RideWording.kinds(legs))
         }
-        let one = most.count == 1
-        let noun = most.mode == .drive ? (one ? "drive" : "drives") : "\(rideWord(most.mode)) \(one ? "ride" : "rides")"
-        return Travel(icon: most.mode.icon, value: "\(most.count)", caption: noun)
-    }
-
-    private static func rideWord(_ mode: TravelMode) -> String {
-        switch mode {
-        case .walk: "walk"
-        case .subway: "subway"
-        case .bus: "bus"
-        case .drive: "drive"
-        }
+        return Travel(icon: most.mode.icon, value: "\(most.count)", caption: RideWording.noun(most.mode, count: most.count))
     }
 }
 

@@ -41,6 +41,7 @@
 		370B1BBA5EC3127C8D4155ED /* SyncReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D14F17A6FC87C91B28D1554 /* SyncReviewTests.swift */; };
 		37B611A100EE191CD0409C2C /* SavedListQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55C59B549330F99057139406 /* SavedListQueryTests.swift */; };
 		3EBD5EACA826F5A6D6731964 /* SavedPostPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C343DED8648F131B64A81DBF /* SavedPostPersistenceTests.swift */; };
+		41DC031C659A6965091AFDED /* RideWordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F67A197BAE3BE154194E0661 /* RideWordingTests.swift */; };
 		4435657B68299E78AD404C75 /* LinkParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB333CD79DB125872198E3A4 /* LinkParsing.swift */; };
 		4819F8E3BB1F34A98A3453AD /* DayPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6194CE06CC90504B47F20BF /* DayPlan.swift */; };
 		494A170F94966DABEB8C705D /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0D8D86876DB353253B402A /* ShareView.swift */; };
@@ -94,6 +95,7 @@
 		9E222E9367AED92EC41D0118 /* VideoEvidenceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7191C0F5D85E96A38F7A0440 /* VideoEvidenceExtractor.swift */; };
 		A6BB9139C67A0E2420BFF6C0 /* AppleReauthorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AE0AC7A49D7795EB817D6F /* AppleReauthorizer.swift */; };
 		A6CC10B3F75C6F24FC7B8455 /* PlanBuilderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504C8B8EFDAB37DFE6540FA9 /* PlanBuilderSheet.swift */; };
+		A725DCBF1897E55DACFD0458 /* RideWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16633FA8AD48A82E013361F0 /* RideWording.swift */; };
 		ABD059E5D3DD7CD3A542FC0B /* SavedPostPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E1A27E0B63AAEF95B99BF2 /* SavedPostPersistence.swift */; };
 		AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA42EFDFC3C4B3021E413BFE /* SampleData.swift */; };
 		B0206DFED4B8F5D6820C4522 /* Manrope-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59AE5E35692BD6722E1B0FFC /* Manrope-Bold.ttf */; };
@@ -198,6 +200,7 @@
 		14B69D681D36152876FB4DBC /* AppleReauthorizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleReauthorizationTests.swift; sourceTree = "<group>"; };
 		15AC2801DC9EA6D58175224D /* AddLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddLinkSheet.swift; sourceTree = "<group>"; };
 		160549CC57FCC01975FCA572 /* AuthCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCopy.swift; sourceTree = "<group>"; };
+		16633FA8AD48A82E013361F0 /* RideWording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideWording.swift; sourceTree = "<group>"; };
 		1E4CA94710BFC17214D4A7E5 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		1FE7AED804D771F4039AE56C /* WelcomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeScreen.swift; sourceTree = "<group>"; };
 		1FEADE27D31DC9BE404E8996 /* AuthenticatedAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedAPI.swift; sourceTree = "<group>"; };
@@ -305,6 +308,7 @@
 		F4EA2889EFD0ED181368F449 /* SavedPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPost.swift; sourceTree = "<group>"; };
 		F605D0A954D4585097AF91B1 /* PlanTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanTimeline.swift; sourceTree = "<group>"; };
 		F6194CE06CC90504B47F20BF /* DayPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayPlan.swift; sourceTree = "<group>"; };
+		F67A197BAE3BE154194E0661 /* RideWordingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideWordingTests.swift; sourceTree = "<group>"; };
 		FB333CD79DB125872198E3A4 /* LinkParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkParsing.swift; sourceTree = "<group>"; };
 		FC163A2DA571246A3967CA6E /* UndoBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoBar.swift; sourceTree = "<group>"; };
 		FC68757C556EA2439B90C22F /* AppClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppClock.swift; sourceTree = "<group>"; };
@@ -530,6 +534,7 @@
 				0B51020694775E70488C05BD /* PlanBuildingTests.swift */,
 				E617A3E3996B4A8A800A2725 /* PlanditStoreTests.swift */,
 				02404D4786292EB10D4AB473 /* PlanEditingTests.swift */,
+				F67A197BAE3BE154194E0661 /* RideWordingTests.swift */,
 				55C59B549330F99057139406 /* SavedListQueryTests.swift */,
 				C343DED8648F131B64A81DBF /* SavedPostPersistenceTests.swift */,
 				E792BAD6BC55F331429035C8 /* StopTimeTests.swift */,
@@ -563,6 +568,7 @@
 				F358ABB1B4DFC14DB5EBD8AA /* CostSheets.swift */,
 				AAC00C8FF2931CB371CEF296 /* EditPlanSheet.swift */,
 				F605D0A954D4585097AF91B1 /* PlanTimeline.swift */,
+				16633FA8AD48A82E013361F0 /* RideWording.swift */,
 				900873E088C5FBF07FCF5247 /* StopDetailView.swift */,
 				C55D01DF203BA000D57AA263 /* StopTimeSheet.swift */,
 				130BEB57FE12B63F0783900B /* TodaySheet.swift */,
@@ -861,6 +867,7 @@
 				73D48A0AD28104A77B823914 /* Pricing.swift in Sources */,
 				D0042643FC621187A32463D4 /* ProfileEditScreens.swift in Sources */,
 				DB5B30AA8B4F3B1FAA596D8B /* ProfileSheet.swift in Sources */,
+				A725DCBF1897E55DACFD0458 /* RideWording.swift in Sources */,
 				C61509BBB72504682D435CF3 /* RootView.swift in Sources */,
 				73938BD2A6979E356613CADD /* RouteService.swift in Sources */,
 				AC05C4D8ACCE514ED5060EB6 /* SampleData.swift in Sources */,
@@ -907,6 +914,7 @@
 				1D1F4CF206B4F980B4C10322 /* PlanBuildingTests.swift in Sources */,
 				6EBB8C74139932A5BEC1D09C /* PlanEditingTests.swift in Sources */,
 				80B1FC38577F76229B5AA280 /* PlanditStoreTests.swift in Sources */,
+				41DC031C659A6965091AFDED /* RideWordingTests.swift in Sources */,
 				37B611A100EE191CD0409C2C /* SavedListQueryTests.swift in Sources */,
 				3EBD5EACA826F5A6D6731964 /* SavedPostPersistenceTests.swift in Sources */,
 				6D047D0F105CE4E684E1424C /* StopTimeTests.swift in Sources */,
