@@ -17,10 +17,14 @@ final class EmptyTodayFlowTests: XCTestCase {
         let firstStop = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Stop 1,'")).firstMatch
         var removed = 0
         while firstStop.waitForExistence(timeout: 3), removed < 10 {
+            let label = firstStop.label
             firstStop.press(forDuration: 1.2)
             let remove = app.buttons["Remove from plan"]
             XCTAssertTrue(remove.waitForExistence(timeout: 3))
             remove.tap()
+            // The removed row stays in the tree during its exit animation: wait it out, or the next
+            // press lands on the dying row and opens no menu.
+            XCTAssertTrue(app.buttons[label].waitForNonExistence(timeout: 3))
             removed += 1
         }
         XCTAssertTrue(app.staticTexts["Nothing planned yet"].waitForExistence(timeout: 3))
