@@ -6,13 +6,17 @@ final class AccountSession {
     let userID: String
     let store: PlanditStore
     let sync: SyncCoordinator?
+    /// Bootstrap seeded a brand-new account: the server had no copy and this phone had no file
+    /// (`SyncDecision.seedAndPush` or `.seedOffline`). Drives the first-run tutorial (D-1).
+    let isNewAccount: Bool
     private let storage: SnapshotStore
 
-    init(userID: String, store: PlanditStore, sync: SyncCoordinator?, storage: SnapshotStore) {
+    init(userID: String, store: PlanditStore, sync: SyncCoordinator?, storage: SnapshotStore, isNewAccount: Bool = false) {
         self.userID = userID
         self.store = store
         self.sync = sync
         self.storage = storage
+        self.isNewAccount = isNewAccount
     }
 
     /// `-skipAuth`: the pre-account file with its sample data, no network at all.
@@ -63,7 +67,8 @@ final class AccountSession {
         var version = previous.version
         var dirty: Bool
         var readOnly = false
-        switch SyncDecision.initial(hasLocalFile: storage.exists, state: previous, remote: remote) {
+        let decision = SyncDecision.initial(hasLocalFile: storage.exists, state: previous, remote: remote)
+        switch decision {
         case .adoptServer(let remoteSnapshot):
             version = remoteSnapshot.version
             if let decoded = try? SnapshotStore.decode(remoteSnapshot.data) {
@@ -109,7 +114,9 @@ final class AccountSession {
             // Kept while read-only: a later bootstrap that can sync again will take it.
             AccountSeed.retireLegacyFile(in: legacyStore)
         }
-        return AccountSession(userID: user.id, store: store, sync: sync, storage: storage)
+        // Saves made before signing in mean this person has used Plandit already.
+        let isNewAccount = decision.seedsNewAccount && legacyPosts.isEmpty
+        return AccountSession(userID: user.id, store: store, sync: sync, storage: storage, isNewAccount: isNewAccount)
     }
 
     /// Detaches the store from the file, the sync and the events API. Idempotent; the session is
@@ -124,5 +131,15 @@ final class AccountSession {
         tearDown()
         sync?.forget()
         storage.reset()
+    }
+}
+
+private extension SyncDecision {
+    /// Nothing on the server or the phone: a fresh seed. Exhaustive, so a new case has to choose.
+    var seedsNewAccount: Bool {
+        switch self {
+        case .seedAndPush, .seedOffline: true
+        case .adoptServer, .keepLocalAndPush, .keepLocalOffline: false
+        }
     }
 }
