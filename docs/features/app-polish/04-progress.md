@@ -8,7 +8,9 @@ added to the brief as D requirements.
 
 ## Attention needed
 
-- PR #28 and #29 merged on November 18. A, D and E were built on 413d299 and need merging onto the new main.
+- PR #28 and #29 merged on November 18. The docs, A, D and E are restacked on the new main (e81d1d0)
+  as `app-polish/docs`, `app-polish/a-bar-profile`, `app-polish/d-saved-list` and
+  `app-polish/e-tutorial`, one PR each, stacked in that order. Nothing is pushed yet.
 - Two walkthrough findings belong to Eldad's planner work and aren't in scope: the planner put a
   "late lunch" after dinner (walkthrough shot 42; a GitHub issue for Eldad once approved), and
   Today's times disagree by 1 to 3 minutes (W-17 rechecks after #28, or moves to 1.0.2).
@@ -18,9 +20,9 @@ added to the brief as D requirements.
   is pushed once the server answers, and `PUT /api/me/snapshot/` doesn't check versions, so it
   can replace the real cloud copy. A Render cold start longer than the 30 s fetch timeout is
   enough. It needs its own issue (not opened yet).
-- `MapAndBudgetFlowTests.testReorderingTheStopsAhead` fails on 413d299 too, so none of these
-  slices caused it. Its cause isn't settled: the time of day (the sample stop is "Done or
-  underway" after about 2:30 PM) or how iOS 27.2 labels the reorder control. Slice C looks at it.
+- `MapAndBudgetFlowTests.testReorderingTheStopsAhead` fails on main too. Cause: #29 put the stop's
+  number and time into the reorder control's accessibility label, so the test's exact match broke.
+  Slice C fixes the test (1b625e3); until C is stacked, the integrated UI run is 55/56.
 
 ## Documents
 
@@ -41,10 +43,11 @@ added to the brief as D requirements.
 | Human approval | Done | Abraham, November 18, in chat |
 | Persona round 3 (D rows) | Done | Five approvals; Marcus's must_fix (Skip ends the tutorial) fixed |
 | Build D (Saved list) | Built, reviewed, fixes re-reviewed | `feature/polish-saved-list`; 261 unit tests, targeted UI 16/16. W-9 proved by screenshot 09 (the test only checks the label) |
-| Build A (bar, Profile, logo) | Built; xhigh review done (no account or data-loss bugs); fixing 7 findings | `feature/polish-bar-profile`, 5 commits; 261 unit tests, UI 30/31 (the reorder test, which also fails on the base) |
-| Build E (tutorial) | Built, reviewed (pass); fixing review findings | `feature/polish-tutorial`; review: interrupted tutorial, pre-account saves, AX5, iPad width, double-tap |
-| Build C (sheets and Today) | In progress | `feature/polish-today`, from main e81d1d0 |
-| Build B (share and processing) | Waiting | A and D merged onto main |
+| Build A (bar, Profile, logo) | Built; xhigh review done (no account or data-loss bugs); 7 findings fixed. The last fix commits are checked in the final review | `feature/polish-bar-profile`; 268 unit tests, ProfileFlowTests 10/10 |
+| Build E (tutorial) | Built, reviewed, fixes re-reviewed | `feature/polish-tutorial`; 278 unit tests; FirstRunTutorialTests 19, TutorialFlowTests 12, twice each |
+| Integration (docs, A, D, E on main) | Done | 319 unit tests; UI 55/56 (the reorder test, fixed in C); share extension builds |
+| Build C (sheets and Today) | Built (W-1, W-15, W-16, W-17, reorder test); reviewed; fixing findings | `feature/polish-today`, from main e81d1d0; 293/293 before the fixes |
+| Build B (share and processing) | In progress | `app-polish/b-share`, from `app-polish/e-tutorial` |
 | Reviews and flow walk | Not started | |
 | Release | Not started | |
 
@@ -65,3 +68,4 @@ added to the brief as D requirements.
 | Nov 18 | The team asked for SVG Repo icons instead of the watercolor category pictures. SVG Repo blocked automated downloads, so the same Phosphor duotone icons (MIT) came from Phosphor's own package. Built in slice D (daed2a8). The glossy P stays as the app icon and logo. |
 | Nov 18 | PR #28 and #29 merged; slice C started from main. |
 | Nov 18 | Slice A reviewed at xhigh: account actions safe. Fixing: past-plan rounding, stat alignment and word breaks, Profile map framing, case-insensitive neighborhoods, dead code, README. Empty Today at half height moved to slice C. Recorded, not fixed: a 1.0 phone drops `fares` from synced past plans (last writer wins); the iPad mini zoom on a selected pin. |
+| Nov 18 | Kept the 80 km cap on the map. A, D and E restacked onto main; the undo bar from #29 sits just above the new tab bar. Slice B started. |
