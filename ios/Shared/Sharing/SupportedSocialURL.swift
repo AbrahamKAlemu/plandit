@@ -12,7 +12,7 @@ enum SupportedSocialURLError: LocalizedError, Equatable {
         case .insecure:
             "Use an HTTPS TikTok or Instagram link."
         case .credentials, .port, .unsupportedHost, .unsupportedPath:
-            "Use a TikTok video or Instagram Reel link."
+            "Use a link to a TikTok or an Instagram post or Reel."
         }
     }
 }

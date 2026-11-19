@@ -33,7 +33,7 @@ struct AddLinkSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.md) {
-                    Text("Paste a TikTok or Instagram Reel link. We'll add the place to your map with its price and hours.")
+                    Text("Paste a TikTok or Instagram post or Reel link. We'll add the place to your map with its price and hours.")
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -84,7 +84,7 @@ struct AddLinkSheet: View {
 
                     VStack(alignment: .leading, spacing: Space.xs) {
                         Text("Use a video").font(.label).foregroundStyle(.ink)
-                        Text("If the link does not include enough detail, choose a video you are allowed to share. Plandit reads it on this device and deletes the temporary copy.")
+                        Text("If the link doesn't include enough detail, choose a video you are allowed to share. Plandit reads it on this device and deletes the temporary copy.")
                             .font(.bodyText)
                             .foregroundStyle(.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -160,7 +160,7 @@ struct AddLinkSheet: View {
 
     private func save() {
         guard let url = LinkParser.firstWebURL(in: text) else {
-            errorMessage = "Paste a TikTok video or Instagram Reel link."
+            errorMessage = "Paste a link to a TikTok or an Instagram post or Reel."
             return
         }
         do {

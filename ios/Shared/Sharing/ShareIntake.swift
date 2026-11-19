@@ -36,9 +36,11 @@ nonisolated enum ShareProblem: Equatable, Sendable {
 
     var message: String {
         switch self {
-        case .unsupportedLink, .noLink, .notVideo: Self.whatWorks
-        case .videoTooLarge: "Plandit saves videos up to 250 MB. You can also share a TikTok or an Instagram post or Reel."
-        case .videosUnavailable: "This build of Plandit can't keep videos. Share a TikTok or an Instagram post or Reel instead."
+        case .unsupportedLink: "That link isn't from TikTok or Instagram. You can add any place by name in Plandit."
+        case .noLink: "This share didn't include a link or a video."
+        case .notVideo: Self.whatWorks
+        case .videoTooLarge: "Try a shorter video, up to 250 MB. You can also share a TikTok or an Instagram post or Reel."
+        case .videosUnavailable: "Plandit can't save videos right now. Share a TikTok or an Instagram post or Reel instead."
         case .videoNotSaved: "Try sharing it again. \(Self.whatWorks)"
         }
     }
