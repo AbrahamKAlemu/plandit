@@ -63,9 +63,8 @@ struct TutorialView: View {
 
     private var header: some View {
         HStack(spacing: Space.sm) {
-            // A logo, read as "Plandit": past the standard sizes it would crowd Skip, so it stops growing.
-            TutorialWordmark()
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            // The app's logo, read as "Plandit". It keeps its size at every text size, so it never crowds Skip.
+            BrandLockup(markSize: 32)
             Spacer(minLength: Space.sm)
             Button(action: onFinish) {
                 Text("Skip")
@@ -99,25 +98,6 @@ struct TutorialView: View {
             try? await Task.sleep(for: .milliseconds(300))
             isTurning = false
         }
-    }
-}
-
-/// The mark beside "Plandit" in Manrope, colored like the lockup ("it" in emerald).
-private struct TutorialWordmark: View {
-    @ScaledMetric(relativeTo: .title2) private var markSize: CGFloat = 32
-
-    var body: some View {
-        HStack(spacing: Space.xs) {
-            BrandArt.markSquare.image
-                .resizable()
-                .scaledToFit()
-                .frame(width: markSize, height: markSize)
-            Text("\(Text("Pland").foregroundStyle(Color.ink))\(Text("it").foregroundStyle(Color.emerald))")
-                .font(.manrope(.extraBold, size: 22, relativeTo: .title2))
-                .lineLimit(1)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Plandit")
     }
 }
 

@@ -39,7 +39,7 @@ to TikTok oEmbed rather than sending an unauthenticated provider request.
 
 Dev launch arguments (Scheme → Run → Arguments): `-startTab saved|profile` and `-startDetent peek|large`.
 
-Appearance follows the device by default. Open **Profile → Settings → Appearance** to choose
+Appearance follows the device by default. Open **Profile → Appearance** to choose
 System, Light, or Dark; the preference also applies to the share extension.
 
 ### Testing Share → Plandit
@@ -75,7 +75,7 @@ Everything follows the *Plandit Style Guide* (October 2026):
 - **Color:** `Shared/DesignSystem/Colors.swift`. Emerald marks the single most important action. Ink is for structure. Red is used only for errors and unavailable states. No gradients, no glass.
 - **Type:** Manrope via `Font.pageHeading`, `.cardHeading`, `.bodyText`, `.label`, `.metadata`, and so on (the mobile scale from the guide).
 - **Icons:** Lucide, through `Icon(.clock)`. To add one, put the SVG from lucide.dev into `Shared/SharedAssets.xcassets/Icons` with stroke width 1.75 and template rendering. The one exception is Saved's category tiles, which use Phosphor duotone icons from `Plandit/Resources/Assets.xcassets/Categories`. Everything else stays Lucide. Don't use SF Symbols in product UI.
-- **Logo:** `BrandLockup` is the logo in the app (splash, Welcome, Profile's footer): the mark, `BrandArt.markSquare`, beside the word "Plandit" drawn in Manrope ExtraBold. `markSquare` is a PNG of 1.0.1's glossy white "P" on a green tile; the share extension shows it on its own. The other `BrandArt` images are 1.0's SVGs.
+- **Logo:** `BrandLockup` is the logo in the app (splash, Welcome, the first-run tutorial, Profile's footer): the mark, `BrandArt.markSquare`, beside the word "Plandit" drawn in Manrope ExtraBold. `markSquare` is a PNG of 1.0.1's glossy white "P" on a green tile; the share extension shows it on its own. The other `BrandArt` images are 1.0's SVGs.
 - **Buttons:** `.buttonStyle(.primary)` (emerald fill, ink label) and `.secondary` (ink outline).
 
 Asset sources:

@@ -65,7 +65,8 @@ enum BrandArt: String {
     var image: Image { Image("Brand/\(rawValue)") }
 }
 
-/// The mark beside the word "Plandit" in Manrope: on the splash screen, Welcome and Profile's footer.
+/// The mark beside the word "Plandit" in Manrope: on the splash screen, Welcome, the first-run
+/// tutorial and Profile's footer.
 /// A logo, so it keeps its size at every Dynamic Type setting.
 struct BrandLockup: View {
     var markSize: CGFloat = 40
