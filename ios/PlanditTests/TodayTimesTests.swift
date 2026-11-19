@@ -140,7 +140,9 @@ import XCTest
             if live.leg.minutes == leg.minutes {
                 XCTAssertNil(planned.update)
             } else {
-                XCTAssertEqual(planned.update, live, "\(leg.minutes) min planned, Apple Maps says \(live.leg.minutes)")
+                var newer = planned.option.leg
+                newer.minutes = live.leg.minutes
+                XCTAssertEqual(planned.update, .init(leg: newer, isLive: true), "\(leg.minutes) min planned, Apple Maps says \(live.leg.minutes)")
             }
 
             let others = rows.filter { !$0.isPlanned }
@@ -188,6 +190,56 @@ import XCTest
         let moved = TimeInterval((update.leg.minutes - leg.minutes) * 60)
         XCTAssertEqual(store.today.stops[destination].start, before[destination].addingTimeInterval(moved))
         assertTimesAgree(store, "after taking Apple Maps' time")
+    }
+
+    // MARK: - Apple Maps' newer time
+
+    func testAppleMapsTimeKeepsTheSubwayLineAndFare() async throws {
+        let store = makeStore()
+        let leg = try XCTUnwrap(store.today.legs.first { $0.detail == "4 and 7 trains" })
+        XCTAssertNotEqual(store.today.state(of: leg), .completed)
+        await store.loadTravelOptions(forLeg: leg.id)
+        let live = try XCTUnwrap(store.travelOptions(forLeg: leg.id).first { $0.leg.mode == .subway })
+        XCTAssertNotEqual(live.leg.minutes, leg.minutes, "the fake Apple Maps differs from the plan")
+
+        let row = try XCTUnwrap(TravelOptionsSheet.rows(store.travelOptions(forLeg: leg.id), planned: leg).first(where: \.isPlanned))
+        let update = try XCTUnwrap(row.update)
+        XCTAssertEqual(update.leg.minutes, live.leg.minutes)
+        XCTAssertEqual(row.liveMinutes, live.leg.minutes, "the line reads Apple Maps' time")
+        XCTAssertEqual(update.leg.detail, "4 and 7 trains", "the line keeps its name")
+        XCTAssertEqual(update.leg.miles, leg.miles)
+        XCTAssertEqual(update.leg.cost, leg.cost)
+        XCTAssertTrue(update.leg.isChosen)
+
+        store.chooseTravel(update)
+        let now = try XCTUnwrap(store.today.legs.first { $0.id == leg.id })
+        XCTAssertEqual(now.summary, "4 and 7 trains · \(live.leg.minutes) min · $2.90")
+    }
+
+    func testAppleMapsTimeForADriveKeepsTheFareAndCountsPickup() async throws {
+        let store = makeStore()
+        let leg = try XCTUnwrap(store.today.legs.last { store.today.state(of: $0) == .upcoming })
+        let from = try XCTUnwrap(store.stop(id: leg.fromStopID))
+        let to = try XCTUnwrap(store.stop(id: leg.toStopID))
+        await store.loadTravelOptions(forLeg: leg.id)
+
+        // A drive planned with its own time and fare, unlike what Apple Maps says now.
+        let live = try XCTUnwrap(store.travelOptions(forLeg: leg.id).first { $0.leg.mode == .drive })
+        var planned = live.leg
+        planned.minutes = live.leg.minutes - 4
+        planned.cost = 23
+        planned.miles = live.leg.miles + 0.4
+        store.chooseTravel(.init(leg: planned, isLive: false))
+        planned = try XCTUnwrap(store.today.legs.first { $0.id == leg.id })
+
+        let route = await FakeRoutes().route(.drive, from: from.place.coordinate, to: to.place.coordinate)
+        let appleMaps = try XCTUnwrap(route)
+        let row = try XCTUnwrap(TravelOptionsSheet.rows(store.travelOptions(forLeg: leg.id), planned: planned).first(where: \.isPlanned))
+        let update = try XCTUnwrap(row.update)
+        XCTAssertEqual(row.liveMinutes, appleMaps.minutes, "the line reads Apple Maps' own driving time")
+        XCTAssertEqual(update.leg.minutes, appleMaps.minutes + TravelLeg.pickupMinutes, "the day counts the wait for pickup")
+        XCTAssertEqual(update.leg.cost, 23, "the fare stays the plan's")
+        XCTAssertEqual(update.leg.miles, planned.miles)
     }
 
     func testRestOfTheDayKeepsTheTimesOfTripsAlreadyMadeThatWay() async throws {

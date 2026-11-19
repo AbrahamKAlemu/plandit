@@ -64,8 +64,8 @@ struct TravelOptionsSheet: View {
                         ) {
                             withAnimation(.snappy) { store.chooseTravel(row.option) }
                         }
-                        if let update = row.update {
-                            LiveTimeButton(update: update, preview: store.previewTravel(update), destination: to) {
+                        if let update = row.update, let minutes = row.liveMinutes {
+                            LiveTimeButton(minutes: minutes, preview: store.previewTravel(update), destination: to) {
                                 withAnimation(.snappy) { store.chooseTravel(update) }
                             }
                         }
@@ -120,6 +120,12 @@ struct TravelOptionsSheet: View {
         /// only way that time reaches the day.
         var update: PlanditStore.TravelOption?
         var id: TravelMode { option.id }
+        /// The time "Apple Maps now says": Apple Maps' own, so a drive leaves out the wait for
+        /// pickup that the day still counts.
+        var liveMinutes: Int? {
+            guard let update else { return nil }
+            return update.leg.minutes - (update.leg.mode == .drive ? TravelLeg.pickupMinutes : 0)
+        }
 
         /// Where the row's time comes from.
         var source: String {
@@ -131,13 +137,19 @@ struct TravelOptionsSheet: View {
     /// The way the trip is planned shows the plan's own time, so it matches the timeline and the
     /// stop times, with Apple Maps' newer time offered under it; the other ways show Apple Maps
     /// times when they've loaded. Opening this sheet never moves the day. Picking the planned row
-    /// again keeps its time and marks it as the user's pick.
+    /// again keeps its time and marks it as the user's pick. Apple Maps' newer time changes only
+    /// the minutes: the line, distance and fare stay the plan's.
     static func rows(_ options: [PlanditStore.TravelOption], planned: TravelLeg) -> [Row] {
         options.map { option in
             guard option.leg.mode == planned.mode else { return Row(option: option, isPlanned: false) }
             var kept = planned
             kept.isChosen = true
-            let update = option.isLive && option.leg.minutes != planned.minutes ? option : nil
+            var update: PlanditStore.TravelOption?
+            if option.isLive, option.leg.minutes != planned.minutes {
+                var newer = kept
+                newer.minutes = option.leg.minutes
+                update = PlanditStore.TravelOption(leg: newer, isLive: true)
+            }
             return Row(option: PlanditStore.TravelOption(leg: kept, isLive: false), isPlanned: true, update: update)
         }
     }
@@ -225,7 +237,8 @@ private struct OptionRow: View {
 /// Under the planned way, when Apple Maps' time for it has changed: "Apple Maps now says 24 min".
 /// Tapping it uses that time and moves the stops after the trip.
 private struct LiveTimeButton: View {
-    let update: PlanditStore.TravelOption
+    /// Apple Maps' own time for the trip.
+    let minutes: Int
     /// The day with Apple Maps' time.
     let preview: DayPlan
     let destination: PlanStop
@@ -235,7 +248,7 @@ private struct LiveTimeButton: View {
         Button(action: apply) {
             HStack(spacing: Space.xxs) {
                 Icon(.clock, size: 14)
-                Text("Apple Maps now says \(update.leg.minutes) min")
+                Text("Apple Maps now says \(minutes) min")
                 Spacer(minLength: 0)
             }
             .font(.label)
