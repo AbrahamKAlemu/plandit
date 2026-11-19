@@ -100,6 +100,51 @@ final class ShareFlowTests: XCTestCase {
         XCTAssertGreaterThan(remove.frame.minY, sourceBottom)
     }
 
+    /// Typing a place name: the tab bar steps aside for the keyboard instead of riding up over
+    /// Search, and comes back when the keyboard goes.
+    @MainActor func testTypingAPlaceNameHidesTheBarAndKeepsSearchReachable() {
+        let app = launch(["-seedShares", "1", "-fakeExtraction", "fail", "-startDetent", "large"])
+        let name = app.textFields["place-search-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 15))
+        let bar = app.descendants(matching: .any)["tab-bar"]
+        XCTAssertTrue(bar.isHittable, "the bar shows before typing")
+
+        name.tap()
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        name.typeText("Levain")
+
+        XCTAssertTrue(waitUntil { !(bar.exists && bar.isHittable) }, "the bar steps aside while the keyboard is up")
+        let search = app.buttons["search-for-place"]
+        // One scroll if Search sits behind the keyboard: a slow drag by just that much, since a
+        // swipe flings past it.
+        let overlap = search.frame.maxY - keyboard.frame.minY
+        if overlap > 0 {
+            let start = app.staticTexts["We couldn't find a place"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -(overlap + 60))),
+                        withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        XCTAssertTrue(search.isHittable, "Search can be tapped")
+        XCTAssertLessThanOrEqual(search.frame.maxY, keyboard.frame.minY, "Search is above the keyboard")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "keyboard-up"
+        shot.lifetime = .keepAlways
+        add(shot)
+
+        name.typeText("\n")
+        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(waitUntil { bar.exists && bar.isHittable }, "the bar is back")
+    }
+
+    @MainActor private func waitUntil(timeout: TimeInterval = 3, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return condition()
+    }
+
     @MainActor func testTryAgainSearchesOnceMore() {
         let app = launch(["-seedShares", "1", "-fakeExtraction", "fail", "-startDetent", "large"])
 

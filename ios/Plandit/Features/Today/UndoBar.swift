@@ -34,7 +34,9 @@ struct UndoBar: View {
                 .padding(.horizontal, Space.md)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .task(id: undo.id) {
-                    try? await Task.sleep(for: .seconds(Self.seconds))
+                    // Cancelled when the bar steps aside for the keyboard: keep the undo, and give
+                    // it its full time again when the bar comes back.
+                    do { try await Task.sleep(for: .seconds(Self.seconds)) } catch { return }
                     withAnimation(.snappy) { store.dismissUndo(undo.id) }
                 }
             }

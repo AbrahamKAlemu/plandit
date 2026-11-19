@@ -153,16 +153,27 @@ struct RootView: View {
 private struct SheetContainer: View {
     @Environment(SheetRouter.self) private var router
     @Environment(PlanditStore.self) private var store
+    /// While the keyboard is up the bar steps aside, so the stacks reach down to the keyboard and a
+    /// field's button (Search, Save) isn't hidden behind the tab bar.
+    @State private var isKeyboardUp = false
 
     var body: some View {
         @Bindable var router = router
         VStack(spacing: 0) {
             stacks
             // The undo bar sits between the stacks and the tab bar, so it never covers a screen's last item.
-            VStack(spacing: Space.xs) {
-                UndoBar()
-                PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+            if !isKeyboardUp {
+                VStack(spacing: Space.xs) {
+                    UndoBar()
+                    PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+                }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardUp = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardUp = false
         }
         // A place added to Saved, by an exact match or a pick, from the list or a post (PRC-7).
         // Here, always on screen, rather than under a pushed post, so each one plays exactly once.
