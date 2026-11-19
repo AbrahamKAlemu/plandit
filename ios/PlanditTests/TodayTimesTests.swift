@@ -92,6 +92,34 @@ import XCTest
         assertTimesAgree(store, "a saved place added")
     }
 
+    /// The day's other edits, on a day that ends by evening (the sample day).
+    func testRestOfDayRunningLateUndoAndNotHereYetNeverStartAStopBeforeItsEarliestArrival() async throws {
+        let store = makeStore()
+        for leg in store.today.legs { await store.loadTravelOptions(forLeg: leg.id) }
+
+        store.chooseTravelForRestOfDay(.subway)
+        assertTimesAgree(store, "the subway the rest of the day")
+        store.chooseTravelForRestOfDay(.walk)
+        assertTimesAgree(store, "walking the rest of the day")
+
+        // Running late: the rest of the day starts from now, then the change is undone.
+        let next = try XCTUnwrap(store.today.stops.first { $0.status == .upcoming })
+        let beforeLate = store.today
+        store.startRestFromNow(now: next.start.addingTimeInterval(45 * 60))
+        XCTAssertNotEqual(store.today.stops.map(\.start), beforeLate.stops.map(\.start), "the day moved later")
+        assertTimesAgree(store, "the rest of the day started from now")
+        store.undoLastChange()
+        XCTAssertEqual(store.today.stops.map(\.start), beforeLate.stops.map(\.start))
+        assertTimesAgree(store, "undone")
+
+        // "I'm here" at the next stop, then "Not here yet": it's planned again, at its planned time.
+        store.arrive(at: next.id)
+        store.leave(next.id)
+        XCTAssertEqual(store.stop(id: next.id)?.status, .upcoming)
+        XCTAssertEqual(store.stop(id: next.id)?.start, next.start)
+        assertTimesAgree(store, "not here yet")
+    }
+
     // MARK: - Timeline and travel sheet
 
     func testTravelSheetShowsTheTripAsPlannedOnceAppleMapsAnswers() async throws {
