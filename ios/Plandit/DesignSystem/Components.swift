@@ -5,6 +5,7 @@ struct SheetHeader<Trailing: View>: View {
     let title: String
     var subtitle: String?
     @ViewBuilder var trailing: () -> Trailing
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(alignment: .center, spacing: Space.sm) {
@@ -17,7 +18,8 @@ struct SheetHeader<Trailing: View>: View {
                     Text(subtitle)
                         .font(.metadata)
                         .foregroundStyle(.inkMuted)
-                        .lineLimit(1)
+                        // One line at standard sizes; at accessibility sizes the whole date shows.
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
             }
             Spacer(minLength: 0)

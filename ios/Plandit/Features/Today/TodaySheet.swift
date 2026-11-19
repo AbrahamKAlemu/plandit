@@ -8,6 +8,7 @@ struct TodaySheet: View {
     @State private var isAddingLink = false
     @State private var isShowingBudget = false
     @State private var isEditingPlan = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let plan = store.today
@@ -58,8 +59,13 @@ struct TodaySheet: View {
                                     } label: {
                                         HStack(spacing: Space.xs) {
                                             Icon(store.travelMode(into: next.id).icon, size: 18)
-                                            Text("Directions to \(next.place.name)").lineLimit(1)
+                                            // One line at standard sizes; at accessibility sizes the place name wraps
+                                            // instead of being cut off.
+                                            Text("Directions to \(next.place.name)")
+                                                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                                .multilineTextAlignment(.center)
                                         }
+                                        .padding(.vertical, typeSize.isAccessibilitySize ? Space.xs : 0)
                                     }
                                     .buttonStyle(.primary)
                                     .transition(.opacity)
