@@ -264,7 +264,7 @@ private struct PickRow: View {
                             .foregroundStyle(.inkMuted)
                             .lineLimit(1)
                     }
-                    Text(post.savedAgoText())
+                    Text(post.savedWhenText())
                         .font(.metadata)
                         .foregroundStyle(.inkMuted)
                         .lineLimit(1)

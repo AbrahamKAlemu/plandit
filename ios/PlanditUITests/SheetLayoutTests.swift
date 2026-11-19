@@ -46,6 +46,22 @@ final class SheetLayoutTests: XCTestCase {
         UITestScrolling.assertAboveBar(last, in: app)
     }
 
+    @MainActor func testSavedLastRowScrollsAboveTheBar() {
+        let app = launch(["-startTab", "saved", "-startDetent", "large"])
+        // Newest first, so the tram (saved 20 days ago) is the last row.
+        let last = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-row-' AND label CONTAINS 'Roosevelt Island Tram'")).firstMatch
+        XCTAssertTrue(app.staticTexts["Levain Bakery"].firstMatch.waitForExistence(timeout: 5))
+        var swipes = 0
+        while !last.exists, swipes < 10 {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(last.waitForExistence(timeout: 3))
+        UITestScrolling.scrollToEnd(watching: last, in: app)
+        UITestScrolling.assertAboveBar(last, in: app)
+        XCTAssertTrue(last.isHittable)
+    }
+
     @MainActor func testEmptyTodaysPlanButtonIsAboveTheBarAfterExpanding() {
         // Empty the sample day through each stop's menu, then reopen at half height. The first
         // swipe there expands the sheet to full height (the system sheet resizes before it

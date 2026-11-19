@@ -143,23 +143,36 @@ extension SavedPost {
         }
     }
 
-    var sourceLine: String {
-        let parts = [platform.displayName, creatorHandle, savedAt.relativeDayText]
-        return parts.compactMap { $0 }.joined(separator: " · ")
+    /// When it was saved: "Today", "Yesterday", "3 days ago" up to 6 days, then "Nov 6" ("Nov 6, 2025"
+    /// in an earlier year). Every saved date in the app reads this way (W-10).
+    func savedAgoText(now: Date = .now, calendar: Calendar = .current) -> String {
+        let days = savedDaysAgo(now: now, calendar: calendar)
+        switch days {
+        case ..<1: return "Today"
+        case 1: return "Yesterday"
+        case 2...6: return "\(days) days ago"
+        default:
+            var style = Date.FormatStyle(locale: calendar.locale ?? .current, calendar: calendar, timeZone: calendar.timeZone)
+                .month(.abbreviated).day()
+            if calendar.component(.year, from: savedAt) != calendar.component(.year, from: now) {
+                style = style.year()
+            }
+            return savedAt.formatted(style)
+        }
     }
 
-    /// "Saved today", "Saved yesterday", "Saved 3 days ago", "Saved 2 weeks ago", "Saved 4 months ago".
-    /// Shown when picking places so an old save (maybe a pop-up that's over) stands out.
-    func savedAgoText(now: Date = .now, calendar: Calendar = .current) -> String {
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: savedAt), to: calendar.startOfDay(for: now)).day ?? 0
-        switch days {
-        case ..<1: return "Saved today"
-        case 1: return "Saved yesterday"
-        case 2..<14: return "Saved \(days) days ago"
-        case 14..<60: return "Saved \(days / 7) weeks ago"
-        case 60..<365: return "Saved \(days / 30) months ago"
-        default: return days < 730 ? "Saved over a year ago" : "Saved \(days / 365) years ago"
+    /// The same date with "Saved" in front, for rows where a bare date would be unclear:
+    /// "Saved today", "Saved yesterday", "Saved 3 days ago", "Saved Nov 6".
+    func savedWhenText(now: Date = .now, calendar: Calendar = .current) -> String {
+        switch savedDaysAgo(now: now, calendar: calendar) {
+        case ..<1: "Saved today"
+        case 1: "Saved yesterday"
+        default: "Saved \(savedAgoText(now: now, calendar: calendar))"
         }
+    }
+
+    private func savedDaysAgo(now: Date, calendar: Calendar) -> Int {
+        calendar.dateComponents([.day], from: calendar.startOfDay(for: savedAt), to: calendar.startOfDay(for: now)).day ?? 0
     }
 
     /// Has a place we can pin and add to a plan.

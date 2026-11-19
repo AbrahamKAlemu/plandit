@@ -31,12 +31,4 @@ extension Date {
     var shortDay: String { formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) }
     /// "Saturday, October 10".
     var longDay: String { formatted(.dateTime.weekday(.wide).month(.wide).day()) }
-
-    /// "Today", "Yesterday", or "Oct 5".
-    var relativeDayText: String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(self) { return "Today" }
-        if calendar.isDateInYesterday(self) { return "Yesterday" }
-        return formatted(.dateTime.month(.abbreviated).day())
-    }
 }
