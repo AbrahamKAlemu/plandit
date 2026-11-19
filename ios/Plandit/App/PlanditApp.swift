@@ -134,20 +134,21 @@ private struct PlanditRoot: View {
             .preferredColorScheme(appearance.mode.colorScheme)
             .accessibilityIdentifier("appearance-\(appearance.mode.rawValue)")
             .task {
-                store.removeExpiredTemporaryMedia()
                 await store.loadRoutes()
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 switch phase {
                 case .active:
                     store.rollOverIfNeeded()
-                    // Coming back from "Share → Plandit": take the user straight to what they just saved.
-                    let incoming = store.ingestPendingShares()
-                    if incoming.count == 1, let id = incoming.first {
-                        router.showPost(id)
-                    } else if !incoming.isEmpty {
-                        router.show(.saved)
-                    }
+                    // Unread shared videos older than a day go first (SHR-3); a share whose video
+                    // went this way still arrives, asking for the video again.
+                    store.removeExpiredTemporaryMedia()
+#if DEBUG
+                    ShareInbox.seedFromLaunchArguments()
+#endif
+                    // Coming back from "Share → Plandit": one share opens its post, several open
+                    // Saved with them on top; none leaves the app where it was (PRC-1).
+                    router.showShares(store.ingestPendingShares())
                     if let sync {
                         Task { await sync.appBecameActive() }
                     }

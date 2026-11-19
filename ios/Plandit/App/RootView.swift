@@ -45,6 +45,10 @@ struct RootView: View {
             frameMap()
         }
         .onChange(of: detent) { frameMap() }
+        // New shares rise from the peek to half height so they're seen (PRC-1).
+        .onChange(of: router.sharesShown) {
+            if detent == SheetDetent.peek { detent = .medium }
+        }
         .onChange(of: sheetColumns) { frameMap(animated: false) }
         .onChange(of: store.today.stops.count) {
             if tab == .today { frameMap() }
