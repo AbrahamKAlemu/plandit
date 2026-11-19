@@ -241,6 +241,61 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertEqual(s.post(id: post.id)?.failureMessage, VideoEvidenceError.unsupportedType.errorDescription)
     }
 
+    // MARK: - Sync during an in-app read (nice-to-have 7)
+
+    /// A video chosen in the app is being read when a sync arrives: it keeps looking.
+    @MainActor func testSyncDuringAnInAppVideoReadLeavesThePostLooking() async throws {
+        let reader = GatedVideoReader()
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: reader)
+        let file = directory.appending(path: "picked.mov")
+        try Data(count: 512).write(to: file)
+        let task = Task { try await s.saveVideo(fileURL: file) }
+        try await waitUntil { reader.continuation != nil }
+        let id = try XCTUnwrap(s.saved.first?.id)
+
+        s.replace(with: StoreSnapshot(saved: s.saved, today: s.today, profile: s.profile, pastPlans: [], visited: []))
+
+        XCTAssertEqual(s.post(id: id)?.status, .processing)
+        XCTAssertNotEqual(s.post(id: id)?.failureMessage, PlanditStore.shareVideoAgainMessage)
+        reader.continuation?.resume()
+        _ = try? await task.value
+    }
+
+    /// The same for "Choose the video again" on a post that asked for it.
+    @MainActor func testSyncDuringAVideoChosenAgainLeavesThePostLooking() async throws {
+        let reader = GatedVideoReader()
+        let post = SavedPost(url: URL(string: "plandit-video://again")!, platform: .video, savedAt: .now,
+                             status: .needsEvidence, failureMessage: PlanditStore.shareVideoAgainMessage)
+        let s = PlanditStore(
+            today: DayPlan(date: .now, title: "Test", budget: 60, stops: [], legs: []),
+            saved: [post], profile: SampleData.profile, pastPlans: [], visited: [],
+            extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil),
+            videoExtractor: reader, mediaStore: mediaStore
+        )
+        let file = directory.appending(path: "picked.mov")
+        try Data(count: 512).write(to: file)
+        let task = Task { try await s.processVideo(postID: post.id, fileURL: file) }
+        try await waitUntil { reader.continuation != nil }
+
+        s.replace(with: StoreSnapshot(saved: s.saved, today: s.today, profile: s.profile, pastPlans: [], visited: []))
+
+        XCTAssertEqual(s.post(id: post.id)?.status, .processing)
+        reader.continuation?.resume()
+        _ = try? await task.value
+    }
+
+    /// Another phone's copy arrives with a video post it's still reading: this phone leaves it
+    /// looking. Only a launch turns it into "Share the video again".
+    @MainActor func testAVideoAnotherPhoneIsReadingStaysLookingAfterSync() {
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil), video: GatedVideoReader())
+        let elsewhere = SavedPost(url: URL(string: "plandit-video://elsewhere")!, platform: .video, savedAt: .now, status: .processing)
+
+        s.replace(with: StoreSnapshot(saved: [elsewhere], today: s.today, profile: s.profile, pastPlans: [], visited: []))
+
+        XCTAssertEqual(s.post(id: elsewhere.id)?.status, .processing)
+        XCTAssertNil(s.post(id: elsewhere.id)?.failureMessage)
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))

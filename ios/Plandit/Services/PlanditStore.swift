@@ -115,16 +115,17 @@ final class PlanditStore {
         legPaths = [:]
         persistNow()
         rollOverIfNeeded()
-        resumeInterruptedLookups()
+        resumeInterruptedLookups(convertsVideos: false)
         Task { await loadRoutes() }
     }
 
     /// Posts left looking for their place (the app quit, or another phone's copy arrived): a link
-    /// looks again; a video asks to be shared again, since its copy may be gone (PRC-8).
-    private func resumeInterruptedLookups() {
+    /// looks again. At launch, a video asks to be shared again, since its copy may be gone (PRC-8).
+    /// After a sync it's left looking: this phone may be reading it, or the phone that sent it may.
+    private func resumeInterruptedLookups(convertsVideos: Bool = true) {
         for post in saved where post.status == .processing {
             if post.platform == .video {
-                guard !readingVideos.contains(post.id), !inFlight.contains(post.id) else { continue }
+                guard convertsVideos, !readingVideos.contains(post.id), !inFlight.contains(post.id) else { continue }
                 updateAndPersist(post.id) {
                     $0.status = .needsEvidence
                     $0.failureMessage = Self.shareVideoAgainMessage
@@ -619,6 +620,8 @@ final class PlanditStore {
         try persistSaved(updated)
         saved = updated
 
+        readingVideos.insert(id)
+        defer { readingVideos.remove(id) }
         do {
             try await applyVideoEvidence(postID: id, fileURL: fileURL)
         } catch {
@@ -638,6 +641,8 @@ final class PlanditStore {
         }) else {
             throw SavedPlacePersistenceError()
         }
+        readingVideos.insert(postID)
+        defer { readingVideos.remove(postID) }
         do {
             try await applyVideoEvidence(postID: postID, fileURL: fileURL)
         } catch {
