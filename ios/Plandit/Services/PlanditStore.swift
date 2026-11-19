@@ -498,9 +498,15 @@ final class PlanditStore {
         } catch {
             updateAndPersist(postID) {
                 $0.status = .needsEvidence
-                $0.failureMessage = error.localizedDescription
+                $0.failureMessage = Self.videoFailureMessage(error)
             }
         }
+    }
+
+    /// What a video post says when its video couldn't be read: our own reasons as they are; a
+    /// system error (the file vanished, say) never reaches the synced post, it asks for the video again.
+    private static func videoFailureMessage(_ error: any Error) -> String {
+        (error as? VideoEvidenceError)?.errorDescription ?? shareVideoAgainMessage
     }
 
     @discardableResult
@@ -637,7 +643,7 @@ final class PlanditStore {
         } catch {
             updateAndPersist(postID) {
                 $0.status = .needsEvidence
-                $0.failureMessage = error.localizedDescription
+                $0.failureMessage = Self.videoFailureMessage(error)
             }
             throw error
         }

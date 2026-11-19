@@ -206,6 +206,41 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: reading.path))
     }
 
+    // MARK: - Raw errors in synced messages (nice-to-have 6)
+
+    /// The video goes missing mid-read: the post asks for it again, not "The file … couldn't be opened".
+    @MainActor func testAVideoThatVanishesAsksForItAgainWithoutASystemError() async throws {
+        let s = store(extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil),
+                      video: VideoEvidenceExtractor(mediaStore: mediaStore))
+        _ = try stageSharedVideo()
+        let id = try XCTUnwrap(s.ingestPendingShares().first)
+        for file in mediaFiles() { try FileManager.default.removeItem(at: file) }
+        try await waitUntil { s.post(id: id)?.status != .processing }
+
+        XCTAssertEqual(s.post(id: id)?.status, .needsEvidence)
+        XCTAssertEqual(s.post(id: id)?.failureMessage, PlanditStore.shareVideoAgainMessage)
+    }
+
+    /// Choosing a video in the app that isn't there: the same, and our own reasons stay as they are.
+    @MainActor func testProcessVideoKeepsOurReasonsAndHidesSystemErrors() async throws {
+        let post = SavedPost(url: URL(string: "plandit-video://test")!, platform: .video, savedAt: .now,
+                             status: .needsEvidence, failureMessage: PlanditStore.shareVideoAgainMessage)
+        let s = PlanditStore(
+            today: DayPlan(date: .now, title: "Test", budget: 60, stops: [], legs: []),
+            saved: [post], profile: SampleData.profile, pastPlans: [], visited: [],
+            extractor: FixturePlaceExtractor(metadataProvider: nil, placeSearcher: nil),
+            videoExtractor: VideoEvidenceExtractor(mediaStore: mediaStore), mediaStore: mediaStore
+        )
+        let missing = directory.appending(path: "missing.mov")
+        _ = try? await s.processVideo(postID: post.id, fileURL: missing)
+        XCTAssertEqual(s.post(id: post.id)?.failureMessage, PlanditStore.shareVideoAgainMessage)
+
+        let text = directory.appending(path: "notes.txt")
+        try Data("hi".utf8).write(to: text)
+        _ = try? await s.processVideo(postID: post.id, fileURL: text)
+        XCTAssertEqual(s.post(id: post.id)?.failureMessage, VideoEvidenceError.unsupportedType.errorDescription)
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))
