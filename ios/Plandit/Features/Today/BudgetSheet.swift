@@ -147,7 +147,7 @@ struct BudgetSheet: View {
                 }
                 VStack(alignment: .leading, spacing: Space.sm) {
                     if !walks.isEmpty {
-                        travelRow(.footprints, "\(RideWording.count(walks.count, .walk)) · \(plan.walkingMiles.milesText)", "Free")
+                        travelRow(.footprints, Self.walksText(walks, miles: plan.walkingMiles), "Free")
                     }
                     if !transit.isEmpty {
                         travelRow(.trainFront, Self.transitText(transit), plan.faresCost.dollarsText)
@@ -162,6 +162,13 @@ struct BudgetSheet: View {
                 .planditCard()
             }
         }
+    }
+
+    /// "3 walks · 1.3 mi", or just "2 walks" when they're too short to round to a tenth of a mile,
+    /// like Today's travel tile.
+    static func walksText(_ walks: [TravelLeg], miles: Double) -> String {
+        let count = RideWording.count(walks.count, .walk)
+        return miles.milesText == 0.0.milesText ? count : "\(count) · \(miles.milesText)"
     }
 
     private func travelRow(_ icon: Lucide, _ title: String, _ cost: String) -> some View {

@@ -404,6 +404,14 @@ final class MapAndBudgetTests: XCTestCase {
         XCTAssertEqual(BudgetSheet.transitText([subway, bus]), "2 rides: 1 subway, 1 bus")
     }
 
+    /// Like Today's travel tile: walks too short to round to a tenth of a mile don't say "0.0 mi".
+    @MainActor func testWalksDropADistanceThatRoundsToZero() {
+        let a = UUID(), b = UUID()
+        let walk = TravelLeg.estimate(.walk, miles: 0.02, fromStopID: a, toStopID: b)
+        XCTAssertEqual(BudgetSheet.walksText([walk, walk], miles: 0.04), "2 walks")
+        XCTAssertEqual(BudgetSheet.walksText([walk], miles: 1.26), "1 walk · 1.3 mi")
+    }
+
     @MainActor func testCostLabelNeverContradictsTheNumber() {
         let food = PriceGuide.typical(.food)
         XCTAssertEqual(BudgetSheet.costSource(20, guide: food), "$15–30 · Typical for food in NYC")
