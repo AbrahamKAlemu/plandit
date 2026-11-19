@@ -6,6 +6,7 @@ import UIKit
 final class ShareViewController: UIViewController {
     private let flow = ShareFlow()
     private var autoClose: Task<Void, Never>?
+    private var saving: Task<Void, Never>?
     private var isFinished = false
 
     override func viewDidLoad() {
@@ -28,13 +29,19 @@ final class ShareViewController: UIViewController {
         TemporaryMediaStore.shared?.removeExpiredFiles()
 
         let items = extensionContext?.inputItems as? [NSExtensionItem] ?? []
-        Task {
+        saving = Task {
             await flow.start(items: items)
             if case .saved = flow.state {
                 UIAccessibility.post(notification: .announcement, argument: "Saved to Plandit")
                 scheduleAutoClose()
             }
         }
+    }
+
+    /// Swiped away while still saving: nothing is queued, and any copy is deleted.
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if flow.state == .saving { saving?.cancel() }
     }
 
     /// About 2 s, unless VoiceOver is on: then it stays until Done or Undo (SHR-5).

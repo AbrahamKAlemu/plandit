@@ -72,7 +72,7 @@ struct ShareIntake {
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
             guard let url = await provider.loadURL() else { continue }
             if url.isFileURL {
-                return stage(fileURL: url)
+                return await stage(fileURL: url)
             }
             sawLink = true
             if let supported = try? SupportedSocialURL(url) {
@@ -105,12 +105,25 @@ struct ShareIntake {
         return await provider.stageMovie(in: mediaStore)
     }
 
-    private func stage(fileURL: URL) -> ShareIntakeResult {
+    private func stage(fileURL: URL) async -> ShareIntakeResult {
         guard let mediaStore else {
             let isMovie = (try? fileURL.resourceValues(forKeys: [.contentTypeKey]).contentType?.conforms(to: .movie)) ?? false
             return .problem(isMovie ? .videosUnavailable : .notVideo)
         }
-        return Self.stage(fileURL, in: mediaStore)
+        return await Self.stageInBackground(fileURL, in: mediaStore)
+    }
+
+    /// A video from Files can be hundreds of megabytes: it's copied off the main actor, so the
+    /// sheet (and its Cancel button) keeps responding.
+    @concurrent
+    private nonisolated static func stageInBackground(_ source: URL, in mediaStore: TemporaryMediaStore) async -> ShareIntakeResult {
+        stage(source, in: mediaStore)
+    }
+
+    /// Deletes the copy a result made, for a share that won't be queued after all.
+    func discard(_ result: ShareIntakeResult) {
+        guard case .video(let fileName) = result, let mediaStore, let file = mediaStore.file(named: fileName) else { return }
+        try? mediaStore.remove(file)
     }
 
     nonisolated static func stage(_ source: URL, in mediaStore: TemporaryMediaStore) -> ShareIntakeResult {
@@ -201,6 +214,12 @@ final class ShareFlow {
     func start(providers: [NSItemProvider], contentText: [String] = []) async {
         state = .saving
         let result = await intake.read(providers, contentText: contentText)
+        // The sheet closed while it was saving: queue nothing, and drop any copy already made.
+        // (Nothing suspends between this check and the enqueue below.)
+        if Task.isCancelled {
+            intake.discard(result)
+            return
+        }
         let share: IncomingShare
         switch result {
         case .problem(let problem):
@@ -227,18 +246,56 @@ final class ShareFlow {
     }
 }
 
+/// An item provider's load, which a cancel may reach before or after it starts.
+private nonisolated final class PendingLoad: @unchecked Sendable {
+    private let lock = NSLock()
+    private var progress: Progress?
+    private var isCancelled = false
+    private var isCompleted = false
+
+    /// True the first time only: a cancelled load can call back twice.
+    func complete() -> Bool {
+        lock.withLock {
+            defer { isCompleted = true }
+            return !isCompleted
+        }
+    }
+
+    func started(_ progress: Progress) {
+        lock.withLock {
+            self.progress = progress
+            if isCancelled { progress.cancel() }
+        }
+    }
+
+    func cancel() {
+        lock.withLock {
+            isCancelled = true
+            progress?.cancel()
+        }
+    }
+}
+
 /// Nonisolated: the provider calls back on its own queue.
 private nonisolated extension NSItemProvider {
-    /// The movie's file only exists inside the callback, so it's copied there.
+    /// The movie's file only exists inside the callback, so it's copied there. Cancelling (the
+    /// sheet closed) stops the load.
     func stageMovie(in mediaStore: TemporaryMediaStore) async -> ShareIntakeResult {
-        await withCheckedContinuation { continuation in
-            _ = loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
-                guard let url else {
-                    continuation.resume(returning: .problem(.videoNotSaved))
-                    return
+        let load = PendingLoad()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let progress = loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
+                    guard load.complete() else { return }
+                    guard let url else {
+                        continuation.resume(returning: .problem(.videoNotSaved))
+                        return
+                    }
+                    continuation.resume(returning: ShareIntake.stage(url, in: mediaStore))
                 }
-                continuation.resume(returning: ShareIntake.stage(url, in: mediaStore))
+                load.started(progress)
             }
+        } onCancel: {
+            load.cancel()
         }
     }
 

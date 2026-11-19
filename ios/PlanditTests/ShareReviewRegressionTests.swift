@@ -351,6 +351,38 @@ final class ShareReviewRegressionTests: XCTestCase {
         XCTAssertTrue(ShareInbox.pending().allSatisfy { share in !first.contains { $0.id == share.id } })
     }
 
+    // MARK: - Closing the sheet while it saves (nice-to-have 10)
+
+    /// The sheet is dismissed while a video from Files is being copied: nothing is queued and no
+    /// copy is left behind.
+    @MainActor func testClosingWhileAFileIsSavingQueuesNothing() async throws {
+        let file = directory.appending(path: "clip.mov")
+        try Data(count: 512).write(to: file)
+        let flow = ShareFlow(intake: ShareIntake(mediaStore: mediaStore))
+
+        let task = Task { await flow.start(providers: [NSItemProvider(object: file as NSURL)]) }
+        task.cancel()
+        await task.value
+
+        XCTAssertTrue(ShareInbox.pending().isEmpty)
+        XCTAssertTrue(mediaFiles().isEmpty)
+    }
+
+    /// The same for a video from Photos (handed over as a movie file).
+    @MainActor func testClosingWhileAMovieIsSavingQueuesNothing() async throws {
+        let file = directory.appending(path: "clip.mov")
+        try Data(count: 512).write(to: file)
+        let provider = try XCTUnwrap(NSItemProvider(contentsOf: file))
+        let flow = ShareFlow(intake: ShareIntake(mediaStore: mediaStore))
+
+        let task = Task { await flow.start(providers: [provider]) }
+        task.cancel()
+        await task.value
+
+        XCTAssertTrue(ShareInbox.pending().isEmpty)
+        XCTAssertTrue(mediaFiles().isEmpty)
+    }
+
     /// A share can't name the `Reading/` folder itself.
     @MainActor func testAShareCantNameTheReadingFolder() {
         XCTAssertNil(mediaStore.file(named: "Reading"))
