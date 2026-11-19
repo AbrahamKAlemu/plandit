@@ -45,8 +45,8 @@ final class MapAndBudgetTests: XCTestCase {
                      extractor: NoExtractor(), storage: storage, routes: routes)
     }
 
-    /// The sample day with its small overlaps removed (the Met ends 12:45, the subway takes 35 min,
-    /// the High Line was at 13:15), so changing one trip moves later stops by exactly the difference.
+    /// The sample day with any overlap removed (the sample has none since W-17), so changing one trip
+    /// moves later stops by exactly the difference.
     @MainActor private func cleanDay() -> DayPlan {
         var plan = SampleData.dayPlan
         for index in plan.stops.indices.dropFirst() {
@@ -402,6 +402,14 @@ final class MapAndBudgetTests: XCTestCase {
         XCTAssertEqual(BudgetSheet.transitText([subway, subway]), "2 subway rides")
         XCTAssertEqual(BudgetSheet.transitText([bus]), "1 bus ride")
         XCTAssertEqual(BudgetSheet.transitText([subway, bus]), "2 rides: 1 subway, 1 bus")
+    }
+
+    /// Like Today's travel tile: walks too short to round to a tenth of a mile don't say "0.0 mi".
+    @MainActor func testWalksDropADistanceThatRoundsToZero() {
+        let a = UUID(), b = UUID()
+        let walk = TravelLeg.estimate(.walk, miles: 0.02, fromStopID: a, toStopID: b)
+        XCTAssertEqual(BudgetSheet.walksText([walk, walk], miles: 0.04), "2 walks")
+        XCTAssertEqual(BudgetSheet.walksText([walk], miles: 1.26), "1 walk · 1.3 mi")
     }
 
     @MainActor func testCostLabelNeverContradictsTheNumber() {

@@ -21,6 +21,7 @@ struct StopCostSheet: View {
             .background(Color.surface)
             .navigationTitle("Cost")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -148,6 +149,7 @@ struct PostCostSheet: View {
             .background(Color.surface)
             .navigationTitle("Cost")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

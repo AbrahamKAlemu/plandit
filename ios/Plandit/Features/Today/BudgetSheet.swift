@@ -46,6 +46,7 @@ struct BudgetSheet: View {
             .background(Color.surface)
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -146,13 +147,13 @@ struct BudgetSheet: View {
                 }
                 VStack(alignment: .leading, spacing: Space.sm) {
                     if !walks.isEmpty {
-                        travelRow(.footprints, "\(count(walks.count, "walk", "walks")) · \(plan.walkingMiles.milesText)", "Free")
+                        travelRow(.footprints, Self.walksText(walks, miles: plan.walkingMiles), "Free")
                     }
                     if !transit.isEmpty {
                         travelRow(.trainFront, Self.transitText(transit), plan.faresCost.dollarsText)
                     }
                     if !drives.isEmpty {
-                        travelRow(.car, count(drives.count, "drive", "drives"), "about \(plan.ridesCost.wholeDollarsText)")
+                        travelRow(.car, RideWording.count(drives.count, .drive), "about \(plan.ridesCost.wholeDollarsText)")
                     }
                     Text("Change how you get between stops by tapping a trip on Today.")
                         .font(.metadata)
@@ -163,6 +164,13 @@ struct BudgetSheet: View {
         }
     }
 
+    /// "3 walks · 1.3 mi", or just "2 walks" when they're too short to round to a tenth of a mile,
+    /// like Today's travel tile.
+    static func walksText(_ walks: [TravelLeg], miles: Double) -> String {
+        let count = RideWording.count(walks.count, .walk)
+        return miles.milesText == 0.0.milesText ? count : "\(count) · \(miles.milesText)"
+    }
+
     private func travelRow(_ icon: Lucide, _ title: String, _ cost: String) -> some View {
         HStack(spacing: Space.sm) {
             Icon(icon, size: 18).foregroundStyle(.ink)
@@ -171,10 +179,6 @@ struct BudgetSheet: View {
             Text(cost).font(.manrope(.bold, size: 16)).foregroundStyle(.ink)
         }
         .accessibilityElement(children: .combine)
-    }
-
-    private func count(_ n: Int, _ one: String, _ many: String) -> String {
-        n == 1 ? "1 \(one)" : "\(n) \(many)"
     }
 
     private func costSource(_ stop: PlanStop) -> String {
@@ -197,13 +201,9 @@ struct BudgetSheet: View {
 
     /// "2 subway rides", "1 bus ride", "2 rides: 1 subway, 1 bus".
     static func transitText(_ legs: [TravelLeg]) -> String {
-        let subway = legs.filter { $0.mode == .subway }.count
-        let bus = legs.filter { $0.mode == .bus }.count
-        switch (subway, bus) {
-        case (_, 0): return subway == 1 ? "1 subway ride" : "\(subway) subway rides"
-        case (0, _): return bus == 1 ? "1 bus ride" : "\(bus) bus rides"
-        default: return "\(subway + bus) rides: \(subway) subway, \(bus) bus"
-        }
+        let counted = RideWording.counts(legs)
+        if counted.count == 1, let only = counted.first { return RideWording.count(only.count, only.mode) }
+        return "\(legs.count) rides: \(RideWording.kinds(legs))"
     }
 }
 

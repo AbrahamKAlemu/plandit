@@ -217,9 +217,32 @@ private struct HiddenWhenSheetCollapsed: ViewModifier {
     }
 }
 
+/// A sheet's navigation bar (Budget, Plan a day, Cost, Getting there…) stays solid surface while
+/// the content scrolls under it: no see-through bar and, on iOS 26 and later, no blurred text
+/// showing through the scroll edge.
+private struct SolidSheetHeader: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .toolbarBackground(Color.surface, for: .navigationBar)
+                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+                .scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            content
+                .toolbarBackground(Color.surface, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+}
+
 extension View {
     func hiddenWhenSheetCollapsed() -> some View {
         modifier(HiddenWhenSheetCollapsed())
+    }
+
+    /// Put on the content inside a sheet's `NavigationStack`, next to `navigationTitle`.
+    func solidSheetHeader() -> some View {
+        modifier(SolidSheetHeader())
     }
 
     /// White surface, 1px border, 16pt radius. No shadow: shadows are reserved for floating sheets.
@@ -260,19 +283,25 @@ extension LegState {
 }
 
 /// What a sheet shows when a section has nothing in it yet: icon, title, one line, and the next step.
+/// `isCompact` is for a sheet's half height, where the next step has to show above the tab bar;
+/// without `showsIcon`, for the shortest sheets, the icon circle goes too.
 struct EmptyState<Action: View>: View {
     let icon: Lucide
     let title: String
     let message: String
+    var isCompact = false
+    var showsIcon = true
     @ViewBuilder var action: () -> Action
 
     var body: some View {
-        VStack(spacing: Space.sm) {
-            Icon(icon, size: 26)
-                .foregroundStyle(.ink)
-                .frame(width: 56, height: 56)
-                .background(Color.canvas, in: Circle())
-                .overlay(Circle().strokeBorder(Color.border))
+        VStack(spacing: isCompact ? Space.xs : Space.sm) {
+            if showsIcon {
+                Icon(icon, size: isCompact ? 22 : 26)
+                    .foregroundStyle(.ink)
+                    .frame(width: isCompact ? 44 : 56, height: isCompact ? 44 : 56)
+                    .background(Color.canvas, in: Circle())
+                    .overlay(Circle().strokeBorder(Color.border))
+            }
             Text(title)
                 .font(.cardHeading)
                 .foregroundStyle(.ink)
@@ -282,10 +311,10 @@ struct EmptyState<Action: View>: View {
                 .foregroundStyle(.inkMuted)
                 .multilineTextAlignment(.center)
             action()
-                .padding(.top, Space.xs)
+                .padding(.top, isCompact ? Space.xxs : Space.xs)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Space.lg)
+        .padding(.vertical, isCompact ? Space.xs : Space.lg)
         .padding(.horizontal, Space.md)
     }
 }

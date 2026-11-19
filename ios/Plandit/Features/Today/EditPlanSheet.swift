@@ -64,6 +64,7 @@ struct EditPlanSheet: View {
             .background(Color.surface)
             .navigationTitle("Edit plan")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

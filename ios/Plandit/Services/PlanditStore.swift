@@ -220,10 +220,11 @@ final class PlanditStore {
     }
 
     /// Walk, subway and drive for a leg, using Apple Maps times already loaded and estimates otherwise.
+    /// A trip planned another way (a bus) keeps that way among them.
     func travelOptions(forLeg id: UUID) -> [TravelOption] {
         guard let leg = today.legs.first(where: { $0.id == id }),
               let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return [] }
-        return TravelMode.choices.map { mode in
+        return Self.travelModes(for: leg).map { mode in
             let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
             return TravelOption(leg: Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place), isLive: live != nil)
         }
@@ -233,9 +234,13 @@ final class PlanditStore {
     func loadTravelOptions(forLeg id: UUID) async {
         guard let leg = today.legs.first(where: { $0.id == id }),
               let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return }
-        for mode in TravelMode.choices {
+        for mode in Self.travelModes(for: leg) {
             _ = await liveRoute(mode, from: from.place, to: to.place)
         }
+    }
+
+    private static func travelModes(for leg: TravelLeg) -> [TravelMode] {
+        TravelMode.allCases.filter { TravelMode.choices.contains($0) || $0 == leg.mode }
     }
 
     /// The day if this trip were made this way: later stops move with the new travel time.
@@ -248,6 +253,7 @@ final class PlanditStore {
     /// Makes this trip this way and moves the rest of the day to match.
     func chooseTravel(_ option: TravelOption) {
         guard today.legs.contains(where: { $0.id == option.leg.id }) else { return }
+        forgetUndo()
         today.setLeg(option.leg)
         legPaths[option.leg.id] = nil
         persist()
@@ -267,9 +273,16 @@ final class PlanditStore {
         persist()
     }
 
-    /// Every trip still ahead goes this way: "Drive everywhere", "Take the subway".
+    /// Every trip still ahead goes this way: "Drive everywhere", "Take the subway". Trips already
+    /// made this way keep their time (only marked as the user's pick), so the timeline doesn't
+    /// jump to Apple Maps' newer times; only trips that change how they're made get a new time.
     func chooseTravelForRestOfDay(_ mode: TravelMode) {
-        for leg in today.legs where today.state(of: leg) != .completed {
+        forgetUndo()
+        for (index, leg) in today.legs.enumerated() where today.state(of: leg) != .completed {
+            if leg.mode == mode {
+                today.legs[index].isChosen = true
+                continue
+            }
             guard let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { continue }
             let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
             today.setLeg(Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place))
@@ -785,6 +798,12 @@ final class PlanditStore {
         self.undo = nil
         persist()
         Task { await loadRoutes() }
+    }
+
+    /// For a change that has no undo of its own: the last one's snapshot predates it, so undoing
+    /// would quietly take this change back too. Clearing it also hides the undo bar.
+    private func forgetUndo() {
+        undo = nil
     }
 
     func dismissUndo(_ id: UUID) {

@@ -21,6 +21,7 @@ struct TravelOptionsSheet: View {
             .background(Color.surface)
             .navigationTitle("Getting there")
             .navigationBarTitleDisplayMode(.inline)
+            .solidSheetHeader()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -36,32 +37,39 @@ struct TravelOptionsSheet: View {
     }
 
     private func content(leg: TravelLeg, from: PlanStop, to: PlanStop) -> some View {
-        let options = store.travelOptions(forLeg: leg.id)
+        let rows = Self.rows(store.travelOptions(forLeg: leg.id), planned: leg)
         let upcomingTrips = store.today.legs.filter { store.today.state(of: $0) != .completed }.count
+        let alreadyLate = Set(store.today.stopsArrivingAfterClose().map(\.id))
         return ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
                 VStack(alignment: .leading, spacing: Space.xxs) {
                     Text("\(from.place.name) to \(to.place.name)")
                         .font(.cardHeading)
                         .foregroundStyle(.ink)
-                    Text(sourceLine(options))
-                        .font(.metadata)
-                        .foregroundStyle(.inkMuted)
-                        .accessibilityIdentifier("travel-source")
+                    if isLoading {
+                        Text("Getting times from Apple Maps…")
+                            .font(.metadata)
+                            .foregroundStyle(.inkMuted)
+                            .accessibilityIdentifier("travel-source")
+                    }
                 }
 
                 VStack(spacing: 0) {
-                    ForEach(options) { option in
+                    ForEach(rows) { row in
                         OptionRow(
-                            option: option,
-                            isSelected: option.leg.mode == leg.mode,
-                            preview: store.previewTravel(option),
-                            alreadyLate: Set(store.today.stopsArrivingAfterClose().map(\.id)),
+                            row: row,
+                            preview: store.previewTravel(row.option),
+                            alreadyLate: alreadyLate,
                             destination: to
                         ) {
-                            withAnimation(.snappy) { store.chooseTravel(option) }
+                            withAnimation(.snappy) { store.chooseTravel(row.option) }
                         }
-                        if option.id != options.last?.id { Hairline() }
+                        if let update = row.update, let minutes = row.liveMinutes {
+                            LiveTimeButton(minutes: minutes, pickupNote: row.pickupNote, preview: store.previewTravel(update), destination: to) {
+                                withAnimation(.snappy) { store.chooseTravel(update) }
+                            }
+                        }
+                        if row.id != rows.last?.id { Hairline() }
                     }
                 }
                 .planditCard(padding: Space.sm)
@@ -78,7 +86,7 @@ struct TravelOptionsSheet: View {
                     } label: {
                         HStack(spacing: Space.xs) {
                             Icon(.navigation, size: 18)
-                            Text(leg.mode.isTransit ? "Subway directions in Maps" : "Directions in Maps")
+                            Text(Self.directionsTitle(leg.mode))
                         }
                     }
                     .buttonStyle(.secondary)
@@ -88,7 +96,7 @@ struct TravelOptionsSheet: View {
                         Button {
                             withAnimation(.snappy) { store.chooseTravelForRestOfDay(leg.mode) }
                         } label: {
-                            Text(restOfDayTitle(leg.mode))
+                            Text(Self.restOfDayTitle(leg.mode))
                                 .font(.label)
                                 .foregroundStyle(.ink)
                                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -102,29 +110,85 @@ struct TravelOptionsSheet: View {
         .scrollIndicators(.hidden)
     }
 
-    private func sourceLine(_ options: [PlanditStore.TravelOption]) -> String {
-        if options.contains(where: \.isLive) { return "Times from Apple Maps" }
-        return isLoading ? "Getting times from Apple Maps…" : "Estimated times"
+    /// One way of making the trip, as the sheet shows it.
+    struct Row: Identifiable, Equatable {
+        /// The time, cost and arrival shown, and what picking the row does.
+        var option: PlanditStore.TravelOption
+        /// The way the trip is planned now.
+        var isPlanned: Bool
+        /// The planned way only: Apple Maps' time when it differs from the plan's. Picking it is the
+        /// only way that time reaches the day.
+        var update: PlanditStore.TravelOption?
+        var id: TravelMode { option.id }
+        /// The time "Apple Maps now says": Apple Maps' own, so a drive leaves out the wait for
+        /// pickup that the day still counts.
+        var liveMinutes: Int? {
+            guard let update else { return nil }
+            return update.leg.minutes - (update.leg.mode == .drive ? TravelLeg.pickupMinutes : 0)
+        }
+
+        /// Drives only: the trip's time once Apple Maps' time is taken, waiting for pickup included,
+        /// so "Apple Maps now says 12 min" doesn't turn into 17 min unexplained.
+        var pickupNote: String? {
+            guard let update, update.leg.mode == .drive else { return nil }
+            return "\(update.leg.minutes) min with pickup"
+        }
+
+        /// Where the row's time comes from.
+        var source: String {
+            if isPlanned { return "In your plan" }
+            return option.isLive ? "From Apple Maps" : "Estimate"
+        }
     }
 
-    private func restOfDayTitle(_ mode: TravelMode) -> String {
+    /// The way the trip is planned shows the plan's own time, so it matches the timeline and the
+    /// stop times, with Apple Maps' newer time offered under it; the other ways show Apple Maps
+    /// times when they've loaded. Opening this sheet never moves the day. Picking the planned row
+    /// again keeps its time and marks it as the user's pick. Apple Maps' newer time changes only
+    /// the minutes: the line, distance and fare stay the plan's.
+    static func rows(_ options: [PlanditStore.TravelOption], planned: TravelLeg) -> [Row] {
+        options.map { option in
+            guard option.leg.mode == planned.mode else { return Row(option: option, isPlanned: false) }
+            var kept = planned
+            kept.isChosen = true
+            var update: PlanditStore.TravelOption?
+            if option.isLive, option.leg.minutes != planned.minutes {
+                var newer = kept
+                newer.minutes = option.leg.minutes
+                update = PlanditStore.TravelOption(leg: newer, isLive: true)
+            }
+            return Row(option: PlanditStore.TravelOption(leg: kept, isLive: false), isPlanned: true, update: update)
+        }
+    }
+
+    /// Buses open Apple Maps in transit mode, like the subway; only the words differ.
+    static func directionsTitle(_ mode: TravelMode) -> String {
+        switch mode {
+        case .subway, .bus: "\(mode.label) directions in Maps"
+        case .walk, .drive: "Directions in Maps"
+        }
+    }
+
+    static func restOfDayTitle(_ mode: TravelMode) -> String {
         switch mode {
         case .walk: "Walk the rest of the day"
-        case .subway, .bus: "Take the subway the rest of the day"
+        case .subway, .bus: "Take the \(mode.label.lowercased()) the rest of the day"
         case .drive: "Drive the rest of the day"
         }
     }
 }
 
 private struct OptionRow: View {
-    let option: PlanditStore.TravelOption
-    let isSelected: Bool
+    let row: TravelOptionsSheet.Row
     /// The day if this option were picked.
     let preview: DayPlan
     /// Stops that are late whatever you pick; only new problems get a warning.
     let alreadyLate: Set<UUID>
     let destination: PlanStop
     let choose: () -> Void
+
+    private var option: PlanditStore.TravelOption { row.option }
+    private var isSelected: Bool { row.isPlanned }
 
     var body: some View {
         Button(action: choose) {
@@ -135,6 +199,10 @@ private struct OptionRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.leg.mode.label).font(.manrope(.bold, size: 16)).foregroundStyle(.ink)
                     Text(detail).font(.metadata).foregroundStyle(.inkMuted)
+                    Text(row.source)
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .accessibilityIdentifier("travel-source-\(option.leg.mode.rawValue)")
                     if let warning {
                         HStack(spacing: Space.xxs) {
                             Icon(.circleAlert, size: 14)
@@ -178,6 +246,51 @@ private struct OptionRow: View {
         let late = preview.stopsArrivingAfterClose().filter { !alreadyLate.contains($0.id) }
         guard let first = late.first else { return nil }
         return late.count == 1 ? "You'd get to \(first.place.name) after it closes" : "You'd miss \(late.count) stops' closing times"
+    }
+}
+
+/// Under the planned way, when Apple Maps' time for it has changed: "Apple Maps now says 24 min".
+/// Tapping it uses that time and moves the stops after the trip. A drive adds what the trip comes
+/// to with pickup: "17 min with pickup".
+private struct LiveTimeButton: View {
+    /// Apple Maps' own time for the trip.
+    let minutes: Int
+    let pickupNote: String?
+    /// The day with Apple Maps' time.
+    let preview: DayPlan
+    let destination: PlanStop
+    let apply: () -> Void
+
+    var body: some View {
+        Button(action: apply) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Space.xxs) {
+                    Icon(.clock, size: 14)
+                    Text("Apple Maps now says \(minutes) min")
+                    Spacer(minLength: 0)
+                }
+                .font(.label)
+                .foregroundStyle(.ink)
+                if let pickupNote {
+                    Text(pickupNote)
+                        .font(.metadata)
+                        .foregroundStyle(.inkMuted)
+                        .padding(.leading, 14 + Space.xxs)
+                }
+            }
+            .padding(.leading, 32 + Space.sm)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(hint)
+        .accessibilityIdentifier("travel-live-time")
+    }
+
+    private var hint: String {
+        guard let arrive = preview.stop(id: destination.id)?.start.shortTime else { return "Uses this time for the trip" }
+        return "Uses this time for the trip, so you'd arrive at \(arrive)"
     }
 }
 

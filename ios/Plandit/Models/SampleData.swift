@@ -52,8 +52,8 @@ enum SampleData {
     static let dayPlan: DayPlan = {
         let pastry = PlanStop(place: hungarianPastry, start: at(9, 30), durationMinutes: 45, estimatedCost: 9, note: "Quiet start near campus. You saved it from @morningside.eats.", sourcePostID: pastryPost.id, status: .done)
         let museum = PlanStop(place: met, start: at(10, 45), durationMinutes: 120, estimatedCost: 5, note: "Pay what you wish with a NY student ID.", sourcePostID: metPost.id, status: .now)
-        let walk = PlanStop(place: highLine, start: at(13, 15), durationMinutes: 75, estimatedCost: 0, note: "Free, and it walks you straight to lunch.", sourcePostID: highLinePost.id, status: .upcoming)
-        let lunch = PlanStop(place: losTacos, start: at(14, 45), durationMinutes: 45, estimatedCost: 15, note: "Late lunch after the rush.", sourcePostID: tacosPost.id, status: .upcoming)
+        let walk = PlanStop(place: highLine, start: at(13, 20), durationMinutes: 70, estimatedCost: 0, note: "Free, and it walks you straight to lunch.", sourcePostID: highLinePost.id, status: .upcoming)
+        let lunch = PlanStop(place: losTacos, start: at(14, 50), durationMinutes: 45, estimatedCost: 15, note: "Late lunch after the rush.", sourcePostID: tacosPost.id, status: .upcoming)
         let park = PlanStop(place: washingtonSquare, start: at(16, 0), durationMinutes: 90, estimatedCost: 0, note: "Free time in the park before dinner.", status: .upcoming)
         let dinner = PlanStop(place: joesPizza, start: at(17, 45), durationMinutes: 30, estimatedCost: 7, note: "Two slices keeps you under budget.", status: .upcoming)
 

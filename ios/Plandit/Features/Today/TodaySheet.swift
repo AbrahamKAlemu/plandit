@@ -22,47 +22,24 @@ struct TodaySheet: View {
                 }
             }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.lg) {
-                    if plan.stops.isEmpty, store.saved.isEmpty {
-                        // Nothing to plan from yet: the first step is a place, not a plan.
-                        EmptyState(
-                            icon: .route,
-                            title: "Nothing planned yet",
-                            message: "Add a place first. Share a TikTok or Reel to Plandit, or paste a link."
-                        ) {
-                            Button {
-                                isAddingLink = true
-                            } label: {
-                                HStack(spacing: Space.xs) {
-                                    Icon(.clipboardPaste, size: 18)
-                                    Text("Paste a link")
-                                }
-                            }
-                            .buttonStyle(.secondary)
-                            .accessibilityIdentifier("today-paste-link")
-                        }
-                        .padding(.top, Space.md)
-                        .transition(.opacity)
-                    } else if plan.stops.isEmpty {
-                        EmptyState(
-                            icon: .route,
-                            title: "Nothing planned yet",
-                            message: "Tap + to turn your saved places into today's plan."
-                        ) {
-                            Button {
-                                router.startPlanning()
-                            } label: {
-                                HStack(spacing: Space.xs) {
-                                    Icon(.plus, size: 18)
-                                    Text("Plan a day")
-                                }
-                            }
-                            .buttonStyle(.secondary)
-                        }
-                        .padding(.top, Space.md)
-                        .transition(.opacity)
-                    } else {
+            if plan.stops.isEmpty {
+                // Sized to the space above the tab bar rather than scrolled, so the next step is
+                // never cut off at half height: the icon goes first when the sheet is short. The
+                // tab bar sits below the sheet's stacks (SheetContainer), so this space ends at it.
+                ViewThatFits(in: .vertical) {
+                    emptyToday(showsIcon: true)
+                    emptyToday(showsIcon: false)
+                    ScrollView { emptyToday(showsIcon: false) }
+                        .scrollIndicators(.hidden)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("empty-today")
+                .hiddenWhenSheetCollapsed()
+                .transition(.opacity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Space.lg) {
                         PlanSummary(plan: plan) { isShowingBudget = true }
 
                         // One clock for the card and the Directions button: no directions to a stop the card says you missed.
@@ -110,16 +87,18 @@ struct TodaySheet: View {
                         }
                         PlanTimeline(plan: plan)
                     }
+                    .padding(.horizontal, Space.lg)
+                    .padding(.top, Space.xs)
+                    .padding(.bottom, Space.lg)
+                    .animation(.snappy(duration: 0.35), value: plan.stops.map(\.id))
+                    .animation(.snappy(duration: 0.35), value: plan.stops.map(\.status))
                 }
-                .padding(.horizontal, Space.lg)
-                .padding(.top, Space.xs)
-                .padding(.bottom, Space.lg)
-                .animation(.snappy(duration: 0.35), value: plan.stops.map(\.id))
-                .animation(.snappy(duration: 0.35), value: plan.stops.map(\.status))
+                .scrollIndicators(.hidden)
+                .hiddenWhenSheetCollapsed()
+                .transition(.opacity)
             }
-            .scrollIndicators(.hidden)
-            .hiddenWhenSheetCollapsed()
         }
+        .animation(.snappy(duration: 0.35), value: plan.stops.isEmpty)
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
@@ -130,6 +109,55 @@ struct TodaySheet: View {
                 router.showPost(id)
             }
         }
+    }
+
+    /// Nothing planned: paste a link when nothing is saved yet (the first step is a place, not a
+    /// plan), otherwise plan a day from what's saved.
+    @ViewBuilder private func emptyToday(showsIcon: Bool) -> some View {
+        Group {
+            if store.saved.isEmpty {
+                EmptyState(
+                    icon: .route,
+                    title: "Nothing planned yet",
+                    message: "Add a place first. Share a TikTok or Reel to Plandit, or paste a link.",
+                    isCompact: true,
+                    showsIcon: showsIcon
+                ) {
+                    Button {
+                        isAddingLink = true
+                    } label: {
+                        HStack(spacing: Space.xs) {
+                            Icon(.clipboardPaste, size: 18)
+                            Text("Paste a link")
+                        }
+                    }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("today-paste-link")
+                }
+            } else {
+                EmptyState(
+                    icon: .route,
+                    title: "Nothing planned yet",
+                    message: "Tap + to turn your saved places into today's plan.",
+                    isCompact: true,
+                    showsIcon: showsIcon
+                ) {
+                    Button {
+                        router.startPlanning()
+                    } label: {
+                        HStack(spacing: Space.xs) {
+                            Icon(.plus, size: 18)
+                            Text("Plan a day")
+                        }
+                    }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("today-plan-a-day")
+                }
+            }
+        }
+        .padding(.horizontal, Space.lg)
+        .padding(.top, Space.xs)
+        .padding(.bottom, Space.sm)
     }
 }
 
@@ -147,22 +175,54 @@ private struct PlanSummary: View {
                     .contentTransition(.numericText())
             }
 
-            HStack(spacing: 0) {
-                SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption)
-                Rectangle().fill(Color.border).frame(width: 1)
-                Button(action: showBudget) {
-                    SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true)
+            // Side by side when every value fits on one line at full size; otherwise one under the
+            // other, so nothing is cut off. Always stacked from XXL text up.
+            Group {
+                if typeSize >= .xxLarge {
+                    stacked
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        sideBySide
+                        stacked
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Shows where the money goes and lets you change it")
-                .accessibilityIdentifier("budget-metric")
-                Rectangle().fill(Color.border).frame(width: 1)
-                SummaryMetric(icon: .footprints, value: plan.walkingMiles.milesText, caption: "Walking")
             }
-            .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, Space.sm)
             .planditCard(padding: 0)
         }
+    }
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var sideBySide: some View {
+        HStack(alignment: .top, spacing: 0) { metrics(isStacked: false) }
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var stacked: some View {
+        VStack(alignment: .leading, spacing: Space.sm) { metrics(isStacked: true) }
+    }
+
+    @ViewBuilder private func metrics(isStacked: Bool) -> some View {
+        SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption, isStacked: isStacked)
+            .accessibilityIdentifier("time-metric")
+        divider(isStacked: isStacked)
+        Button(action: showBudget) {
+            SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true, isStacked: isStacked)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows where the money goes and lets you change it")
+        .accessibilityIdentifier("budget-metric")
+        if let travel = TodaySummaryText.travel(plan) {
+            divider(isStacked: isStacked)
+            SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption,
+                          accessibilityLabel: travel.accessibilityLabel, isStacked: isStacked)
+                .accessibilityIdentifier("travel-metric")
+        }
+    }
+
+    private func divider(isStacked: Bool) -> some View {
+        Rectangle().fill(Color.border).frame(width: isStacked ? nil : 1, height: isStacked ? 1 : nil)
     }
 
     private var stopsLine: String {
@@ -180,11 +240,70 @@ private struct PlanSummary: View {
     }
 }
 
+/// How Today's summary describes getting around: miles walked when the day has any walking that
+/// rounds to more than nothing, otherwise its rides by kind, so a subway day never reads
+/// "0.0 mi Walking". Like the other tiles, a short value over a caption: "2" over "subway rides",
+/// "2 rides" over "1 subway, 1 bus". A day with no trips (one stop) has nothing to say.
+enum TodaySummaryText {
+    struct Travel: Equatable {
+        var icon: Lucide
+        var value: String
+        var caption: String
+        /// What VoiceOver reads: "2 subway rides", "2.3 miles walking".
+        var accessibilityLabel: String
+    }
+
+    static func travel(_ plan: DayPlan) -> Travel? {
+        guard !plan.legs.isEmpty else { return nil }
+        let walks = plan.legs.filter { $0.mode == .walk }
+        let miles = plan.walkingMiles.milesText
+        if !walks.isEmpty, miles != 0.0.milesText {
+            return Travel(icon: .footprints, value: miles, caption: "Walking", accessibilityLabel: spokenMiles(plan.walkingMiles) + " walking")
+        }
+        if let rides = rides(plan.legs.filter { $0.mode != .walk }) { return rides }
+        // Only short walks: count them rather than say "0.0 mi".
+        return Travel(icon: .footprints, value: "\(walks.count)", caption: RideWording.noun(.walk, count: walks.count),
+                      accessibilityLabel: RideWording.count(walks.count, .walk))
+    }
+
+    /// "All done for today" line: "2.1 mi walked", "2 subway rides" or "1 subway, 1 bus". Nil with no trips.
+    static func completedTravel(_ plan: DayPlan) -> String? {
+        guard let travel = travel(plan) else { return nil }
+        if travel.caption == "Walking" { return "\(travel.value) walked" }
+        return travel.value.hasSuffix("rides") ? travel.caption : "\(travel.value) \(travel.caption)"
+    }
+
+    /// Nil when there are no rides.
+    private static func rides(_ legs: [TravelLeg]) -> Travel? {
+        let counted = RideWording.counts(legs)
+        // The icon follows the most common kind; ties go to the subway, then the bus.
+        guard let most = counted.max(by: { $0.count < $1.count }) else { return nil }
+        guard counted.count == 1 else {
+            let kinds = RideWording.kinds(legs)
+            return Travel(icon: most.mode.icon, value: "\(legs.count) rides", caption: kinds,
+                          accessibilityLabel: "\(legs.count) rides: \(kinds)")
+        }
+        return Travel(icon: most.mode.icon, value: "\(most.count)", caption: RideWording.noun(most.mode, count: most.count),
+                      accessibilityLabel: RideWording.count(most.count, most.mode))
+    }
+
+    /// "2.3 miles", "1 mile": words for VoiceOver rather than "mi".
+    private static func spokenMiles(_ miles: Double) -> String {
+        let number = miles.formatted(.number.precision(.fractionLength(1)))
+        return number == 1.0.formatted(.number.precision(.fractionLength(1))) ? "1 mile" : "\(number) miles"
+    }
+}
+
 private struct SummaryMetric: View {
     let icon: Lucide
     let value: String
     let caption: String
     var showsChevron = false
+    /// What VoiceOver reads instead of the value and caption run together.
+    var accessibilityLabel: String?
+    /// One under the other, full width. Side by side, the value keeps its full size on one line
+    /// (the summary stacks the tiles when that doesn't fit) and the caption wraps under it.
+    var isStacked = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -194,19 +313,23 @@ private struct SummaryMetric: View {
                     .font(.manrope(.bold, size: 17))
                     .foregroundStyle(.ink)
                     .contentTransition(.numericText())
+                    .fixedSize(horizontal: !isStacked, vertical: false)
                 if showsChevron {
                     Icon(.chevronRight, size: 14).foregroundStyle(.inkMuted)
                 }
             }
+            // A longer caption ("1 subway, 1 bus") wraps rather than being cut off. Its ideal width
+            // is zero so only the values decide whether the tiles fit side by side.
             Text(caption)
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
+                .frame(minWidth: 0, idealWidth: isStacked ? nil : 0, maxWidth: .infinity, alignment: .leading)
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Space.sm)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityLabel ?? "\(value), \(caption)"))
     }
 }
 
@@ -222,7 +345,7 @@ private struct DayCompleteCard: View {
                 .background(Color.emerald, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text("All done for today").font(.cardHeading).foregroundStyle(.ink)
-                Text("\(plan.stops.count) stops · \(plan.totalCost.wholeDollarsText) · \(plan.walkingMiles.milesText) walked")
+                Text(summary)
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
             }
@@ -230,6 +353,14 @@ private struct DayCompleteCard: View {
         }
         .planditCard()
         .accessibilityElement(children: .combine)
+    }
+
+    /// "6 stops · $42 · 2.3 mi walked", or "1 stop · $9" when there were no trips.
+    private var summary: String {
+        let stops = plan.stops.count == 1 ? "1 stop" : "\(plan.stops.count) stops"
+        return [stops, plan.totalCost.wholeDollarsText, TodaySummaryText.completedTravel(plan)]
+            .compactMap { $0 }
+            .joined(separator: " · ")
     }
 }
 
