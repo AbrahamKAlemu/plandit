@@ -119,3 +119,4 @@ Merge them in that order, deleting each merged branch so GitHub moves the next P
 | Nov 18 | Slice B built. Persona round 4 on its new copy: five approvals, no must_fix; error wording simplified from their suggestions. |
 | Nov 18 | Persona round 5: five approvals, no must_fix. Final review at xhigh: one must-fix (share problem wording), fixed. Abraham asked to cut review rounds to one final review and one screen walk. |
 | Nov 18 | Bumped to 1.0.1. The six stacked PRs opened for Abraham to merge. |
+| Nov 19 | After the first 1.0.1 build, Abraham asked for Plan to look like the other bar items (replaces D-2's emerald pill) and for the bar to float as an island with no band behind it. Built in 5a5d944 to 3adaf7a; new pushed screens need `.clearsFloatingBars()`. Abraham's account was seeded for device testing (27 saved posts, 6 past plans). |
