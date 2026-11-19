@@ -7,7 +7,6 @@ struct SavedPostDetailView: View {
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
-    @State private var evidenceText = ""
     @State private var isSearchingForPlace = false
     @State private var searchName = ""
     @State private var searchAddress = ""
@@ -24,24 +23,16 @@ struct SavedPostDetailView: View {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     switch post.status {
                     case .processing:
-                        HStack(spacing: Space.sm) {
-                            ProgressView()
-                            Text("Finding the place in \(post.platform.postPhrase)…")
-                                .font(.bodyText)
-                                .foregroundStyle(.ink)
-                        }
-                        .planditCard()
+                        // What was shared, while Plandit looks for the place (PRC-2).
+                        SourceCard(post: post)
+                        FindingPlaceCard(
+                            phrase: post.platform.postPhrase,
+                            startedAt: store.findingStartedAt[post.id]
+                        )
                         .transition(.opacity)
-                    case .needsEvidence:
-                        EvidenceEditor(
-                            platform: post.platform,
-                            text: $evidenceText,
-                            message: post.failureMessage
-                                ?? "Add the restaurant or place name, neighborhood, address, or clues from the video."
-                        ) {
-                            store.submitEvidence(postID: post.id, text: evidenceText)
-                        }
-                        videoFallback(for: post)
+                    case .needsEvidence, .failed:
+                        couldNotPlace(post)
+                            .transition(.opacity)
                     case .needsConfirmation:
                         CandidateList(
                             post: post,
@@ -55,36 +46,11 @@ struct SavedPostDetailView: View {
                             }
                         )
                         if isSearchingForPlace {
-                            PlaceSearchEditor(
-                                name: $searchName,
-                                address: $searchAddress
-                            ) {
-                                let query = [searchName, searchAddress]
-                                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                                    .filter { !$0.isEmpty }
-                                    .joined(separator: ", ")
+                            PlaceSearchEditor(name: $searchName, address: $searchAddress) {
                                 isSearchingForPlace = false
-                                store.submitEvidence(postID: post.id, text: query)
+                                search(post)
                             }
                         }
-                    case .failed:
-                        VStack(alignment: .leading, spacing: Space.sm) {
-                            Text("We couldn't find a place").font(.sectionHeading).foregroundStyle(.ink)
-                            Text(post.failureMessage ?? "Nothing in \(post.platform.postPhrase) matched a place. Add a name or neighborhood and try again.")
-                                .font(.bodyText)
-                                .foregroundStyle(.inkMuted)
-                            Button("Try again") { withAnimation(.snappy) { store.retryExtraction(post.id) } }
-                                .buttonStyle(.secondary)
-                        }
-                        .transition(.opacity)
-                        EvidenceEditor(
-                            platform: post.platform,
-                            text: $evidenceText,
-                            message: "Or add the place name, neighborhood, or address yourself."
-                        ) {
-                            store.submitEvidence(postID: post.id, text: evidenceText)
-                        }
-                        videoFallback(for: post)
                     case .ready, .needsReview:
                         if let place = post.place {
                             PlaceSummary(post: post, place: place)
@@ -92,65 +58,70 @@ struct SavedPostDetailView: View {
                         }
                     }
 
-                    VStack(spacing: Space.sm) {
-                        if post.isMappable {
-                            if isInToday {
-                                HStack(spacing: Space.xs) {
-                                    Icon(.circleCheck, size: 18)
-                                    Text("In today's plan")
-                                }
-                                .font(.label)
-                                .foregroundStyle(.emeraldDeep)
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                                .transition(.scale(scale: 0.9).combined(with: .opacity))
-
-                                TodayPlacement(postID: post.id)
-
-                                Button {
-                                    router.show(.today)
-                                } label: {
+                    if post.isMappable || didConfirmPlace {
+                        VStack(spacing: Space.sm) {
+                            if post.isMappable {
+                                if isInToday {
                                     HStack(spacing: Space.xs) {
-                                        Icon(.route, size: 18)
-                                        Text("View today's plan")
+                                        Icon(.circleCheck, size: 18)
+                                        Text("In today's plan")
                                     }
+                                    .font(.label)
+                                    .foregroundStyle(.emeraldDeep)
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+
+                                    TodayPlacement(postID: post.id)
+
+                                    Button {
+                                        router.show(.today)
+                                    } label: {
+                                        HStack(spacing: Space.xs) {
+                                            Icon(.route, size: 18)
+                                            Text("View today's plan")
+                                        }
+                                    }
+                                    .buttonStyle(.secondary)
+                                    .transition(.opacity)
+                                } else {
+                                    Button {
+                                        withAnimation(.snappy) { _ = store.addToToday(post.id) }
+                                    } label: {
+                                        HStack(spacing: Space.xs) {
+                                            Icon(.plus, size: 18)
+                                            Text("Add to today's plan")
+                                        }
+                                    }
+                                    .buttonStyle(.primary)
+                                    .transition(.opacity)
+                                }
+                            }
+
+                            if didConfirmPlace {
+                                Button("Confirm") {
+                                    dismiss()
                                 }
                                 .buttonStyle(.secondary)
-                                .transition(.opacity)
-                            } else {
-                                Button {
-                                    withAnimation(.snappy) { _ = store.addToToday(post.id) }
-                                } label: {
-                                    HStack(spacing: Space.xs) {
-                                        Icon(.plus, size: 18)
-                                        Text("Add to today's plan")
-                                    }
-                                }
-                                .buttonStyle(.primary)
-                                .transition(.opacity)
+                                .accessibilityIdentifier("finish-place-confirmation")
                             }
                         }
-
-                        if didConfirmPlace {
-                            Button("Confirm") {
-                                dismiss()
-                            }
-                            .buttonStyle(.secondary)
-                            .accessibilityIdentifier("finish-place-confirmation")
-                        }
-
-                        Button(role: .destructive) {
-                            dismiss()
-                            withAnimation(.snappy) { store.removePost(post.id) }
-                        } label: {
-                            Text("Remove from saved")
-                                .font(.label)
-                                .foregroundStyle(.error)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .accessibilityIdentifier("remove-saved-place")
                     }
 
-                    SourceCard(post: post)
+                    if post.status != .processing {
+                        SourceCard(post: post)
+                    }
+
+                    // Last on the screen, away from the main actions (W-13).
+                    Button(role: .destructive) {
+                        dismiss()
+                        withAnimation(.snappy) { store.removePost(post.id) }
+                    } label: {
+                        Text("Remove from saved")
+                            .font(.label)
+                            .foregroundStyle(.error)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .accessibilityIdentifier("remove-saved-place")
                 }
                 .padding(Space.lg)
                 .animation(.snappy(duration: 0.35), value: post.status)
@@ -158,11 +129,6 @@ struct SavedPostDetailView: View {
             }
             .background(Color.surface)
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                if evidenceText.isEmpty {
-                    evidenceText = post.caption ?? ""
-                }
-            }
             .onChange(of: selectedVideo) { _, item in
                 guard let item else { return }
                 isProcessingVideo = true
@@ -211,36 +177,64 @@ struct SavedPostDetailView: View {
         }
     }
 
+    /// A post Plandit couldn't place: one title, Try again when the lookup failed, a name-or-address
+    /// search that starts empty, then the video as the second choice (W-12, PRC-3).
+    @ViewBuilder
+    private func couldNotPlace(_ post: SavedPost) -> some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            Text(post.status == .failed ? "We couldn't find a place" : "Add the place")
+                .font(.pageHeading)
+                .foregroundStyle(.ink)
+                .accessibilityAddTraits(.isHeader)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(post.failureMessage ?? "Search for the place's name or address.")
+                .font(.bodyText)
+                .foregroundStyle(.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            if post.status == .failed {
+                Button("Try again") { withAnimation(.snappy) { store.retryExtraction(post.id) } }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("retry-extraction")
+            }
+        }
+
+        PlaceSearchEditor(name: $searchName, address: $searchAddress, showsHeading: false) {
+            search(post)
+        }
+
+        videoFallback(for: post)
+    }
+
+    private func search(_ post: SavedPost) {
+        let query = [searchName, searchAddress]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        guard !query.isEmpty else { return }
+        store.submitEvidence(postID: post.id, text: query)
+    }
+
     @ViewBuilder
     private func videoFallback(for post: SavedPost) -> some View {
         if post.platform != .video {
             VStack(alignment: .leading, spacing: Space.sm) {
                 VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text("Use the saved video instead")
-                        .font(.sectionHeading)
+                    Text("Use the video instead")
+                        .font(.cardHeading)
                         .foregroundStyle(.ink)
                     Text("Plandit reads it on this device and deletes the temporary copy.")
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                PhotosPicker(
+                VideoSourceButtons(
                     selection: $selectedVideo,
-                    matching: .videos,
-                    photoLibrary: .shared()
-                ) {
-                    Text("Choose from Photos")
-                }
-                .buttonStyle(.secondary)
-                .disabled(isProcessingVideo)
-                .accessibilityIdentifier("fallback-video-photos")
-
-                Button("Choose from Files") {
-                    isChoosingVideo = true
-                }
-                .buttonStyle(.plain)
-                .disabled(isProcessingVideo)
-                .accessibilityIdentifier("fallback-video-files")
+                    isChoosingFile: $isChoosingVideo,
+                    isDisabled: isProcessingVideo,
+                    photosIdentifier: "fallback-video-photos",
+                    filesIdentifier: "fallback-video-files"
+                )
 
                 if isProcessingVideo {
                     HStack(spacing: Space.xs) {
@@ -275,6 +269,73 @@ struct SavedPostDetailView: View {
     }
 }
 
+/// "Finding the place in this TikTok…", and after 8 s "Still looking. This can take up to a
+/// minute." while a sleeping server wakes up (PRC-2).
+private struct FindingPlaceCard: View {
+    static let slowAfter: TimeInterval = 8
+    let phrase: String
+    let startedAt: Date?
+    @State private var isSlow = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            HStack(spacing: Space.sm) {
+                ProgressView()
+                Text("Finding the place in \(phrase)…")
+                    .font(.bodyText)
+                    .foregroundStyle(.ink)
+            }
+            if isSlow {
+                Text("Still looking. This can take up to a minute.")
+                    .font(.metadata)
+                    .foregroundStyle(.inkMuted)
+                    .accessibilityIdentifier("still-looking")
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .planditCard()
+        .accessibilityElement(children: .combine)
+        .task {
+            let elapsed = startedAt.map { Date().timeIntervalSince($0) } ?? 0
+            let wait = max(0, Self.slowAfter - elapsed)
+            if wait > 0 {
+                try? await Task.sleep(for: .seconds(wait))
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.25)) { isSlow = true }
+            AccessibilityNotification.Announcement("Still looking. This can take up to a minute.").post()
+        }
+    }
+}
+
+/// "Choose from Photos" and "Choose from Files", drawn as the same kind of button (W-14).
+struct VideoSourceButtons: View {
+    @Binding var selection: PhotosPickerItem?
+    @Binding var isChoosingFile: Bool
+    let isDisabled: Bool
+    let photosIdentifier: String
+    let filesIdentifier: String
+
+    var body: some View {
+        VStack(spacing: Space.sm) {
+            PhotosPicker(selection: $selection, matching: .videos, photoLibrary: .shared()) {
+                Text("Choose from Photos")
+            }
+            .buttonStyle(.secondary)
+            .disabled(isDisabled)
+            .accessibilityIdentifier(photosIdentifier)
+
+            Button("Choose from Files") {
+                isChoosingFile = true
+            }
+            .buttonStyle(.secondary)
+            .disabled(isDisabled)
+            .accessibilityIdentifier(filesIdentifier)
+        }
+    }
+}
+
 private struct CandidateList: View {
     let post: SavedPost
     let onConfirm: (String) -> Void
@@ -284,10 +345,11 @@ private struct CandidateList: View {
         VStack(alignment: .leading, spacing: Space.md) {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("Places found").font(.sectionHeading).foregroundStyle(.ink)
-                Text("Choose the place from the video to add it to your map.")
+                Text("Choose the place from \(post.platform.postPhrase) to add it to your map.")
                     .font(.bodyText)
                     .foregroundStyle(.inkMuted)
             }
+
 
             ForEach(Array(post.candidates.prefix(3))) { candidate in
                 CandidateCard(
@@ -342,6 +404,8 @@ private struct CandidateCard: View {
 private struct PlaceSearchEditor: View {
     @Binding var name: String
     @Binding var address: String
+    /// Off where the screen's own title already says what to do (W-12).
+    var showsHeading = true
     let onSubmit: () -> Void
 
     private var canSubmit: Bool {
@@ -351,13 +415,15 @@ private struct PlaceSearchEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
-            VStack(alignment: .leading, spacing: Space.xxs) {
-                Text("Search for the place")
-                    .font(.sectionHeading)
-                    .foregroundStyle(.ink)
-                Text("Add the name, address, or both.")
-                    .font(.bodyText)
-                    .foregroundStyle(.inkMuted)
+            if showsHeading {
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text("Search for the place")
+                        .font(.sectionHeading)
+                        .foregroundStyle(.ink)
+                    Text("Add the name, address, or both.")
+                        .font(.bodyText)
+                        .foregroundStyle(.inkMuted)
+                }
             }
 
             VStack(alignment: .leading, spacing: Space.xs) {
@@ -399,35 +465,6 @@ private extension View {
                 RoundedRectangle(cornerRadius: Radius.control)
                     .strokeBorder(Color.border, lineWidth: 1)
             }
-    }
-}
-
-private struct EvidenceEditor: View {
-    let platform: SourcePlatform
-    @Binding var text: String
-    let message: String
-    let onSubmit: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            VStack(alignment: .leading, spacing: Space.xxs) {
-                Text("Add details from \(platform.postPhrase)").font(.sectionHeading).foregroundStyle(.ink)
-                Text(message).font(.bodyText).foregroundStyle(.inkMuted)
-            }
-            TextEditor(text: $text)
-                .font(.bodyText)
-                .frame(minHeight: 120)
-                .padding(Space.xs)
-                .background(Color.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radius.control)
-                        .strokeBorder(Color.border)
-                )
-            Button("Find matching places", action: onSubmit)
-                .buttonStyle(.primary)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .planditCard()
     }
 }
 
@@ -483,21 +520,29 @@ private struct PlaceSummary: View {
     }
 }
 
-/// Where the place came from, with a link back to the original post.
+/// Where the place came from: platform, creator, caption and thumbnail when known, and a link back
+/// to the original post. The caption never shows the post's link (W-12).
 struct SourceCard: View {
     let post: SavedPost
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            HStack(spacing: Space.xs) {
-                Icon(.video, size: 16)
-                Text("Saved from \(post.platform.displayName)" + (post.creatorHandle.map { " · \($0)" } ?? ""))
-                    .font(.label)
-            }
-            .foregroundStyle(.ink)
+            HStack(alignment: .top, spacing: Space.sm) {
+                if post.thumbnailURL != nil {
+                    SavedThumbnail(post: post, size: 64)
+                }
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    HStack(spacing: Space.xs) {
+                        Icon(.video, size: 16)
+                        Text(sourceLine)
+                            .font(.label)
+                    }
+                    .foregroundStyle(.ink)
 
-            if let caption = post.caption, post.platform != .video {
-                Text("“\(caption)”").font(.bodyText).foregroundStyle(.ink)
+                    if let caption = SourceCard.caption(for: post) {
+                        Text("“\(caption)”").font(.bodyText).foregroundStyle(.ink)
+                    }
+                }
             }
 
             if ["http", "https"].contains(post.url.scheme?.lowercased() ?? "") {
@@ -512,7 +557,21 @@ struct SourceCard: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .planditCard()
+        .accessibilityIdentifier("post-source")
+    }
+
+    /// "Saved from TikTok · @creator", or "Saved from a video".
+    private var sourceLine: String {
+        let source = post.platform == .video ? "Saved from a video" : "Saved from \(post.platform.displayName)"
+        return source + (post.creatorHandle.map { " · \($0)" } ?? "")
+    }
+
+    /// The post's words without its link; nothing for a video (its text is what Plandit read).
+    static func caption(for post: SavedPost) -> String? {
+        guard post.platform != .video else { return nil }
+        return LinkParser.textWithoutLinks(post.caption)
     }
 }
 
