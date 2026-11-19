@@ -117,7 +117,7 @@ Not in scope:
   shares, Plandit opens where it always does and never jumps to Saved.
 - **PRC-2** While Plandit looks for the place, the post shows where it came from (platform, creator,
   caption and thumbnail when known) and a progress line. After 8 s it adds "Still looking. This can
-  take up to a minute."
+  take a minute or two." (A 60 s timeout plus one retry can take about two minutes.)
 - **PRC-3** A network error or timeout is retried once on its own before the post shows "We
   couldn't find a place" with Try again.
 - **PRC-4** A shared video is read on the phone. It ends the same ways a link does. If reading fails,

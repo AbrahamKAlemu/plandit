@@ -16,6 +16,9 @@ added to the brief as D requirements.
   "late lunch" after dinner (walkthrough shot 42; a GitHub issue for Eldad once approved), and
   Today's times disagree by 1 to 3 minutes (W-17 rechecks after #28, or moves to 1.0.2).
 - Website and App Store wording change with slice A (plan, Rollout).
+- plandit.app/privacy (Jaden's repo) says only the text found in a video is used to search Apple Maps.
+  The app also keeps that text as the post's caption, which syncs. True since 1.0; covered by
+  "Other User Content" in the App Store answers. Fix the policy wording in the website PR.
 - Existing sync risk, found in the slice E review and not caused by this work: an existing account
   whose first sign-in on a new phone can't reach the server gets an empty offline seed. That seed
   is pushed once the server answers, and `PUT /api/me/snapshot/` doesn't check versions, so it
@@ -51,7 +54,7 @@ added to the brief as D requirements.
 | Build E (tutorial) | Built, reviewed, fixes re-reviewed | `feature/polish-tutorial`; 278 unit tests; FirstRunTutorialTests 19, TutorialFlowTests 12, twice each |
 | Integration (docs, A, D, E on main) | Done | 319 unit tests; UI 55/56 (the reorder test, fixed in C); share extension builds |
 | Build C (sheets and Today) | Built, reviewed twice, all findings fixed | `app-polish/c-today` 046cde3; 349 unit tests, EmptyToday and TodaySummary UI tests pass |
-| Build B (share and processing) | Built; persona round 4 passed; xhigh review running | `app-polish/b-share` 1372ff4 on c-today f74693a; 381 unit and 67 UI tests, 0 failures |
+| Build B (share and processing) | Built; persona round 4 passed; xhigh review: 2 must-fix (extension privacy manifest, PRC-3 retry never fired in production) and 12 smaller; fixing | `app-polish/b-share` 1372ff4 on c-today f74693a; 381 unit and 67 UI tests, 0 failures |
 | Reviews and flow walk | Not started | |
 | Release | Not started | |
 
