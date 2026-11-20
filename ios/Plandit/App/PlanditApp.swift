@@ -37,7 +37,8 @@ struct PlanditApp: App {
 }
 
 /// loading → splash; signed out → welcome; signed in → the account's store, then the app
-/// (after the first-run tutorial, for a brand-new account).
+/// (after the first-run tutorial, for a brand-new account). Each change cross-fades; the splash
+/// lifts away as it fades, and stays at least until its logo has settled in.
 private struct AccountGate: View {
     let account: AccountModel
     let appearance: AppearanceSettings
@@ -45,29 +46,68 @@ private struct AccountGate: View {
     @Binding var session: AccountSession?
     /// D-1: decided once when a session opens; finishing the tutorial clears it.
     @State private var showsTutorial = false
+    /// False for the splash's first moments, so a quick launch still shows the logo arrive.
+    @State private var splashHasSettled = false
     private let tutorial = FirstRunTutorial()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private enum Stage: Hashable { case splash, auth, tutorial, app }
+
+    private var stage: Stage {
+        guard splashHasSettled else { return .splash }
+        switch account.state {
+        case .loading:
+            return .splash
+        case .signedOut, .awaitingConfirmation:
+            return .auth
+        case .signedIn(let user):
+            guard let session, session.userID == user.id else { return .splash }
+            return showsTutorial ? .tutorial : .app
+        }
+    }
+
+    /// The signed-in user whose store isn't open yet.
+    private var userToOpen: AuthUser? {
+        guard case .signedIn(let user) = account.state, session?.userID != user.id else { return nil }
+        return user
+    }
 
     var body: some View {
-        Group {
-            switch account.state {
-            case .loading:
+        ZStack {
+            switch stage {
+            case .splash:
                 SplashScreen()
-            case .signedOut, .awaitingConfirmation:
+                    .transition(.asymmetric(
+                        insertion: .identity,
+                        removal: reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 1.06))
+                    ))
+                    // Over the screen coming in while it fades.
+                    .zIndex(1)
+            case .auth:
                 AuthFlowView()
-            case .signedIn(let user):
-                if let session, session.userID == user.id {
-                    if showsTutorial {
-                        TutorialView { finishTutorial(userID: user.id) }
-                            .transition(.opacity)
-                    } else {
-                        PlanditRoot(store: session.store, sync: session.sync, appearance: appearance, router: router)
-                    }
-                } else {
-                    SplashScreen()
-                        .task(id: user.id) { await open(user) }
+                    .transition(.opacity)
+            case .tutorial:
+                if let session {
+                    TutorialView { finishTutorial(userID: session.userID) }
+                        .transition(.opacity)
+                }
+            case .app:
+                if let session {
+                    PlanditRoot(store: session.store, sync: session.sync, appearance: appearance, router: router)
+                        .transition(.opacity)
                 }
             }
+        }
+        // Only the splash handoff animates. Sign-out and deletion swap screens at once, so the old
+        // sheet doesn't stay over the welcome screen while the map fades.
+        .animation(.easeInOut(duration: reduceMotion ? 0.25 : 0.5), value: stage == .splash)
+        .task(id: userToOpen?.id) {
+            if let user = userToOpen { await open(user) }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            splashHasSettled = true
         }
         .environment(account)
         .environment(appearance)

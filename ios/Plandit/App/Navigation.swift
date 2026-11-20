@@ -120,6 +120,17 @@ enum SheetDetent {
         }
     }
 
+    /// How far the body has faded in at this sheet height: 0 at the peek, 1 once the sheet is
+    /// `revealDistance` above it. The body shows while the sheet is still being dragged up.
+    static func reveal(sheetHeight: CGFloat) -> Double {
+        let risen = sheetHeight - peekHeight - revealStart
+        return Double(min(max(risen / revealDistance, 0), 1))
+    }
+
+    /// Slack above the peek before the body starts to show, so a resting peek never shows it.
+    static let revealStart: CGFloat = 8
+    static let revealDistance: CGFloat = 72
+
     /// How much of the map the sheet covers, so the camera can frame content above it.
     static func coveredHeight(_ detent: PresentationDetent, screenHeight: CGFloat) -> CGFloat {
         detent == peek ? peekHeight + Space.md : screenHeight * 0.52 + Space.md
