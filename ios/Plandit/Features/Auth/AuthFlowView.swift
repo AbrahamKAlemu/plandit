@@ -34,17 +34,33 @@ struct AuthFlowView: View {
 }
 
 /// While the stored session is read, or the account's data is fetched after sign-in.
+/// The logo on the launch screen's color while the account opens. The launch screen is the same
+/// color, so the logo seems to arrive on it: it fades and settles in. The spinner shows only when
+/// opening takes more than a second.
 struct SplashScreen: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isShown = false
+    @State private var isSlow = false
+
     var body: some View {
         VStack(spacing: Space.lg) {
             BrandLockup(markSize: 48)
+                .opacity(isShown ? 1 : 0)
+                .scaleEffect(isShown || reduceMotion ? 1 : 0.94)
             ProgressView()
                 .tint(Color.inkMuted)
+                .opacity(isSlow ? 1 : 0)
+                .accessibilityHidden(!isSlow)
                 .accessibilityLabel("Loading")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.canvas)
         .accessibilityIdentifier("splash-screen")
+        .task {
+            withAnimation(.easeOut(duration: 0.45)) { isShown = true }
+            try? await Task.sleep(for: .seconds(1))
+            withAnimation(.easeIn(duration: 0.3)) { isSlow = true }
+        }
     }
 }
 
