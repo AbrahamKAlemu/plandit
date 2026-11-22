@@ -32,6 +32,9 @@ final class AccountModel {
     @ObservationIgnored var beforeSignOut: (() async -> Void)?
     /// Runs once the server confirmed the account is gone, with the user id.
     @ObservationIgnored var onAccountDeleted: ((String) -> Void)?
+    /// Runs when the server stopped taking the session (revoked or expired), before the person is
+    /// signed out: what signing out removes from the phone goes now too (the group plans, REM-4).
+    @ObservationIgnored var onSessionRevoked: (() -> Void)?
 
     init(
         client: SupabaseAuthClient?,
@@ -227,6 +230,7 @@ final class AccountModel {
 
     private func sessionWasRevoked() {
         guard case .signedIn = state else { return }
+        onSessionRevoked?()
         finishSignOut()
     }
 
