@@ -27,7 +27,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. Daylight-saving fix for older planner code in progress. G3 test-planning pass done; G3a (backend) next. |
+| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. The daylight-saving fix for older planner code is #52 (on #51). G3 test-planning pass done; G3a (backend) in progress. |
 | Verify, ship, learn | Not started. |
 
 ## Tasks and evidence
