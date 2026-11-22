@@ -12,7 +12,7 @@ struct SharedLink: Codable, Equatable {
     /// "Let friends suggest swaps": the page offers up to two of your saved places per stop.
     var suggestsSwaps = true
     /// Friends' swap picks the organizer answered with "Keep it" (`ShareAnswers.keepKey`), so their
-    /// marks stay hidden until someone picks something else.
+    /// marks stay hidden until that friend picks another place (`ShareAnswers.isKept`).
     var keptSwaps: [String] = []
 
     private enum CodingKeys: String, CodingKey { case slug, url, planID, showPrices, note, suggestsSwaps, keptSwaps }

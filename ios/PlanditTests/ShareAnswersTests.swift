@@ -230,6 +230,63 @@ import XCTest
         XCTAssertEqual(store.swapMarks[highLine.id]?.map(\.name), ["Maya", "Jordan"], "a new pick shows again")
     }
 
+    func testKeepItSurvivesTheServerDroppingThePick() async throws {
+        // The server turns a pick into "no pick" when the place is no longer offered for the stop
+        // (swaps turned off, or the same place swapped in elsewhere).
+        let (store, answers) = try await sharedStore()
+        let highLine = stop(named: "The High Line", in: store)
+        let maya = answer("Maya", .in, swaps: [highLine.id: SampleData.littleIslandPost.id])
+        await answers.set([maya])
+        await store.refreshShareAnswers()
+        store.keepStop(highLine.id)
+        XCTAssertNil(store.swapMarks[highLine.id])
+
+        var rewritten = maya
+        rewritten.swaps = [highLine.id: nil]
+        await answers.set([rewritten])
+        await store.refreshShareAnswers(force: true)
+        XCTAssertNil(store.swapMarks[highLine.id], "still kept")
+    }
+
+    func testKeepItShowsAFriendAgainWhoPicksAnotherPlace() async throws {
+        let (store, answers) = try await sharedStore()
+        let highLine = stop(named: "The High Line", in: store)
+        let maya = answer("Maya", .in, swaps: [highLine.id: SampleData.littleIslandPost.id])
+        await answers.set([maya])
+        await store.refreshShareAnswers()
+        store.keepStop(highLine.id)
+
+        var changed = maya
+        changed.swaps = [highLine.id: SampleData.levainPost.id]
+        await answers.set([changed])
+        await store.refreshShareAnswers(force: true)
+        XCTAssertEqual(store.swapMarks[highLine.id]?.map(\.alternateID), [SampleData.levainPost.id], "a new pick shows again")
+
+        store.keepStop(highLine.id)
+        XCTAssertNil(store.swapMarks[highLine.id])
+        XCTAssertEqual(store.todayLink?.keptSwaps.count, 1, "one kept pick per friend and stop")
+    }
+
+    func testKeptPicksSavedBeforeStillLoadAndHide() throws {
+        let store = makeStore()
+        let highLine = stop(named: "The High Line", in: store)
+        let mayaID = UUID()
+        let pick = SampleData.littleIslandPost.id
+        let json = """
+        {"slug": "abc", "url": "https://plandit.app/p/abc", "planID": "\(store.today.id.uuidString)", "showPrices": true,
+         "note": "", "suggestsSwaps": true, "keptSwaps": ["\(highLine.id.uuidString)/\(mayaID.uuidString)/\(pick.uuidString)"]}
+        """
+        let link = try JSONDecoder().decode(SharedLink.self, from: Data(json.utf8))
+        let kept = Set(link.keptSwaps)
+        func marks(_ pick: UUID?) -> [UUID: [SwapPick]] {
+            let maya = ShareAnswer(id: mayaID, name: "Maya", status: .in, swaps: [highLine.id: pick], createdAt: Date(), updatedAt: Date())
+            return ShareAnswers.swapMarks([maya], plan: store.today, kept: kept)
+        }
+        XCTAssertNil(marks(pick)[highLine.id], "the same pick")
+        XCTAssertNil(marks(nil)[highLine.id], "the pick dropped by the server")
+        XCTAssertEqual(marks(SampleData.levainPost.id)[highLine.id]?.count, 1, "another pick")
+    }
+
     // MARK: - Removing an answer (GV-7)
 
     func testRemovingAnAnswerTakesItOffTheServerAndToday() async throws {

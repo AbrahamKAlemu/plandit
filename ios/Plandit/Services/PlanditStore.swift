@@ -1086,14 +1086,16 @@ final class PlanditStore {
         return true
     }
 
-    /// "Keep it": the stop stays, and these picks stop showing until a friend picks something else.
+    /// "Keep it": the stop stays, and these picks stop showing until a friend picks another place.
     func keepStop(_ stopID: UUID) {
         guard var link = todayLink, let picks = swapMarks[stopID] else { return }
         // Picks about stops no longer in the plan can't show again; no need to keep them.
         var kept = link.keptSwaps.filter { key in today.stops.contains { key.hasPrefix($0.id.uuidString) } }
         for pick in picks {
-            let key = ShareAnswers.keepKey(stopID: stopID, pick: pick)
-            if !kept.contains(key) { kept.append(key) }
+            // One kept pick per friend and stop: the latest.
+            let prefix = ShareAnswers.keepPrefix(stopID: stopID, answerID: pick.answerID)
+            kept.removeAll { $0.hasPrefix(prefix) }
+            kept.append(ShareAnswers.keepKey(stopID: stopID, pick: pick))
         }
         link.keptSwaps = kept
         sharedLink = link

@@ -84,7 +84,7 @@ struct SwapPick: Equatable, Identifiable {
     /// The saved post they'd go to instead; nil when they didn't pick one.
     var alternateID: UUID?
 
-    var id: String { ShareAnswers.keepKey(answerID: answerID, alternateID: alternateID) }
+    var id: String { "\(answerID.uuidString)/\(alternateID?.uuidString ?? "-")" }
 }
 
 /// Turning friends' answers into what Today shows.
@@ -98,28 +98,38 @@ enum ShareAnswers {
     }
 
     /// Swap picks per stop, for stops still ahead in `plan`. Answers about stops that are gone,
-    /// done or underway don't show, and neither do picks the organizer kept the stop over.
+    /// done or underway don't show, and neither do picks the organizer kept the stop over (`isKept`).
     static func swapMarks(_ answers: [ShareAnswer], plan: DayPlan, kept: Set<String>) -> [UUID: [SwapPick]] {
         var marks: [UUID: [SwapPick]] = [:]
         for stop in plan.stops where stop.status == .upcoming {
             let picks = answers.compactMap { answer -> SwapPick? in
                 guard let pick = answer.swaps[stop.id] else { return nil }
                 let swap = SwapPick(answerID: answer.id, name: answer.name, alternateID: pick)
-                return kept.contains(keepKey(stopID: stop.id, pick: swap)) ? nil : swap
+                return isKept(swap, stopID: stop.id, kept: kept) ? nil : swap
             }
             if !picks.isEmpty { marks[stop.id] = picks }
         }
         return marks
     }
 
-    /// What "Keep it" remembers for one pick: who, which stop and what they picked. A friend who
-    /// picks something else later shows again.
+    /// What "Keep it" remembers for one pick: "<stop>/<answer>/<place picked, or ->".
     static func keepKey(stopID: UUID, pick: SwapPick) -> String {
-        "\(stopID.uuidString)/\(pick.id)"
+        keepPrefix(stopID: stopID, answerID: pick.answerID) + (pick.alternateID?.uuidString ?? "-")
     }
 
-    fileprivate static func keepKey(answerID: UUID, alternateID: UUID?) -> String {
-        "\(answerID.uuidString)/\(alternateID?.uuidString ?? "-")"
+    /// "<stop>/<answer>/": what one friend kept on one stop.
+    static func keepPrefix(stopID: UUID, answerID: UUID) -> String {
+        "\(stopID.uuidString)/\(answerID.uuidString)/"
+    }
+
+    /// Once the organizer kept a stop over a friend's pick, that friend stays hidden on that stop
+    /// while they keep the pick or have none: the server turns a pick into none when the place is
+    /// no longer offered for the stop. Picking another place shows them again.
+    static func isKept(_ pick: SwapPick, stopID: UUID, kept: Set<String>) -> Bool {
+        if kept.contains(keepKey(stopID: stopID, pick: pick)) { return true }
+        guard pick.alternateID == nil else { return false }
+        let prefix = keepPrefix(stopID: stopID, answerID: pick.answerID)
+        return kept.contains { $0.hasPrefix(prefix) }
     }
 }
 
