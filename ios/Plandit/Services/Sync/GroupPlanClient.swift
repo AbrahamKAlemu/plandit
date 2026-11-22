@@ -31,12 +31,34 @@ nonisolated protocol GroupPlanServing: Sendable {
 
 /// `/api/group-plans/` with this account's token. Paths and trailing slashes are the contract's
 /// exactly; URLs are built by `PlanditAPIClient.url(for:)`, never `appending(path:)`. Plans are
-/// encoded with a plain `JSONEncoder`, so dates are numbers. Nothing is read from or stored in the
-/// URL cache: the ETag is this client's to send.
+/// encoded with a plain `JSONEncoder`, so dates are numbers. The ETag is this client's to send:
+/// requests skip reading the URL cache (`.reloadIgnoringLocalCacheData`), and in the app they go
+/// through `session`, which has no cache to store answers in.
 nonisolated struct GroupPlanClient: GroupPlanServing {
     let api: PlanditAPIClient
 
+    /// Group calls' own session. `URLSession.shared` stores answers in the shared URL cache
+    /// (`Cache.db`), where plans, members' names and invite links would stay after sign-out or
+    /// account deletion; this one has no cache, so a 304 to this client's `If-None-Match` comes
+    /// back as a 304.
+    static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }()
+
     private static let root = "api/group-plans/"
+
+    /// The account's client with its `URLSession` swapped for `session`; the account's other calls
+    /// keep theirs. Any other transport (a test's) is used as given.
+    init(api: PlanditAPIClient) {
+        if api.transport is URLSession {
+            self.api = PlanditAPIClient(baseURL: api.baseURL, userID: api.userID, tokenProvider: api.tokenProvider, transport: Self.session)
+        } else {
+            self.api = api
+        }
+    }
 
     private struct Created: Encodable {
         var date: String

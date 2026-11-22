@@ -167,6 +167,21 @@ final class HeaderTransport: HTTPTransport, @unchecked Sendable {
         XCTAssertEqual(transport.requests[0].cachePolicy, .reloadIgnoringLocalCacheData)
     }
 
+    /// Plans, members' names and invite links never go into the shared URL cache (`Cache.db`),
+    /// which would keep them after sign-out: the app's `URLSession` is swapped for one with no
+    /// cache. The account's other calls keep theirs, and a test's transport is used as given.
+    func testGroupCallsGoThroughASessionWithNoURLCache() throws {
+        let api = PlanditAPIClient(baseURL: URL(string: "https://api.example")!, userID: "user-1", tokenProvider: FakeTokenProvider())
+
+        let session = try XCTUnwrap(GroupPlanClient(api: api).api.transport as? URLSession)
+
+        XCTAssertFalse(session === URLSession.shared)
+        XCTAssertNil(session.configuration.urlCache)
+        XCTAssertTrue(api.transport as? URLSession === URLSession.shared, "the other calls are as they were")
+        let fake = HeaderTransport()
+        XCTAssertTrue(client(fake).api.transport as? HeaderTransport === fake)
+    }
+
     /// For a group whose plan isn't held, no `If-None-Match`: a 304 would leave no plan.
     func testFetchWithoutAHeldPlanSendsNoETag() async throws {
         let transport = HeaderTransport([(200, detail(version: 3, plan: plan), ["ETag": "\"3.1\""])])

@@ -41,7 +41,8 @@ nonisolated struct PlanditAPIClient: Sendable {
     /// returned as-is for the caller to interpret.
     ///
     /// `headers` are added to the request (`If-None-Match`); `cachePolicy` replaces the default
-    /// one (group plans bypass the URL cache).
+    /// one (group plans don't read the URL cache). Whether answers are stored in a cache is the
+    /// transport's: `GroupPlanClient` uses a session without one.
     func send(
         _ method: String,
         path: String,
