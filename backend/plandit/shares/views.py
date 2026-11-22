@@ -78,8 +78,14 @@ class SharedPlanDetailView(APIView):
     existence isn't revealed."""
 
     def delete(self, request, slug):
-        deleted, _ = SharedPlan.objects.filter(slug=slug, owner=request.user).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT if deleted else status.HTTP_404_NOT_FOUND)
+        with transaction.atomic():
+            # Lock the link first. A friend's answer is saved with this lock held, so the delete
+            # waits for it and takes it along, instead of missing it and failing at commit.
+            shared = SharedPlan.objects.select_for_update().filter(slug=slug, owner=request.user).first()
+            if shared is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            shared.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ShareAnswersView(APIView):
