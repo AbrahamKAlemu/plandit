@@ -15,6 +15,9 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
   from a phone on cellular and from a laptop, so the `proxy chain:` log lines can set the hop count.
 - #47 (G2a): decide whether `/g/` pages show the organizer's first name.
 - #50 (G1b, iOS) is stacked on #49. Don't upload a build with it to TestFlight until #46 is deployed.
+- #51 (G2b, iOS) is stacked on #50. Don't upload a build with it to TestFlight until #47 is deployed.
+- Decide whether "plans for a later day" becomes its own slice: today a group plan can only be built
+  on its own day (D1), because the app keeps only today's plan.
 
 ## Phases
 
@@ -24,7 +27,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47 and G1b #50 open. G1a and G2a merge after the proxy-chain measurement. G2b (iOS) next. |
+| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. Next: a daylight-saving fix for older planner code, then mode 3 (G3a, G3b). |
 | Verify, ship, learn | Not started. |
 
 ## Tasks and evidence
@@ -70,8 +73,30 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
     - Each fix has a test that failed first.
   - Copy: all five personas approve (7 to 8), no must_fix. Applied: the undo bar says the link
     updates, "Keep {stop}", and "You'll see their answers in Today."
+- G2b, `feat/group-requests-app`, #51 (base `feat/group-answers-app`, #50):
+  - Tests: the full lane on 9e8fc9c passed 605 unit tests. UI: 85 tests with 2 failures in
+    `MapAndBudgetFlowTests` while the Mac was overloaded (load average up to 391). That suite then
+    passed 13 of 13 on its own. G2b doesn't change those screens.
+  - Contract with G2a, checked against a local backend from #47's branch: create 201, answer 303,
+    owner GET 200, share with `request` 201, `/g/` redirects to `/p/`, answer delete 204 then 404,
+    close 204, no token 401, request delete 204 then 404.
+  - Review (high): round 1 found 4 must-fix (Undo after Build republished the old plan, Try again
+    after Undo, Build before answers loaded, daylight-saving times). Later checks found Undo during
+    the share, overlapping shares and Today replaced before the share. All are fixed, each with a
+    test that failed first. The last fix round wasn't independently reviewed.
+  - Copy: Amara's must_fix (preview a later day's plan) is fixed. No must_fix is open.
 
 ## Decisions and events
+
+- November 22: Abraham asked for one review round per slice from now on: one code review and one
+  persona pass, then fixes, the full test lane and the PR, with no re-review. This applies to G3a
+  too unless he asks for more.
+- November 22: G2b builds a group plan only on its own day (D1), because the store holds one
+  `today`. A later day's plan is previewed with the answers so far. Build reuses Today's existing
+  link, `planRequest` syncs last writer wins, and Ask about another day checks the server before
+  deleting. A small window remains, because the server's delete doesn't check the status.
+- November 22: older planner code adds minutes to the start of the day in 6 places, an hour off on
+  daylight-saving days. G2b fixed its own `ClockTime`; a follow-up PR fixes the rest.
 
 - November 22: G1b's Undo after Swap it restores the plan and its page but not friends' swap picks
   for the replaced stop, as GV-8 says. Links shared by the previous app version load with swaps off,
