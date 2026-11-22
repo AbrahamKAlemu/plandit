@@ -44,19 +44,28 @@ from tests.test_group_plans import (
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-def first_holds_until_second_waits(monkeypatch, module, helper: str, first, second) -> dict:
-    """Run `first`. Right after its first call to `module.<helper>`, with that request's locks held,
-    start `second`, wait until a session is waiting for a lock, then let `first` commit. Returns
-    both responses and whether `second` was seen blocked. Later calls to the helper run as normal."""
+def first_holds_until_second_waits(
+    monkeypatch, module, helper: str, first, second, *, before: bool = False, when=None
+) -> dict:
+    """Run `first`. Right after its first call to `module.<helper>` (right before it, with `before`),
+    with that request's locks held, start `second`, wait until a session is waiting for a lock, then
+    let `first` go on and commit. Returns both responses and whether `second` was seen blocked.
+    `when(*args, **kwargs)` picks which call holds; later calls to the helper run as normal."""
     original = getattr(module, helper)
     holding = threading.Event()
     results = {}
 
+    def hold():
+        holding.set()
+        results["second_was_blocked"] = another_session_is_waiting_for_a_lock()
+
     def hold_the_first_call(*args, **kwargs):
+        holds = not holding.is_set() and (when is None or when(*args, **kwargs))
+        if holds and before:
+            hold()
         value = original(*args, **kwargs)
-        if not holding.is_set():
-            holding.set()
-            results["second_was_blocked"] = another_session_is_waiting_for_a_lock()
+        if holds and not before:
+            hold()
         return value
 
     monkeypatch.setattr(module, helper, hold_the_first_call)
