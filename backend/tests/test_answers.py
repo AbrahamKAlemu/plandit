@@ -384,11 +384,21 @@ def test_the_owner_removes_an_answer_from_the_api_and_the_page(auth_client, slug
     assert auth_client.delete(f"/api/shares/{slug}/answers/{maya.id}/").status_code == 404
 
 
+@pytest.mark.parametrize("case", [str.upper, str.lower], ids=["upper-case", "lower-case"])
+def test_the_owner_removes_an_answer_by_its_id_in_either_case(auth_client, slug, case):
+    """The app sends Swift UUIDs, which are upper case."""
+    answer_as(slug, "Maya")
+    maya = ShareAnswer.objects.get()
+    assert auth_client.delete(f"/api/shares/{slug}/answers/{case(str(maya.id))}/").status_code == 204
+    assert ShareAnswer.objects.count() == 0
+
+
 def test_every_owner_endpoint_is_404_for_another_account(auth_client, other_client, slug):
     answer_as(slug, "Maya")
     maya = ShareAnswer.objects.get()
     assert other_client.get(f"/api/shares/{slug}/answers/").status_code == 404
     assert other_client.delete(f"/api/shares/{slug}/answers/{maya.id}/").status_code == 404
+    assert other_client.delete(f"/api/shares/{slug}/answers/{str(maya.id).upper()}/").status_code == 404
     assert other_client.delete(f"/api/shares/{slug}/").status_code == 404
     assert ShareAnswer.objects.count() == 1
 
@@ -398,6 +408,7 @@ def test_owner_endpoints_need_an_account(api_client, slug):
     maya = ShareAnswer.objects.get()
     assert api_client.get(f"/api/shares/{slug}/answers/").status_code in (401, 403)
     assert api_client.delete(f"/api/shares/{slug}/answers/{maya.id}/").status_code in (401, 403)
+    assert api_client.delete(f"/api/shares/{slug}/answers/{str(maya.id).upper()}/").status_code in (401, 403)
     assert ShareAnswer.objects.count() == 1
 
 
@@ -406,13 +417,18 @@ def test_an_answer_can_only_be_removed_through_its_own_link(auth_client, slug):
     answer_as(slug, "Maya")
     maya = ShareAnswer.objects.get()
     assert auth_client.delete(f"/api/shares/{other_slug}/answers/{maya.id}/").status_code == 404
+    assert auth_client.delete(f"/api/shares/{other_slug}/answers/{str(maya.id).upper()}/").status_code == 404
     assert ShareAnswer.objects.count() == 1
 
 
 def test_unknown_links_and_answers_are_404_for_the_owner_too(auth_client, slug):
     assert auth_client.get("/api/shares/doesnotexist/answers/").status_code == 404
     assert auth_client.delete(f"/api/shares/{slug}/answers/{uuid.uuid4()}/").status_code == 404
-    assert auth_client.delete(f"/api/shares/{slug}/answers/not-a-uuid/").status_code == 404
+    assert auth_client.delete(f"/api/shares/{slug}/answers/{str(uuid.uuid4()).upper()}/").status_code == 404
+    for bad in ("not-a-uuid", "1234", "%20"):
+        response = auth_client.delete(f"/api/shares/{slug}/answers/{bad}/")
+        assert response.status_code == 404, bad
+        assert "text/html" not in response.get("Content-Type", ""), bad  # the API's 404, not Django's page
 
 
 # --- GV-8: updating the plan keeps answers, minus swaps for stops that left ---------

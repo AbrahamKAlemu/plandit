@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import UTC, date, timedelta
 from urllib.parse import urlencode
 
@@ -103,9 +104,14 @@ class ShareAnswersView(APIView):
 
 class ShareAnswerDetailView(APIView):
     """DELETE /api/shares/<slug>/answers/<id>/: the owner removes an answer (brief GV-7). It's gone
-    from the page at once. Anyone else gets 404."""
+    from the page at once. Anyone else gets 404. The id may come in either case: the app sends
+    Swift UUIDs, which are upper case."""
 
     def delete(self, request, slug, answer_id):
+        try:
+            answer_id = uuid.UUID(answer_id)
+        except ValueError:
+            return Response(status=status.HTTP_404_NOT_FOUND)
         deleted, _ = ShareAnswer.objects.filter(
             id=answer_id, shared_plan__slug=slug, shared_plan__owner=request.user
         ).delete()
