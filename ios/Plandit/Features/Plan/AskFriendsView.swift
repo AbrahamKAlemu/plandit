@@ -62,6 +62,25 @@ enum AskFriendsText {
     /// Next to the disabled "Build our plan" while times clash.
     static let clashHint = "Leave out someone's times above to build."
 
+    /// Why "Build our plan" can't build now, or nil when it can: the link's day has gone by (the
+    /// screen stayed open past midnight, say), or it's still ahead: "You can build it on Tue, Nov 24".
+    static func notBuildable(_ link: PlanRequestLink, now: Date) -> String? {
+        if link.isOver(now: now) {
+            return "\(day(link, now: now)) is over, so this plan can't be built. Ask about another day to start again."
+        }
+        guard day(link, now: now) != "today" else { return nil }
+        guard let date = link.dayDate else { return "You can build it on \(link.day)" }
+        var style = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day()
+        style.timeZone = link.calendar.timeZone
+        return "You can build it on \(date.formatted(style))"
+    }
+
+    /// The line next to "Build our plan" while it's off: the clash, or the day. None for "Try again".
+    static func buildHint(_ link: PlanRequestLink, clash: Bool, needsLink: Bool, now: Date) -> String? {
+        guard !needsLink else { return nil }
+        return clash ? clashHint : notBuildable(link, now: now)
+    }
+
     /// Above the preview of a plan for a later day.
     static func laterDay(_ link: PlanRequestLink, now: Date) -> String {
         "This is how the plan looks with the answers so far. You can build it on \(day(link, now: now))."
@@ -336,6 +355,8 @@ private struct FriendsAnswersView: View {
     @State private var didCopyLink = false
     @State private var errorText: String?
     @State private var built = 0
+    /// Bumped when a tap finds the day changed under the screen, so it shows the day as it is now.
+    @State private var clockChecks = 0
 
     var body: some View {
         Group {
@@ -383,9 +404,12 @@ private struct FriendsAnswersView: View {
         let result = store.groupInputs(organizer: me, leftOut: leftOut)
         let plan = result.flatMap(\.plan)
         let outcome = plan.flatMap { store.previewGroupPlan($0) }
+        _ = clockChecks
         let canBuild = store.canBuildGroupPlan()
         // Built into Today, but the link didn't get it: "Try again" only puts it on the link.
         let needsLink = store.groupPlanAwaitsLink
+        let isClash: Bool = { if case .clash? = result { return true } else { return false } }()
+        let buildHint = AskFriendsText.buildHint(link, clash: isClash, needsLink: needsLink, now: AppClock.now)
         return VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
@@ -414,15 +438,15 @@ private struct FriendsAnswersView: View {
             if !isBuilt {
                 VStack(spacing: 0) {
                     Hairline()
-                    if case .clash? = result, !needsLink {
-                        Text(AskFriendsText.clashHint)
+                    if let buildHint {
+                        Text(buildHint)
                             .font(.metadata)
                             .foregroundStyle(.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, Space.lg)
                             .padding(.top, Space.sm)
-                            .accessibilityIdentifier("build-clash-hint")
+                            .accessibilityIdentifier(isClash ? "build-clash-hint" : "build-day-hint")
                     }
                     Button {
                         Task { await build(plan, onlyShare: needsLink) }
@@ -810,6 +834,15 @@ private struct FriendsAnswersView: View {
     // MARK: - Actions
 
     private func build(_ plan: GroupInputs.Plan?, onlyShare: Bool) async {
+        // The screen may have stayed open past midnight: Build looked on, but the day has changed.
+        // Show the day as it is now (the line next to Build says why) instead of doing nothing.
+        if !onlyShare, !store.canBuildGroupPlan() {
+            clockChecks += 1
+            if let link = store.planRequest, let why = AskFriendsText.notBuildable(link, now: AppClock.now) {
+                AccessibilityNotification.Announcement(why).post()
+            }
+            return
+        }
         isWorking = true
         errorText = nil
         defer { isWorking = false }

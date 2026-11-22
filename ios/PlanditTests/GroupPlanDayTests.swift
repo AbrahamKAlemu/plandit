@@ -69,6 +69,43 @@ import XCTest
         XCTAssertEqual(store.today.stops.map(\.id), before)
     }
 
+    // Round 3, persona polish: the line next to the disabled "Build our plan".
+    func testTheLineNextToBuildSaysWhichDay() {
+        let link = PlanRequestLink(slug: "req1", url: URL(string: "https://plandit.app/g/req1")!, day: "2026-11-24",
+                                   windowStart: "12:00", windowEnd: "20:00", timeZone: "America/New_York",
+                                   answersBy: Date(), placeIDs: [], builtPlanID: nil)
+        let ny = calendar("America/New_York")
+        let now = ny.date(from: DateComponents(year: 2026, month: 11, day: 22, hour: 11))!
+        XCTAssertEqual(AskFriendsText.buildHint(link, clash: false, needsLink: false, now: now), "You can build it on Tue, Nov 24")
+        XCTAssertEqual(AskFriendsText.buildHint(link, clash: true, needsLink: false, now: now), AskFriendsText.clashHint)
+        XCTAssertNil(AskFriendsText.buildHint(link, clash: false, needsLink: true, now: now), "Try again needs no hint")
+        let after = ny.date(from: DateComponents(year: 2026, month: 11, day: 25, hour: 0, minute: 5))!
+        XCTAssertEqual(AskFriendsText.buildHint(link, clash: false, needsLink: false, now: after),
+                       "Tuesday, November 24 is over, so this plan can't be built. Ask about another day to start again.")
+    }
+
+    // Round 3, R4: the answers screen stayed open past midnight, so Build says why instead of doing nothing.
+    func testBuildAfterMidnightSaysTheDayIsOver() async throws {
+        let (store, requests) = try await F.requestedStore()
+        await requests.setAnswers([F.answer("Maya", budget: 20, 13, 18)])
+        await store.refreshPlanRequest(force: true)
+        let plan = try XCTUnwrap(F.plan(store))
+        let link = try XCTUnwrap(store.planRequest)
+        let lateEvening = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: F.elevenAM)!
+        XCTAssertTrue(store.canBuildGroupPlan(now: lateEvening))
+        XCTAssertNil(AskFriendsText.notBuildable(link, now: lateEvening))
+        XCTAssertNil(AskFriendsText.buildHint(link, clash: false, needsLink: false, now: lateEvening))
+
+        let afterMidnight = lateEvening.addingTimeInterval(6 * 60)
+        XCTAssertFalse(store.canBuildGroupPlan(now: afterMidnight))
+        let before = store.today.stops.map(\.id)
+        XCTAssertNil(store.buildGroupPlan(plan, now: afterMidnight))
+        XCTAssertEqual(store.today.stops.map(\.id), before)
+        let over = "\(AskFriendsText.day(link, now: afterMidnight)) is over, so this plan can't be built. Ask about another day to start again."
+        XCTAssertEqual(AskFriendsText.notBuildable(link, now: afterMidnight), over)
+        XCTAssertEqual(AskFriendsText.buildHint(link, clash: false, needsLink: false, now: afterMidnight), over)
+    }
+
     // R9
     func testTheDayIsWrittenInTheLinksTimeZone() throws {
         guard TimeZone.current.secondsFromGMT() < 12 * 3600 else { throw XCTSkip("the phone is already that far east") }
