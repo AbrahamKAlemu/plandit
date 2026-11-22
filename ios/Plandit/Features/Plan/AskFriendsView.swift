@@ -34,7 +34,10 @@ enum AskFriendsText {
     static func status(_ link: PlanRequestLink, _ details: PlanRequest?, now: Date) -> String {
         switch details?.status {
         case .built?:
-            return "Done. The link now opens your plan."
+            // Built, then Stop sharing took the plan down: friends' link says it's closed.
+            return details?.planSlug == nil
+                ? "Your plan isn't shared anymore, so friends' link shows it's closed."
+                : "Done. The link now opens your plan."
         case .closed?:
             return "Not taking answers any more. You can still build the plan."
         case .open?, nil:
@@ -336,7 +339,7 @@ private struct FriendsAnswersView: View {
             Text("Friends who haven't answered won't be able to. You can still build the plan.")
         }
         .confirmationDialog("Delete this link?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-            Button("Delete link", role: .destructive) { Task { await discard() } }
+            Button("Delete link", role: .destructive) { Task { await discard(.delete) } }
                 .accessibilityIdentifier("confirm-delete-request")
         } message: {
             Text("Friends' answers are deleted and the link stops working.")
@@ -729,8 +732,7 @@ private struct FriendsAnswersView: View {
     // MARK: - Footer
 
     private func footer(_ link: PlanRequestLink, _ details: PlanRequest?) -> some View {
-        let opensPlan = details?.status == .built || link.builtPlanID != nil
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             if details?.status == .open {
                 Button(role: .destructive) {
                     errorText = nil
@@ -747,7 +749,7 @@ private struct FriendsAnswersView: View {
             }
             Button {
                 errorText = nil
-                if opensPlan { Task { await discard() } } else { confirmsDiscard = true }
+                Task { await askAboutAnotherDay() }
             } label: {
                 Text("Ask about another day")
                     .font(.label)
@@ -755,7 +757,8 @@ private struct FriendsAnswersView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .disabled(isWorking)
-            .accessibilityHint(opensPlan ? "Friends' link keeps showing your plan" : "Deletes this link and its answers")
+            // What happens is decided by the server's answer after the tap, so this holds either way.
+            .accessibilityHint("Deletes this link and its answers, unless it opens your plan")
             .accessibilityIdentifier("request-new")
         }
     }
@@ -801,11 +804,26 @@ private struct FriendsAnswersView: View {
         }
     }
 
-    private func discard() async {
+    /// Asks the server first: a link that opens a plan is let go of, one that doesn't is deleted
+    /// once the organizer confirms. If the server can't be reached, the link stays and they're told.
+    private func askAboutAnotherDay() async {
         isWorking = true
         defer { isWorking = false }
         do {
-            try await store.discardPlanRequest()
+            switch try await store.discardKind() {
+            case .delete: confirmsDiscard = true
+            case .forget: try await store.discardPlanRequest(.forget)
+            }
+        } catch {
+            errorText = "Couldn't check the link. Check your connection and try again."
+        }
+    }
+
+    private func discard(_ kind: PlanditStore.RequestDiscard) async {
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await store.discardPlanRequest(kind)
         } catch {
             errorText = "Couldn't delete the link. Check your connection and try again."
         }

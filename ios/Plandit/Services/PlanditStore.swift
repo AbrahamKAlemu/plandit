@@ -1290,13 +1290,33 @@ final class PlanditStore {
         if fetchedRequest?.slug == link.slug, fetchedRequest?.status == .open { fetchedRequest?.status = .closed }
     }
 
-    /// "Ask about another day": forgets this link so a new one can be made. One that never got a
-    /// plan is deleted with its answers; one that opens a plan is kept on the server, so friends'
-    /// link still works, until it's cleaned up 30 days after its day (GS-5).
-    func discardPlanRequest() async throws {
+    /// What "Ask about another day" does with the link.
+    enum RequestDiscard: Equatable {
+        /// It never opened a plan: it goes, with friends' answers.
+        case delete
+        /// It opens a plan (or the server no longer has it): the app lets go of it, and friends'
+        /// link keeps working until it's cleaned up 30 days after its day (GS-5).
+        case forget
+    }
+
+    /// Reads the link first and decides by what the server says now, not what this phone last
+    /// read: built (maybe on another phone) is forgotten, open or closed is deleted. Throws when it
+    /// can't be read, and the link stays.
+    func discardKind() async throws -> RequestDiscard {
+        guard let link = planRequest, let requestClient else { return .forget }
+        guard let fetched = try await requestClient.fetch(slug: link.slug) else { return .forget }
+        if planRequest?.slug == link.slug, fetched != fetchedRequest {
+            fetchedRequest = fetched
+            requestFetchFailed = false
+        }
+        return fetched.status == .built ? .forget : .delete
+    }
+
+    /// "Ask about another day", once `discardKind` decided: deletes or forgets the link so a new
+    /// one can be made.
+    func discardPlanRequest(_ kind: RequestDiscard) async throws {
         guard let link = planRequest else { return }
-        let opensAPlan = link.builtPlanID != nil || requestDetails?.status == .built
-        if !opensAPlan, let requestClient { try await requestClient.delete(slug: link.slug) }
+        if kind == .delete, let requestClient { try await requestClient.delete(slug: link.slug) }
         requestChanges += 1
         planRequest = nil
         fetchedRequest = nil

@@ -178,7 +178,7 @@ import XCTest
 
     func testAskingAboutAnotherDayDeletesALinkWithoutAPlan() async throws {
         let (store, requests) = try await requestedStore()
-        try await store.discardPlanRequest()
+        try await store.discardPlanRequest(try await store.discardKind())
         XCTAssertNil(store.planRequest)
         let deleted = await requests.deleted
         XCTAssertEqual(deleted, ["req1"])
@@ -188,7 +188,7 @@ import XCTest
         let (store, requests) = try await requestedStore()
         await requests.setStatus(.built)
         await store.refreshPlanRequest(force: true)
-        try await store.discardPlanRequest()
+        try await store.discardPlanRequest(try await store.discardKind())
         XCTAssertNil(store.planRequest)
         let deleted = await requests.deleted
         XCTAssertEqual(deleted, [], "friends' link keeps opening the plan")
