@@ -22,7 +22,7 @@ from django.db import DatabaseError
 from plandit.core import retention
 from plandit.core import views as core_views
 from plandit.core.models import ActivityEvent, AppSnapshot, Profile
-from plandit.plans.models import REQUEST_RETENTION_DAYS, GroupAnswer, GroupRequest
+from plandit.plans.models import REQUEST_RETENTION_DAYS, DayPlan, GroupAnswer, GroupRequest
 from plandit.saved.models import SavedPost
 from plandit.shares.models import SharedPlan
 from resolution.models import SocialEvidenceThrottleState
@@ -153,6 +153,8 @@ ADDS_A_ROW = {
         SocialEvidenceThrottleState,
     ),
     "saved-post": (lambda who: who.client.post("/api/saved/", {"url": TIKTOK_URL}, format="json"), SavedPost),
+    "day-plan": (lambda who: who.client.post("/api/plans/", {}, format="json"), DayPlan),
+    "todays-plan": (lambda who: who.client.get("/api/plans/today/"), DayPlan),
 }
 SETTINGS_FOR = {"social-evidence": {"SOCIAL_PAGE_EXTRACTION_ENABLED": True}}
 
