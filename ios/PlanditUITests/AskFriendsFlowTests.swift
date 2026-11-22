@@ -50,7 +50,7 @@ final class AskFriendsFlowTests: XCTestCase {
 
     /// GI-1: four saved places today, noon to 8 PM by default, then the link. At 11 AM answers are
     /// due when the time starts, at noon: sooner than 2 hours from now.
-    @MainActor private func makeLink(_ app: XCUIApplication) {
+    @MainActor private func makeLink(_ app: XCUIApplication, isToday: Bool = true) {
         XCTAssertTrue(app.navigationBars["Ask friends what works"].waitForExistence(timeout: 3))
         let create = app.buttons["ask-create"]
         XCTAssertFalse(create.isEnabled, "nothing picked yet")
@@ -68,7 +68,24 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Friends' answers"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["request-link-url"].label, "Link: https://plandit.app/g/req123abcd")
         XCTAssertTrue(app.buttons["request-send-link"].exists)
-        XCTAssertEqual(text(app.staticTexts["request-status"]), "Friends can answer until 12:00 PM.")
+        if isToday { XCTAssertEqual(text(app.staticTexts["request-status"]), "Friends can answer until 12:00 PM.") }
+    }
+
+    /// Sets the form's day to `daysAhead` days from today, in the day picker's calendar.
+    @MainActor private func chooseDay(_ daysAhead: Int, in app: XCUIApplication) {
+        let picker = element("ask-day", in: app)
+        XCTAssertTrue(picker.waitForExistence(timeout: 3))
+        scrollTo(picker, in: app)
+        picker.tap()
+        let day = Calendar.current.date(byAdding: .day, value: daysAhead, to: Date())!
+        let label = day.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        let button = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", label)).firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 3), "no \(label) in the calendar")
+        button.tap()
+        sleep(1)
+        // Closes the calendar: a tap above it, on the navigation bar's empty middle.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        sleep(1)
     }
 
     /// Picks a place on the form, or leaves it picked: a row that's already picked is never tapped,
@@ -217,5 +234,27 @@ final class AskFriendsFlowTests: XCTestCase {
         scrollTo(hint, in: app)
         XCTAssertLessThanOrEqual(hint.frame.maxY, build.frame.minY, "at the end it sits right above Build our plan")
         XCTAssertGreaterThan(hint.frame.minY, app.buttons["request-new"].frame.maxY, "after the answers and the links' buttons")
+    }
+
+    /// On a later day, the line saying when the plan can be built is there at the largest text sizes
+    /// too: last in the list, reachable right above the disabled button (round 4 persona review).
+    @MainActor func testAtTheLargestTextTheLaterDayLineIsReachable() {
+        let app = launch(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
+        openAskFriends(app)
+        XCTAssertTrue(app.navigationBars["Ask friends what works"].waitForExistence(timeout: 3))
+        chooseDay(2, in: app)
+        makeLink(app, isToday: false)
+        let line = app.staticTexts["build-day-hint"]
+        XCTAssertTrue(line.waitForExistence(timeout: 3))
+        let day = Calendar.current.date(byAdding: .day, value: 2, to: Date())!
+        XCTAssertEqual(line.label, "You can build it on \(day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
+        let build = app.buttons["build-our-plan"]
+        XCTAssertFalse(build.isEnabled, "a later day's plan is built on that day")
+
+        scrollBackUp(app)
+        XCTAssertGreaterThan(line.frame.minY, build.frame.minY, "the line is pinned over the answers")
+        scrollTo(line, in: app)
+        XCTAssertTrue(line.isHittable)
+        XCTAssertLessThanOrEqual(line.frame.maxY, build.frame.minY, "at the end it sits right above Build our plan")
     }
 }
