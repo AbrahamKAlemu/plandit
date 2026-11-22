@@ -407,30 +407,73 @@ def test_lim_4_create_accepts_20_stops_and_refuses_21():
     assert response.json() == {"plan": ["A group plan has at most 20 stops."]}
 
 
-def bad_plans():
+# The keys the app's Codable types decode with no default (ios/Plandit/Models/DayPlan.swift on
+# feat/group-requests-app): a plan without one fails to decode on every member's phone.
+STOP_KEYS = ["id", "place", "start", "durationMinutes", "estimatedCost", "status"]
+LEG_KEYS = ["id", "fromStopID", "toStopID", "mode", "minutes", "miles"]
+
+
+def without(item: dict, key: str) -> dict:
+    return {k: v for k, v in item.items() if k != key}
+
+
+def nested(levels: int) -> list:
+    """A list `levels` deep: nested(1) is [], nested(2) is [[]]."""
+    value = []
+    for _ in range(levels - 1):
+        value = [value]
+    return value
+
+
+def non_canonical(uuid_text: str) -> dict:
+    """Forms Python's UUID() reads and Swift's UUID decoding doesn't."""
+    return {
+        "in braces": "{" + uuid_text + "}",
+        "as a urn": f"urn:uuid:{uuid_text}",
+        "as bare hex": uuid_text.replace("-", ""),
+    }
+
+
+def bad_plans(plan_id=None):
+    """Plans the server must refuse, each with `plan_id` (or a new id) unless the case is the id."""
+    plan_id = str(plan_id or uuid.uuid4()).upper()
+
+    def plan(**overrides):
+        return plan_json(plan_id, **overrides)
+
     stop = stop_json()
     duplicate = {**stop_json(), "id": stop["id"].lower()}
-    without = {k: v for k, v in stop_json().items() if k != "id"}
-    return {
-        "not an object": [plan_json()],
-        "no id": {k: v for k, v in plan_json().items() if k != "id"},
-        "id not a UUID": plan_json(id="plan-1"),
-        "stops not a list": plan_json(stops={"a": stop}),
-        "a stop not an object": plan_json(stops=["The Met"]),
-        "a stop without an id": plan_json(stops=[without]),
-        "a stop id not a UUID": plan_json(stops=[{**stop, "id": 7}]),
-        "duplicate stop ids": plan_json(stops=[stop, duplicate]),
-        "no legs": {k: v for k, v in plan_json().items() if k != "legs"},
-        "legs not a list": plan_json(legs=None),
-        "no date": {k: v for k, v in plan_json().items() if k != "date"},
-        "null date": plan_json(date=None),
-        "no title": {k: v for k, v in plan_json().items() if k != "title"},
-        "title not text": plan_json(title=3),
-        "no budget": {k: v for k, v in plan_json().items() if k != "budget"},
-        "budget not a number": plan_json(budget="40"),
-        "budget a bool": plan_json(budget=True),
-        "a null character": plan_json(title="Sat\x00urday"),
+    leg = plan()["legs"][0]
+    cases = {
+        "not an object": [plan()],
+        "no id": without(plan(), "id"),
+        "plan id not a UUID": plan(id="plan-1"),
+        **{f"plan id {form}": plan(id=text) for form, text in non_canonical(plan_id).items()},
+        "stops not a list": plan(stops={"a": stop}),
+        "a stop not an object": plan(stops=["The Met"]),
+        "a stop id not a UUID": plan(stops=[{**stop, "id": 7}]),
+        **{f"a stop id {form}": plan(stops=[{**stop, "id": text}]) for form, text in non_canonical(stop["id"]).items()},
+        **{f"a stop without {key}": plan(stops=[without(stop, key)]) for key in STOP_KEYS},
+        "a stop with a null start": plan(stops=[{**stop, "start": None}]),
+        "duplicate stop ids": plan(stops=[stop, duplicate]),
+        "no legs": without(plan(), "legs"),
+        "legs not a list": plan(legs=None),
+        "a leg not an object": plan(legs=["walk"]),
+        **{f"a leg without {key}": plan(legs=[without(leg, key)]) for key in LEG_KEYS},
+        "a leg with a null mode": plan(legs=[{**leg, "mode": None}]),
+        "extras not a list": plan(extras={"snacks": 8}),
+        "extras null": plan(extras=None),
+        "nested 33 levels deep": plan(extras=nested(32)),
+        "no date": without(plan(), "date"),
+        "null date": plan(date=None),
+        "no title": without(plan(), "title"),
+        "title not text": plan(title=3),
+        "no budget": without(plan(), "budget"),
+        "budget not a number": plan(budget="40"),
+        "budget a bool": plan(budget=True),
+        "a null character": plan(title="Sat\x00urday"),
     }
+    return cases
 
 
 @pytest.mark.parametrize("case", list(bad_plans()))
@@ -440,6 +483,43 @@ def test_lim_5_create_refuses_a_plan_of_the_wrong_shape(case):
     assert response.status_code == 400
     assert "plan" in response.json()
     assert GroupPlan.objects.count() == 0
+
+
+@pytest.mark.parametrize(
+    ("case", "message"),
+    [
+        ("plan id as a urn", "`id` must be a UUID in its 36-character form."),
+        ("a stop id in braces", "Every stop needs a UUID `id` in its 36-character form."),
+        (
+            "a stop without place",
+            "Every stop needs `id`, `place`, `start`, `durationMinutes`, `estimatedCost` and `status`.",
+        ),
+        ("a leg not an object", "Every leg needs `id`, `fromStopID`, `toStopID`, `mode`, `minutes` and `miles`."),
+        ("a leg without miles", "Every leg needs `id`, `fromStopID`, `toStopID`, `mode`, `minutes` and `miles`."),
+        ("extras not a list", "`extras` must be a list."),
+        ("nested 33 levels deep", "Can't be nested more than 32 levels deep."),
+    ],
+)
+def test_lim_5_the_new_shape_checks_say_what_is_wrong(case, message):
+    response = create(person("Maya Lopez"), bad_plans()[case])
+    assert (response.status_code, response.json()) == (400, {"plan": [message]})
+
+
+def test_lim_5_a_plan_with_only_the_keys_the_app_needs_is_accepted_unchanged():
+    """No optional key is required: not `extras`, a stop's `note`, `sourcePostID`, `costItems` or
+    `costIsCustom`, or a leg's `cost`, `detail` or `isChosen`."""
+    maya = person("Maya Lopez")
+    stops = [{key: stop_json()[key] for key in STOP_KEYS} for _ in range(2)]
+    plan = without(plan_json(stops=stops), "extras")
+    plan["legs"] = [{key: plan["legs"][0][key] for key in LEG_KEYS}]
+    response = create(maya, plan)
+    assert response.status_code == 201
+    assert response.json()["plan"] == plan
+
+
+def test_lim_5_a_plan_nested_32_levels_deep_is_accepted():
+    """The plan object is level 1, so `extras` may hold 31 more."""
+    assert create(person("Maya Lopez"), plan_json(extras=nested(31))).status_code == 201
 
 
 @pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
@@ -776,6 +856,7 @@ def test_ver_5_a_base_version_that_isnt_a_whole_number_is_400(group, jordan, bas
         ("edit", {"kind": "remove"}),
         ("edit", {"kind": "remove", "stopIds": "abc"}),
         ("edit", {"kind": "remove", "stopIds": ["not-a-uuid"]}),
+        *[("edit", {"kind": "remove", "stopIds": [text]}) for text in non_canonical(new_id()).values()],
         ("edit", {"kind": "remove", "stopIds": [str(uuid.uuid4()) for _ in range(21)]}),
     ],
 )
@@ -886,9 +967,8 @@ def test_lim_4_a_put_accepts_20_stops_and_refuses_21(group, jordan):
 
 @pytest.mark.parametrize("case", list(bad_plans()))
 def test_lim_5_a_put_of_a_plan_of_the_wrong_shape_is_400(group, jordan, case):
-    plan = bad_plans()[case]
-    if isinstance(plan, dict) and "id" in plan and case != "id not a UUID":
-        plan["id"] = group.data["id"]
+    """Each bad plan carries the group's own plan id, in another form for the id cases."""
+    plan = bad_plans(group.data["id"])[case]
     before = row(group)
     response = put(jordan, group, plan, stop_ids=[])
     assert response.status_code == 400
