@@ -40,11 +40,24 @@ Q-5).
 
 ### G1a, G1b
 
-As in the architecture. G1a includes tests for:
+As in the architecture. Before G1a relies on `client_ip`:
+
+- G0 logs the proxy chain's shape (no addresses) on every `/p/` page view: `proxy chain:
+  forwarded_entries=… private_from_right=… true_client_ip=… true_client_ip_from_right=…`;
+- after G0 deploys, open any shared plan link from a phone on cellular and from a laptop, then read
+  those lines in Render's logs. Set `TRUSTED_PROXY_HOPS` to the measured position of the client's
+  address (default 3, from public reports), or switch `client_ip` to `True-Client-IP` if that
+  header is present and matches;
+- if plandit.app forwards `/p/` or `/g/` to the API by then, measure on that route too: it adds a
+  hop;
+- G1a removes `describe_forwarding` and its log line.
+
+G1a includes tests for:
 
 - every owner endpoint called as an outsider (404);
 - CSRF rejection;
-- the per-IP limit and the 50-answer cap;
+- the per-IP limit and the 50-answer cap (the cap is a database count of the link's answers, not
+  `rate_limited`: the cache's culling can evict live slots once the table is full);
 - changing an answer from the same cookie;
 - another cookie not being able to change it;
 - dropping swaps for removed stops;
@@ -144,7 +157,8 @@ Merging stays with Abraham.
 
 For each mode:
 
-1. Mode 1 only: GV-11 measured before the app version is submitted.
+1. Mode 1 only: GV-11 measured before the app version is submitted, and the proxy chain measured
+   from G0's log before G1a merges (see "G1a, G1b").
 2. Merge the backend slice; Render deploys and runs the migration. Then, from a test account,
    create, answer and delete once in production and confirm it works. Check the RLS query from
    #41's PR returns no rows.

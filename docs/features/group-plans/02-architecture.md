@@ -28,7 +28,8 @@ Policy and rate limits.
   - `GET /p/<slug>` renders `shares/plan.html`, with `X-Robots-Tag: noindex`,
     `Cache-Control: public, max-age=60`, `Referrer-Policy: no-referrer`, and no CSP.
   - `share_url()` uses `SHARE_BASE_URL` (plandit.app once the site forwards `/p/`), otherwise the
-    API's own host.
+    API's own host. Since G0 the page's styles are static files at `/static/shares/`, so the site
+    must forward that path too when `SHARE_BASE_URL` moves.
 - **Share payload** (`ios/Plandit/Models/SharedPlan.swift`): `SharedPlanPayload` holds the title,
   `dateText`, stops (name, place, address, texts and coordinates) and legs. Stops have no ids, and
   the date is only text. `SharedLink` (slug, url, planID, showPrices, note) lives in the app's
