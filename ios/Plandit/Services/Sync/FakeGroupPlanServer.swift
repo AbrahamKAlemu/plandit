@@ -480,6 +480,26 @@ actor FakeGroupPlanServer: GroupPlanServing {
     }
 }
 
+extension DayPlan {
+    /// A copy whose stops and trips have new ids, trips still joining the same stops: a group plan
+    /// for tests that shares no stop ids with the sample day.
+    func withFreshStopIDs() -> DayPlan {
+        var copy = self
+        var fresh: [UUID: UUID] = [:]
+        for index in copy.stops.indices {
+            let id = UUID()
+            fresh[copy.stops[index].id] = id
+            copy.stops[index].id = id
+        }
+        for index in copy.legs.indices {
+            copy.legs[index].id = UUID()
+            copy.legs[index].fromStopID = fresh[copy.legs[index].fromStopID] ?? copy.legs[index].fromStopID
+            copy.legs[index].toStopID = fresh[copy.legs[index].toStopID] ?? copy.legs[index].toStopID
+        }
+        return copy
+    }
+}
+
 extension FakeGroupPlanServer {
     nonisolated static let launchArgument = "-fakeGroupPlans"
     /// The seeded group's link, already joined (joining again changes nothing).
@@ -506,18 +526,20 @@ extension FakeGroupPlanServer {
         let scenario = arguments.indices.contains(index + 1) ? arguments[index + 1] : ""
         let server = FakeGroupPlanServer()
         guard scenario != "empty" else { return server }
-        var plan = SampleData.dayPlan
+        // Every group's stops get their own ids, as on the server, so nothing found in your own
+        // plan by id can pass for a group plan's stop.
+        var plan = SampleData.dayPlan.withFreshStopIDs()
         plan.id = UUID(uuidString: "BE1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
         plan.date = now
         for stop in plan.stops.indices { plan.stops[stop].status = .upcoming }
         let date = GroupPlanDay.string(for: now, calendar: calendar)
         await server.seedGroup(id: seededGroupID, plan: plan, date: date, organizer: "Maya", others: ["Jordan"])
-        var other = plan
+        var other = plan.withFreshStopIDs()
         other.id = UUID(uuidString: "CF1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
         other.title = "Jordan's day"
         await server.seedGroup(id: joinableGroupID, plan: other, date: date, organizer: "Jordan", youAreMember: false, token: joinableToken)
         if scenario == "youOrganize" {
-            var yours = plan
+            var yours = plan.withFreshStopIDs()
             yours.id = UUID(uuidString: "EF1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
             await server.seedGroup(id: organizedGroupID, plan: yours, date: date, organizer: nil, others: ["Maya", "Jordan"])
         }

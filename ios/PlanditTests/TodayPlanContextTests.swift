@@ -32,9 +32,9 @@ import XCTest
         TodayPlanContext(store: store, groups: groups ?? self.groups, router: router, messages: messages, now: Date(), calendar: .current)
     }
 
-    /// Maya's plan for today: the sample day, every stop still ahead.
+    /// Maya's plan for today: the sample day with its own stop ids, every stop still ahead.
     private func mayasGroup() async -> UUID {
-        var plan = SampleData.dayPlan
+        var plan = SampleData.dayPlan.withFreshStopIDs()
         plan.id = UUID()
         for index in plan.stops.indices { plan.stops[index].status = .upcoming }
         let id = await server.seedGroup(plan: plan, date: today, organizer: "Maya", others: ["Jordan"])
@@ -171,14 +171,17 @@ import XCTest
         XCTAssertEqual(store.today, ownBefore)
     }
 
+    /// "Edit with friends" tapped twice before the first tap is done: one group plan, one create.
     func testTwoTapsMakeOneGroupPlan() async throws {
+        let starter = GroupStarter()
         let context = context()
-        async let first = context.startGroup()
-        async let second = context.startGroup()
+        async let first = starter.start(with: context)
+        async let second = starter.start(with: context)
         let links = await [first, second]
-        XCTAssertEqual(try links[0].get(), try links[1].get())
+        XCTAssertEqual(links.compactMap { $0 }.count, 1, "the second tap does nothing")
         XCTAssertEqual(groups.groups.count, 1)
         let created = await server.count(.create)
-        XCTAssertLessThanOrEqual(created, 2)
+        XCTAssertEqual(created, 1)
+        XCTAssertFalse(starter.isStarting)
     }
 }

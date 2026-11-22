@@ -97,18 +97,40 @@ struct GroupEmptyToday: View {
     }
 }
 
+/// "Edit with friends" while it works. A second tap while the first is going does nothing, so one
+/// tap makes one group plan.
+@Observable
+final class GroupStarter {
+    private(set) var isStarting = false
+    private(set) var error: String?
+
+    /// The new group plan's link; nil when it failed (`error` says why) or a start was already going.
+    func start(with today: TodayPlanContext) async -> URL? {
+        guard !isStarting else { return nil }
+        isStarting = true
+        error = nil
+        defer { isStarting = false }
+        switch await today.startGroup() {
+        case .success(let link):
+            return link
+        case .failure(let failure):
+            error = GroupToday.failureText(failure, for: .start)
+            return nil
+        }
+    }
+}
+
 /// "Edit with friends" on your own plan: makes a group plan from it, shows it, and opens the
 /// share sheet with its link. A second tap while it's working does nothing.
 struct StartGroupButton: View {
     @TodayContext private var today
-    @State private var isStarting = false
-    @State private var error: String?
+    @State private var starter = GroupStarter()
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
             Button(action: start) {
                 HStack(spacing: Space.xs) {
-                    if isStarting {
+                    if starter.isStarting {
                         ProgressView().controlSize(.small)
                     } else {
                         Icon(.users, size: 18)
@@ -117,7 +139,7 @@ struct StartGroupButton: View {
                 }
             }
             .buttonStyle(.secondary)
-            .disabled(isStarting)
+            .disabled(starter.isStarting)
             // The line below says who can change it and what they see; VoiceOver reads it next.
             .accessibilityHint("Makes a copy of this plan, then lets you send your friends the link")
             .accessibilityIdentifier("start-group")
@@ -126,7 +148,7 @@ struct StartGroupButton: View {
                 .foregroundStyle(.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("start-group-note")
-            if let error {
+            if let error = starter.error {
                 Text(error)
                     .font(.metadata)
                     .foregroundStyle(Color.error)
@@ -137,19 +159,12 @@ struct StartGroupButton: View {
     }
 
     private func start() {
-        guard !isStarting else { return }
-        isStarting = true
-        error = nil
         let today = today
         Task {
-            let result = await today.startGroup()
-            isStarting = false
-            switch result {
-            case .success(let link):
+            if let link = await starter.start(with: today) {
                 InviteShareSheet.present(link)
-            case .failure(let failure):
-                error = GroupToday.failureText(failure, for: .start)
-                AccessibilityNotification.Announcement(GroupToday.failureText(failure, for: .start)).post()
+            } else if let error = starter.error {
+                AccessibilityNotification.Announcement(error).post()
             }
         }
     }

@@ -15,8 +15,9 @@ import XCTest
         calendar.date(from: DateComponents(year: 2026, month: 11, day: 20, hour: hour, minute: minute))!
     }
 
+    /// The sample day as a group plan: its own stop ids, every stop still ahead.
     private func day() -> DayPlan {
-        var plan = SampleData.dayPlan
+        var plan = SampleData.dayPlan.withFreshStopIDs()
         for index in plan.stops.indices { plan.stops[index].status = .upcoming }
         return plan
     }
