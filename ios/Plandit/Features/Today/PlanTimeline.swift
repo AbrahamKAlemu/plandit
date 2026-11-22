@@ -6,6 +6,8 @@ struct PlanTimeline: View {
     @Environment(PlanditStore.self) private var store
     /// The trip whose walk / subway / drive options are open.
     @State private var choosingLeg: StopRef?
+    /// The stop whose friends' swap picks are open.
+    @State private var reviewingSwaps: StopRef?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,6 +21,13 @@ struct PlanTimeline: View {
                     StopActions(stop: stop)
                 }
                 .transition(.opacity.combined(with: .move(edge: .leading)))
+
+                if let picks = store.swapMarks[stop.id] {
+                    SwapMarkRow(count: picks.count, stopName: stop.place.name, railColor: leg.map { plan.state(of: $0).color }) {
+                        reviewingSwaps = StopRef(id: stop.id)
+                    }
+                    .transition(.opacity)
+                }
 
                 if let leg {
                     let state = plan.state(of: leg)
@@ -36,6 +45,7 @@ struct PlanTimeline: View {
             }
         }
         .sheet(item: $choosingLeg) { TravelOptionsSheet(legID: $0.id) }
+        .sheet(item: $reviewingSwaps) { StopSwapSheet(stopID: $0.id) }
     }
 }
 
@@ -126,6 +136,40 @@ private struct TimelineStopRow: View {
         .animation(.snappy(duration: 0.3), value: stop.status)
         .accessibilityElement(children: .combine)
         .accessibilityHint("Shows stop details")
+    }
+}
+
+/// "2 would swap" under a stop friends would swap; opens what they picked.
+private struct SwapMarkRow: View {
+    let count: Int
+    let stopName: String
+    /// The rail carries on down to the trip after the stop; nil for the last stop.
+    let railColor: Color?
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: Space.sm) {
+            Rectangle()
+                .fill(railColor ?? .clear)
+                .frame(width: 2)
+                .frame(maxHeight: .infinity)
+                .frame(width: 28)
+            Button(action: action) {
+                HStack(spacing: Space.xxs) {
+                    Icon(.users, size: 16)
+                    Text(ShareAnswersText.wouldSwap(count))
+                    Icon(.chevronRight, size: 14).foregroundStyle(.inkMuted)
+                }
+                .outlinedControl()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(count == 1 ? "1 friend would swap \(stopName)" : "\(count) friends would swap \(stopName)")
+            .accessibilityHint("Shows what they picked")
+            .accessibilityIdentifier("swap-mark-\(stopName)")
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, Space.xs)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

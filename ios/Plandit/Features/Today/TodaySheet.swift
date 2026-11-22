@@ -10,6 +10,7 @@ struct TodaySheet: View {
     @State private var isEditingPlan = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var isSendingPlan = false
+    @State private var isShowingAnswers = false
     /// Goes up each time "Use this plan" makes a plan: the same success haptic as building one.
     @State private var suggestionsUsed = 0
 
@@ -118,6 +119,11 @@ struct TodaySheet: View {
                         }
                         .buttonStyle(.secondary)
                         .accessibilityIdentifier("send-plan")
+
+                        if let summary = store.answerSummary {
+                            AnswerSummaryButton(summary: summary) { isShowingAnswers = true }
+                                .transition(.opacity)
+                        }
                     }
                     .padding(.horizontal, Space.lg)
                     .padding(.top, Space.xs)
@@ -128,6 +134,8 @@ struct TodaySheet: View {
                 .scrollIndicators(.hidden)
                 .hiddenWhenSheetCollapsed()
                 .transition(.opacity)
+                // Friends' answers on the shared plan: on appearing, and when the link changes (GV-5).
+                .task(id: store.todayLink?.slug) { await store.refreshShareAnswers() }
             }
         }
         .animation(.snappy(duration: 0.35), value: plan.stops.isEmpty)
@@ -138,6 +146,7 @@ struct TodaySheet: View {
         .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
         .sheet(isPresented: $isEditingPlan) { EditPlanSheet() }
         .sheet(isPresented: $isSendingPlan) { SendPlanSheet() }
+        .sheet(isPresented: $isShowingAnswers) { ShareAnswersSheet() }
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
                 // Same landing as from Saved: watch the new post get mapped.
@@ -261,6 +270,36 @@ struct TodaySheet: View {
         .padding(.horizontal, Space.lg)
         .padding(.top, Space.xs)
         .padding(.bottom, Space.sm)
+    }
+}
+
+/// "3 in · 1 can't make it" under the share button; opens who answered.
+private struct AnswerSummaryButton: View {
+    let summary: ShareAnswerSummary
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.xs) {
+                Icon(.users, size: 18).foregroundStyle(.ink)
+                Text(summary.text)
+                    .font(.label)
+                    .foregroundStyle(.ink)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .planditCard(padding: Space.sm)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(summary.accessibilityText)
+        .accessibilityHint("Shows who answered")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("answers-summary")
     }
 }
 
