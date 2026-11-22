@@ -90,7 +90,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 
 - November 22: Abraham asked for one review round per slice from now on: one code review and one
   persona pass, then fixes, the full test lane and the PR, with no re-review. This applies to G3a
-  too unless he asks for more.
+  too unless Abraham asks for more.
 - November 22: G2b builds a group plan only on its own day (D1), because the store holds one
   `today`. A later day's plan is previewed with the answers so far. Build reuses Today's existing
   link, `planRequest` syncs last writer wins, and Ask about another day checks the server before
