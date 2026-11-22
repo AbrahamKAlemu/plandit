@@ -244,7 +244,7 @@ def test_the_edit_log_and_removals_hold_no_foreign_key_to_a_profile():
 
 def test_cas_7_group_plans_are_registered_for_expiry_30_days_after_their_date():
     rules = [rule for rule in retention.RULES if rule.model is GroupPlan]
-    assert [(rule.date_field, rule.days) for rule in rules] == [("date", 30)]
+    assert [(rule.date_field, rule.days, rule.lock_first) for rule in rules] == [("date", 30, True)]
     assert GROUP_RETENTION_DAYS == 30
 
 

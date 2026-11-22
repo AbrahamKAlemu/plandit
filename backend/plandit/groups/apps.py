@@ -12,4 +12,5 @@ class GroupsConfig(AppConfig):
         from .models import GROUP_RETENTION_DAYS, GroupPlan
 
         # Brief GS-5. Deleting the group deletes its members, edits and removals with it (CASCADE).
-        retention.register(GroupPlan, "date", days=GROUP_RETENTION_DAYS)
+        # Locked first, as every group write and account deletion lock it (MF-E).
+        retention.register(GroupPlan, "date", days=GROUP_RETENTION_DAYS, lock_first=True)

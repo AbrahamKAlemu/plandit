@@ -232,10 +232,11 @@ def _detail_response(request, group: GroupPlan, caller: GroupMember, *, status_c
 
 def _purge_quietly() -> None:
     """Expire old group plans and friends' input on an organizer's create (GS-5). Never on a poll
-    (N-7), and a failure here never fails the create."""
+    (N-7), and a failure here never fails the create. Not inside one transaction: each rule commits
+    on its own (the group rule in its own transaction), so the purge never holds one table's row
+    locks while it waits for another's, which account deletion takes in another order."""
     try:
-        with transaction.atomic():
-            purge_expired()
+        purge_expired()
     except DatabaseError:
         logger.exception("purge_expired failed during a group plan create")
 

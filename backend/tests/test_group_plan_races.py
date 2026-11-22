@@ -8,14 +8,18 @@ a lock. That forces the order that goes wrong, so the tests don't depend on timi
 asserts the second request really was blocked."""
 
 import threading
+from datetime import timedelta
+from io import StringIO
 
 import pytest
+from django.core.management import call_command
 from django.db import connection, transaction
 
+from plandit.core import retention
 from plandit.core import views as core_views
 from plandit.core.models import Profile
 from plandit.groups import views as group_views
-from plandit.groups.models import GroupMember, GroupPlan, GroupPlanEdit, GroupRemoval
+from plandit.groups.models import GROUP_RETENTION_DAYS, GroupMember, GroupPlan, GroupPlanEdit, GroupRemoval
 from tests.test_answer_races import WAIT_SECONDS, another_session_is_waiting_for_a_lock
 from tests.test_group_plans import (
     BASE,
@@ -32,6 +36,7 @@ from tests.test_group_plans import (
     plan_json,
     put,
     row,
+    today,
     token_of,
     with_and_without_supabase,
 )
@@ -493,3 +498,38 @@ def test_iso_2_an_outsider_gets_the_same_404_while_the_group_is_locked(group, ma
     assert not pair[0].has_header("Retry-After")
     assert row(group) == before
     assert group.members.count() == 3
+
+
+# --- The retention purge against a member's account deletion, on an expired group ---------------
+
+
+@pytest.mark.parametrize("trigger", ["a group create", "the purge command"])
+@pytest.mark.parametrize("first", ["purge", "deletion"])
+def test_the_purge_and_a_members_account_deletion_on_an_expired_group_both_finish(
+    maya, jordan, casey, settings, monkeypatch, caplog, first, trigger
+):
+    """The purge deleted an expired group's members, then the group, without locking it first;
+    a member's account deletion locks the group, then deletes their membership. Each waited for
+    the other: deadlock. The purge now locks the expired groups first, as every group write does."""
+    expired = make_group(maya, jordan, casey, day=today() - timedelta(days=GROUP_RETENTION_DAYS))
+    sam = person("Sam Rivera")
+    warm(maya, jordan, sam)
+    delete = delete_account_later(jordan, settings, monkeypatch, with_supabase=False)
+    if trigger == "a group create":
+        purge = lambda: create(sam)  # noqa: E731 - an organizer's create runs the purge
+    else:
+        purge = lambda: call_command("purge_expired", stdout=StringIO()) or "purged"  # noqa: E731
+    if first == "purge":
+        results = first_holds_until_second_waits(monkeypatch, retention, "lock_rows", purge, delete)
+        purged, deleted = results["first"], results["second"]
+    else:
+        results = first_holds_until_second_waits(monkeypatch, core_views, "_lock_group_plans", delete, purge)
+        deleted, purged = results["first"], results["second"]
+
+    assert deleted.status_code == 204
+    assert purged == "purged" or purged.status_code == 201
+    assert "purge_expired failed" not in caplog.text
+    assert "deadlock" not in caplog.text
+    assert not GroupPlan.objects.filter(pk=expired.pk).exists()
+    assert not GroupMember.objects.filter(group_id=expired.pk).exists()
+    assert not Profile.objects.filter(pk=jordan.id).exists()
