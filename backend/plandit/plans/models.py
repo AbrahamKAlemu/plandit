@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from django.db import models
 
+from plandit.shares.models import new_slug
+
 
 class DayPlan(models.Model):
     """One Plandit day: an ordered set of stops with the travel between them."""
@@ -88,3 +90,82 @@ class TravelLeg(models.Model):
 
     def __str__(self) -> str:
         return f"{self.mode} {self.minutes} min"
+
+
+# --- Friends' input links (group plans, mode 2) ------------------------------------------------
+
+# Brief GS-5: friends' answers are deleted this many days after the plan's day (or with the link).
+REQUEST_RETENTION_DAYS = 30
+BUDGET_MAX = 150  # brief GI-2: $0 to $150, train included
+MAX_STARS = 3  # brief GI-2
+
+
+class GroupRequest(models.Model):
+    """An "Ask friends what works" link (plandit.app/g/<slug>, group plans mode 2): the organizer's
+    places, day, time range and answer deadline. Friends answer on the page without an account;
+    the organizer's app reads the answers and builds the plan on the phone, then shares it with
+    this request's slug, which marks it built and makes the link open that plan's page (brief GI-7).
+
+    `status` is what the organizer did: `open` until they close it or build the plan. The link also
+    stops taking answers at `answers_by` (brief GI-3). The request and its answers are deleted 30
+    days after `day` (brief GS-5, plandit.core.retention) or when the organizer deletes it."""
+
+    class Status(models.TextChoices):
+        OPEN = "open"
+        CLOSED = "closed"
+        BUILT = "built"
+
+    slug = models.CharField(max_length=10, unique=True, default=new_slug, editable=False)
+    owner = models.ForeignKey("core.Profile", on_delete=models.CASCADE, related_name="plan_requests")
+    places = models.JSONField(help_text="2 to 10 of {id, name, neighborhood, kind, costText}, from the app.")
+    day = models.DateField(db_index=True, help_text="The plan's day, for expiry.")
+    window_start = models.TimeField(help_text="Local time in time_zone.")
+    window_end = models.TimeField(help_text="Local time in time_zone.")
+    time_zone = models.CharField(max_length=64, help_text="IANA name, such as America/New_York.")
+    answers_by = models.DateTimeField()
+    status = models.CharField(max_length=6, choices=Status.choices, default=Status.OPEN)
+    shared_plan = models.ForeignKey(
+        "shares.SharedPlan",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="plan_requests",
+        help_text="The plan built from the answers, once the app shares it with this request.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"{self.slug}: {self.day} ({self.status})"
+
+
+class GroupAnswer(models.Model):
+    """A friend's answer on a /g/ link: a first name, a budget, when they're free and up to 3
+    starred places. No account: the same browser is recognized by its `pa` cookie, of which only
+    the hash is stored (plandit.core.public_forms.responder_token). Only the organizer sees answers
+    (brief GI-4); the page shows other friends only how many have answered (brief GI-8)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request = models.ForeignKey(GroupRequest, on_delete=models.CASCADE, related_name="answers")
+    responder = models.CharField(max_length=64, help_text="SHA-256 hex of the browser's cookie token.")
+    name = models.CharField(max_length=30, help_text="First name, checked by clean_first_name.")
+    budget = models.PositiveSmallIntegerField(help_text="Dollars for the day, train included.")
+    free_from = models.TimeField()
+    free_until = models.TimeField()
+    stars = models.JSONField(default=list, blank=True, help_text="Up to 3 place ids from the request.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["request", "responder"], name="one_request_answer_per_browser"),
+            models.CheckConstraint(
+                condition=models.Q(budget__lte=BUDGET_MAX), name="request_answer_budget_at_most_150"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(free_from__lt=models.F("free_until")), name="request_answer_free_from_before_until"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.request_id}: {self.budget}"

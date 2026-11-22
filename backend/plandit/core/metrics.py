@@ -8,6 +8,9 @@ are excluded from every number except `anonymous_sessions`.
 Friends' answers on shared plans (group plans) are counted, never read: how many links have any,
 and how many each such link has on average (brief "Analytics", GS-7). Answers are deleted 30 days
 after the plan's date, so these describe the answers kept now, not all time.
+
+Friends' input links (mode 2) are counted the same way: how many there are, and how many were
+built into a plan. Their answers aren't read at all. Requests are deleted 30 days after their day.
 """
 
 from datetime import UTC, date, datetime, time, timedelta
@@ -17,6 +20,7 @@ from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
+from plandit.plans.models import GroupRequest
 from plandit.shares.models import ShareAnswer
 from plandit.waitlist.models import WaitlistSignup
 
@@ -64,6 +68,14 @@ def _answer_totals() -> dict:
     }
 
 
+def _request_totals() -> dict:
+    requests = GroupRequest.objects.filter(owner__is_anonymous=False)
+    return {
+        "plan_requests": requests.count(),
+        "plan_requests_built": requests.filter(status=GroupRequest.Status.BUILT).count(),
+    }
+
+
 def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
     now = timezone.now()
     today = timezone.localdate(now)
@@ -93,6 +105,7 @@ def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
         "waitlist_signups": WaitlistSignup.objects.count(),
         "anonymous_sessions": Profile.objects.filter(is_anonymous=True).count(),
         **_answer_totals(),
+        **_request_totals(),
     }
 
     daily = {

@@ -172,6 +172,9 @@ if DEBUG:
 # --- Shared plan links: plandit.app/p/<slug> once the site forwards /p/ to this API; blank = this host ---
 
 SHARE_BASE_URL = env("SHARE_BASE_URL", "")
+# Friends' input links (plandit.app/g/<slug>) have their own setting, also blank = this host, so /p/
+# can move to the site before it forwards /g/ and /static/plans/ here.
+REQUEST_BASE_URL = env("REQUEST_BASE_URL", "")
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "https://plandit.app,https://www.plandit.app")
 CORS_ALLOW_ALL_ORIGINS = DEBUG

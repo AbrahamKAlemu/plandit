@@ -5,16 +5,18 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from rest_framework import status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from plandit.core.models import Profile
 from plandit.core.public_forms import (
     RESPONDER_COOKIE_MAX_AGE,
     clean_first_name,
@@ -25,6 +27,7 @@ from plandit.core.public_forms import (
     responder_token,
 )
 from plandit.core.retention import purge_expired
+from plandit.plans.models import GroupRequest
 
 from .models import ANSWER_RETENTION_DAYS, ShareAnswer, SharedPlan
 from .serializers import SharedPlanSerializer
@@ -54,14 +57,20 @@ def share_url(request, slug: str) -> str:
 class SharedPlanListView(APIView):
     """POST /api/shares/: share a plan, or update its existing link. 201 the first time, 200 after.
 
-    Updating keeps friends' answers (brief GV-8), minus their swaps for stops no longer in the plan."""
+    Updating keeps friends' answers (brief GV-8), minus their swaps for stops no longer in the plan.
+    With `request`, the plan was built from that friends' input link, which is marked built and now
+    opens this plan (brief GI-7). Only the owner's own request can be: any other slug is a 400 and
+    nothing is saved."""
 
     def post(self, request):
         serializer = SharedPlanSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
         plan_id = data.pop("planId")
+        request_slug = data.pop("request", None)
         with transaction.atomic():
+            if request_slug is not None:
+                _hold_owner(request.user)
             # update_or_create locks the link's row, as answering does, so an answer can't be saved
             # against the old stops while this replaces them.
             shared, created = SharedPlan.objects.update_or_create(
@@ -69,10 +78,37 @@ class SharedPlanListView(APIView):
             )
             if not created:
                 _keep_answers_in_step(shared)
+            if request_slug is not None:
+                _mark_request_built(request.user, request_slug, shared)
         return Response(
             {"slug": shared.slug, "url": share_url(request, shared.slug)},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+def _hold_owner(owner) -> None:
+    """Take the owner's profile's key-share lock before any other row. A new plan's link checks its
+    owner when the transaction commits, which takes this same lock; taken only then, it would wait
+    for an account deletion that holds the profile and is itself waiting for the request this share
+    has locked, and Postgres would end one of them as a deadlock."""
+    table = connection.ops.quote_name(Profile._meta.db_table)
+    column = connection.ops.quote_name(Profile._meta.pk.column)
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT 1 FROM {table} WHERE {column} = %s FOR KEY SHARE", [owner.pk])
+
+
+def _mark_request_built(owner, slug, shared) -> None:
+    """Point the owner's request at its built plan. The share holds the owner's profile, then the
+    plan's link, then this request: the order every path that takes these locks follows (deleting
+    the account locks the profile, then its links, then its requests; stopping sharing locks the
+    link, then clears the request's plan). Raising rolls the whole share back."""
+    group = GroupRequest.objects.select_for_update().filter(slug=slug, owner=owner).first()
+    if group is None:
+        # The same answer for someone else's request as for one that doesn't exist.
+        raise DRFValidationError({"request": ["No such request."]})
+    group.status = GroupRequest.Status.BUILT
+    group.shared_plan = shared
+    group.save(update_fields=["status", "shared_plan", "updated_at"])
 
 
 class SharedPlanDetailView(APIView):
@@ -131,7 +167,7 @@ def shared_plan_page(request, slug):
     logger.info("proxy chain: %s", describe_forwarding(request))
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
-        return _not_found_page(request)
+        return not_found_page(request)
     if _takes_answers(shared):
         purge_expired()
     return _plan_page(request, shared)
@@ -147,7 +183,7 @@ def answer_plan(request, slug):
     name (400), the page comes back with the reason."""
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
-        return _not_found_page(request)
+        return not_found_page(request)
     if not _takes_answers(shared):
         raise Http404
     if rate_limited(f"answer:{slug}:{client_ip(request)}", ANSWERS_PER_ADDRESS, ANSWERS_PER_ADDRESS_WINDOW):
@@ -163,12 +199,12 @@ def answer_plan(request, slug):
     if form["status"] not in ShareAnswer.Status.values:
         return _plan_page(request, shared, form=form, error=CHOOSE_A_BUTTON, status=400)
 
-    response = _with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
+    response = with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
     responder = responder_token(request, response, _page_path(slug), max_age=_cookie_max_age(shared), renew=True)
     with transaction.atomic():
         shared = SharedPlan.objects.select_for_update().filter(pk=shared.pk).first()
         if shared is None:
-            return _not_found_page(request)
+            return not_found_page(request)
         if not _takes_answers(shared):
             raise Http404
         answers = shared.answers.all()
@@ -196,18 +232,18 @@ def take_back_answer(request, slug):
     rate limited: it can only remove what this browser's cookie wrote. 303 back to the page."""
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
-        return _not_found_page(request)
+        return not_found_page(request)
     purge_expired()
     responder = _existing_responder(request, slug)
     ShareAnswer.objects.filter(shared_plan=shared, responder=responder).delete()
-    return _with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
+    return with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
 
 
-def _not_found_page(request):
+def not_found_page(request):
     """A link that doesn't exist, or stopped being shared while the page was open. (A link shared
     without answers answers the answer POSTs with a bare 404 instead, so nothing is collected before
     the app asks for it.)"""
-    return _with_page_headers(render(request, "shares/not_found.html", status=404), takes_answers=False)
+    return with_page_headers(render(request, "shares/not_found.html", status=404), takes_answers=False)
 
 
 def _plan_page(request, shared, *, form=None, error="", name_invalid=False, status=200):
@@ -260,13 +296,13 @@ def _plan_page(request, shared, *, form=None, error="", name_invalid=False, stat
         },
         status=status,
     )
-    return _with_page_headers(response, takes_answers=takes_answers)
+    return with_page_headers(response, takes_answers=takes_answers)
 
 
 _ALTERNATE_DETAILS = ("kind", "neighborhood", "costText")
 
 
-def _with_page_headers(response, *, takes_answers: bool):
+def with_page_headers(response, *, takes_answers: bool):
     response["X-Robots-Tag"] = "noindex, nofollow"
     if takes_answers:
         # The page depends on the browser's cookie and carries a CSRF token, so nothing may keep it.

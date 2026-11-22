@@ -1,0 +1,83 @@
+{% extends "shares/base.html" %}
+{% load static %}
+{% block title %}{{ day_text }} · Plandit{% endblock %}
+{% block meta %}
+  <meta name="description" content="{{ day_text }} · {{ range_text }}. Answers by {{ deadline_text }}.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Plandit">
+  <meta property="og:title" content="You're invited to a plan">
+  <meta property="og:description" content="{{ day_text }} · {{ range_text }}. Answers by {{ deadline_text }}.">
+  <meta property="og:url" content="{{ page_url }}">
+  <meta property="og:image" content="https://plandit.app/images/route-map-804.png">
+  <meta name="twitter:card" content="summary_large_image">
+{% endblock %}
+{% block stylesheets %}
+  <link rel="stylesheet" href="{% static 'shares/plan.css' %}">
+  <link rel="stylesheet" href="{% static 'plans/request.css' %}">
+{% endblock %}
+{% block content %}
+  <a class="brand" href="https://plandit.app" rel="noreferrer"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
+
+  <section class="cover" aria-labelledby="request-title">
+    <div class="kicker">You're invited to a plan</div>
+    <h1 id="request-title">{{ day_text }}</h1>
+    <div class="facts">
+      <div class="fact">{{ range_text }}<small>Answers by {{ deadline_text }}</small></div>
+    </div>
+    {# Brief GI-8: how many answered, never what anyone else said. #}
+    {% if answer_count %}<div class="chips"><span class="chip">{{ answer_count }} friend{{ answer_count|pluralize }} answered</span></div>{% endif %}
+  </section>
+
+  <h2 id="places-title">The places ({{ places|length }})</h2>
+  <p class="lead" id="places-hint">Star up to 3 places you want most.</p>
+  {# Part of the form below (form="answer"), so the places and their costs come first. #}
+  <ul class="places" aria-labelledby="places-title">
+    {% for place in places %}
+    <li>
+      <label class="place">
+        <input type="checkbox" name="star" value="{{ place.id }}" form="answer" aria-describedby="places-hint"{% if place.starred %} checked{% endif %}>
+        <span class="place-text">
+          <span class="name">{{ place.name }}</span>
+          {% if place.details %}<span class="meta">{{ place.details }}</span>{% endif %}
+        </span>
+        {% if place.costText %}<span class="place-cost">{{ place.costText }}</span>{% endif %}
+      </label>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <section class="answer" aria-labelledby="answer-title">
+    <h2 id="answer-title">What works for you?</h2>
+    {% if own %}<p class="own">You've answered: <strong>${{ own.budget }}</strong>, free <strong>{{ own_window }}</strong>. You can change it until the deadline.</p>{% endif %}
+    <form id="answer" method="post" action="{% url 'plan-request-answer' slug %}">
+      {% csrf_token %}
+      {% if error %}<p class="error" id="answer-error" role="alert">{{ error }}</p>{% endif %}
+      <label class="field-label" for="answer-name">First name</label>
+      <input id="answer-name" name="name" type="text" value="{{ form.name }}" maxlength="30" required autocomplete="given-name" autocapitalize="words" spellcheck="false" aria-describedby="answer-name-hint{% if error %} answer-error{% endif %}"{% if invalid == "name" %} aria-invalid="true"{% endif %}>
+      <p class="hint" id="answer-name-hint">Only the person who sent this link sees your answer.</p>
+
+      <label class="field-label" for="answer-budget">Your budget for the day, train included</label>
+      {# A choice, not a slider: it shows the dollars without a script, and nothing is chosen for a friend who hasn't picked. #}
+      <select id="answer-budget" name="budget" required{% if invalid == "budget" %} aria-invalid="true"{% endif %}>
+        <option value="">Choose your budget</option>
+        {% for amount in budget_choices %}<option value="{{ amount }}"{% if amount == form.budget %} selected{% endif %}>${{ amount }}</option>{% endfor %}
+      </select>
+
+      <fieldset class="window">
+        <legend class="field-label">When you're free</legend>
+        <div class="times">
+          <label for="answer-from">From<input id="answer-from" type="time" name="free_from" min="{{ window_start }}" max="{{ window_end }}" value="{{ form.free_from }}" required{% if invalid == "window" %} aria-invalid="true"{% endif %}></label>
+          <label for="answer-until">Until<input id="answer-until" type="time" name="free_until" min="{{ window_start }}" max="{{ window_end }}" value="{{ form.free_until }}" required{% if invalid == "window" %} aria-invalid="true"{% endif %}></label>
+        </div>
+      </fieldset>
+
+      <button type="submit" class="primary send">Send my answer</button>
+    </form>
+    {% if own %}
+    <form method="post" action="{% url 'plan-request-answer-delete' slug %}" class="take-back">
+      {% csrf_token %}
+      <button type="submit" class="link">Take back my answer</button>
+    </form>
+    {% endif %}
+  </section>
+{% endblock %}
