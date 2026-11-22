@@ -95,11 +95,14 @@ def responder_token(request, response, scope: str) -> str:
 
 def client_ip(request) -> str:
     """The address to rate limit by. Behind the deployed proxy (settings.BEHIND_TRUSTED_PROXY), the
-    first X-Forwarded-For entry; otherwise, or when that entry isn't an address, the connecting
-    peer (REMOTE_ADDR). Addresses come back normalized, so one IPv6 address has one spelling."""
+    X-Forwarded-For entry our own proxies added: settings.TRUSTED_PROXY_HOPS from the right. Entries
+    to the left of it came from the client and can be anything, so the first entry is never used.
+    Otherwise, or when that entry is missing or isn't an address, the connecting peer (REMOTE_ADDR).
+    Addresses come back normalized, so one IPv6 address has one spelling."""
     if getattr(settings, "BEHIND_TRUSTED_PROXY", False):
-        first = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
-        if address := _normalized(first):
+        hops = max(1, int(getattr(settings, "TRUSTED_PROXY_HOPS", 1)))
+        entries = [entry.strip() for entry in request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")]
+        if len(entries) >= hops and (address := _normalized(entries[-hops])):
             return address
     remote = request.META.get("REMOTE_ADDR", "")
     return _normalized(remote) or remote

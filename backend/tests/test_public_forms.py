@@ -160,9 +160,29 @@ def test_a_cookie_that_was_not_issued_by_us_is_replaced(cookie):
 # --- client_ip ----------------------------------------------------------------
 
 
-def test_behind_the_proxy_the_first_forwarded_address_is_the_client(settings):
+def test_behind_the_proxy_the_address_our_proxy_added_is_the_client(settings):
     settings.BEHIND_TRUSTED_PROXY = True
-    request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="203.0.113.7, 10.0.0.1", REMOTE_ADDR="10.0.0.2")
+    settings.TRUSTED_PROXY_HOPS = 1
+    request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="203.0.113.7", REMOTE_ADDR="10.0.0.2")
+    assert client_ip(request) == "203.0.113.7"
+
+
+def test_an_address_the_client_sent_itself_is_ignored(settings):
+    """Render's proxy appends the address it saw to whatever X-Forwarded-For the client sent, so a
+    client can pick the first entry but not the last."""
+    settings.BEHIND_TRUSTED_PROXY = True
+    settings.TRUSTED_PROXY_HOPS = 1
+    for faked in ("198.51.100.1", "198.51.100.2, 192.0.2.9"):
+        request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR=f"{faked}, 203.0.113.7", REMOTE_ADDR="10.0.0.2")
+        assert client_ip(request) == "203.0.113.7"
+
+
+def test_with_two_proxy_hops_the_second_entry_from_the_right_is_the_client(settings):
+    settings.BEHIND_TRUSTED_PROXY = True
+    settings.TRUSTED_PROXY_HOPS = 2
+    request = RequestFactory().get(
+        "/", HTTP_X_FORWARDED_FOR="198.51.100.1, 203.0.113.7, 10.0.0.1", REMOTE_ADDR="10.0.0.2"
+    )
     assert client_ip(request) == "203.0.113.7"
 
 
@@ -172,9 +192,13 @@ def test_without_a_trusted_proxy_the_forwarded_header_is_ignored(settings):
     assert client_ip(request) == "198.51.100.4"
 
 
-@pytest.mark.parametrize("forwarded", [None, "", "not-an-address", " , 10.0.0.1"])
-def test_a_missing_or_garbled_forwarded_header_falls_back_to_the_peer(settings, forwarded):
+@pytest.mark.parametrize(
+    ("forwarded", "hops"),
+    [(None, 1), ("", 1), ("not-an-address", 1), ("10.0.0.1, ", 1), ("203.0.113.7", 2)],
+)
+def test_a_missing_garbled_or_short_forwarded_header_falls_back_to_the_peer(settings, forwarded, hops):
     settings.BEHIND_TRUSTED_PROXY = True
+    settings.TRUSTED_PROXY_HOPS = hops
     extra = {} if forwarded is None else {"HTTP_X_FORWARDED_FOR": forwarded}
     request = RequestFactory().get("/", REMOTE_ADDR="198.51.100.4", **extra)
     assert client_ip(request) == "198.51.100.4"

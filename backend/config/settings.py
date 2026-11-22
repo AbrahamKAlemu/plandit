@@ -182,6 +182,10 @@ CORS_URLS_REGEX = r"^/api/.*$"
 # The proxy also passes the client's address in X-Forwarded-For. plandit.core.public_forms.client_ip
 # reads that header only when this is on; without a proxy in front, anyone could set it.
 BEHIND_TRUSTED_PROXY = not DEBUG
+# How many entries at the right end of X-Forwarded-For our own proxies added. Render's proxy keeps
+# whatever the client sent and appends the address it saw, so only the last entry can be trusted;
+# the first one is whatever the client chose to send.
+TRUSTED_PROXY_HOPS = int(env("TRUSTED_PROXY_HOPS", "1"))
 if BEHIND_TRUSTED_PROXY:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
