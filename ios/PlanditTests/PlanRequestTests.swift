@@ -263,7 +263,7 @@ import XCTest
             return XCTFail("expected a plan")
         }
         let before = store.today.stops.map(\.id)
-        XCTAssertNil(store.previewGroupPlan(plan, now: elevenAM))
+        // It's previewed on its own day (GroupPlanDayTests), but only built then.
         XCTAssertNil(store.buildGroupPlan(plan, now: elevenAM))
         XCTAssertEqual(store.today.stops.map(\.id), before)
     }

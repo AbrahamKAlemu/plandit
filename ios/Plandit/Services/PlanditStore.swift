@@ -1321,8 +1321,16 @@ final class PlanditStore {
         return GroupInputs.combine(answers: details.answers, organizer: organizer, places: places, leftOut: leftOut)
     }
 
-    /// What "Build our plan" would put in Today, without changing anything. Nil when the link
-    /// isn't for today: the app only keeps today's plan.
+    /// The link's day is today, both where it was made and on the phone: Today only holds today's
+    /// plan, so a plan for a later day is built on that day (D1).
+    func canBuildGroupPlan(now: Date = AppClock.now) -> Bool {
+        guard let link = planRequest else { return false }
+        return link.isToday(now: now) && link.day == DayPlan.isoDay(now, calendar: .current)
+    }
+
+    /// The plan from the answers so far, planned on the link's day, without changing anything:
+    /// what "Build our plan" would put in Today, or for a later day how it looks so far. Nil once
+    /// the day is over.
     func previewGroupPlan(_ plan: GroupInputs.Plan, now: Date = AppClock.now) -> DayPlanner.Outcome? {
         groupPlanRequest(plan, now: now).map { DayPlanner(travel: travelPreference).plan($0) }
     }
@@ -1330,10 +1338,10 @@ final class PlanditStore {
     /// "Build our plan": the answers' plan replaces today's and the link remembers it. Then
     /// `shareGroupPlan` puts it on the link. Until that works, Undo puts the old plan back (and
     /// Build is offered again); once friends' link opens it, there's no Undo: the organizer changes
-    /// it in Today, as with any shared plan. Nil when the link isn't for today.
+    /// it in Today, as with any shared plan. Nil unless `canBuildGroupPlan`.
     @discardableResult
     func buildGroupPlan(_ plan: GroupInputs.Plan, now: Date = AppClock.now) -> DayPlanner.Outcome? {
-        guard var link = planRequest, let request = groupPlanRequest(plan, now: now) else { return nil }
+        guard canBuildGroupPlan(now: now), var link = planRequest, let request = groupPlanRequest(plan, now: now) else { return nil }
         let outcome = DayPlanner(travel: travelPreference).plan(request)
         guard !outcome.stops.isEmpty else { return outcome }
         remember(Self.groupBuildUndoMessage, isGroupBuild: true)
@@ -1379,16 +1387,18 @@ final class PlanditStore {
 
     static let groupBuildUndoMessage = "Built our plan. It isn't on the link yet."
 
-    /// The planner's inputs for the answers' plan: from the start of everyone's time (or the next
-    /// quarter hour, if that's later) to its end, on the lowest budget, most-starred places first.
+    /// The planner's inputs for the answers' plan, on the link's day, so places' hours are that
+    /// day's: from the start of everyone's time (or the next quarter hour, if that's later) to its
+    /// end, on the lowest budget, most-starred places first. Today's extra costs only count today.
     private func groupPlanRequest(_ plan: GroupInputs.Plan, now: Date) -> DayPlanner.Request? {
-        guard let link = planRequest, link.isToday(now: now), let day = link.dayDate,
+        guard let link = planRequest, !link.isOver(now: now), let day = link.dayDate,
               let windowStart = plan.start.date(on: day, calendar: link.calendar),
               let windowEnd = plan.end.date(on: day, calendar: link.calendar) else { return nil }
         let start = max(windowStart, PlanDefaults.nextQuarterHour(after: now))
         let priorities = Dictionary(plan.candidates.map { ($0.placeID, $0.stars) }, uniquingKeysWith: max)
         var request = basePlanRequest(postIDs: plan.candidates.map(\.placeID), start: start, budget: plan.budget,
                                       mode: .replace, priorities: priorities)
+        if !canBuildGroupPlan(now: now) { request.alreadySpent = 0 }
         request.dayEnd = windowEnd
         return request
     }

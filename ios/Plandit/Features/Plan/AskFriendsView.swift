@@ -19,6 +19,44 @@ struct AskFriendsView: View {
     }
 }
 
+/// The words on the answers screen that depend on the link, apart so tests can read them.
+enum AskFriendsText {
+    /// "today" when the plan can be built now, otherwise the link's day in its own time zone:
+    /// "Tuesday, November 24".
+    static func day(_ link: PlanRequestLink, now: Date) -> String {
+        if link.isToday(now: now), link.day == DayPlan.isoDay(now, calendar: .current) { return "today" }
+        guard let date = link.dayDate else { return link.day }
+        var style = Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day()
+        style.timeZone = link.calendar.timeZone
+        return date.formatted(style)
+    }
+
+    static func status(_ link: PlanRequestLink, _ details: PlanRequest?, now: Date) -> String {
+        switch details?.status {
+        case .built?:
+            return "Done. The link now opens your plan."
+        case .closed?:
+            return "Not taking answers any more. You can still build the plan."
+        case .open?, nil:
+            let deadline = details?.answersBy ?? link.answersBy
+            let when = Calendar.current.isDate(deadline, inSameDayAs: now)
+                ? deadline.shortTime : "\(deadline.shortDay), \(deadline.shortTime)"
+            return "Friends can answer until \(when)."
+        }
+    }
+
+    static func shareMessage(_ link: PlanRequestLink, now: Date) -> String {
+        "What works for you on \(day(link, now: now))? Answer here and I'll make the plan."
+    }
+
+    static func budget(_ plan: GroupInputs.Plan) -> String { "Budget: \(plan.budget.wholeDollarsText) each" }
+
+    /// Above the preview of a plan for a later day.
+    static func laterDay(_ link: PlanRequestLink, now: Date) -> String {
+        "This is how the plan looks with the answers so far. You can build it on \(day(link, now: now))."
+    }
+}
+
 // MARK: - Making the link
 
 private struct AskFriendsForm: View {
@@ -143,7 +181,7 @@ private struct AskFriendsForm: View {
                 }
             }
             .planditCard(padding: Space.sm)
-            Text("After the deadline, the link stops taking answers. You can build the plan any time.")
+            Text("After the deadline, the link stops taking answers. You can build the plan on the day, with whoever answered.")
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -313,6 +351,7 @@ private struct FriendsAnswersView: View {
         let result = store.groupInputs(organizer: me, leftOut: leftOut)
         let plan = result.flatMap(\.plan)
         let outcome = plan.flatMap { store.previewGroupPlan($0) }
+        let canBuild = store.canBuildGroupPlan()
         // Built into Today, but the link didn't get it: "Try again" only puts it on the link.
         let needsLink = store.groupPlanAwaitsLink
         return VStack(spacing: 0) {
@@ -322,7 +361,7 @@ private struct FriendsAnswersView: View {
                     answersSection(details, canRemove: !isBuilt)
                     if !isBuilt {
                         youSection(link, me)
-                        planSection(link, result, outcome)
+                        planSection(link, result, outcome, canBuild: canBuild)
                     }
                     if let errorText {
                         Text(errorText)
@@ -352,7 +391,7 @@ private struct FriendsAnswersView: View {
                         }
                     }
                     .buttonStyle(.primary)
-                    .disabled(isWorking || (!needsLink && (outcome?.stops.isEmpty ?? true)))
+                    .disabled(isWorking || (!needsLink && (!canBuild || (outcome?.stops.isEmpty ?? true))))
                     .accessibilityHint("Puts the plan in Today and on the link")
                     .accessibilityIdentifier("build-our-plan")
                     .padding(.horizontal, Space.lg)
@@ -380,11 +419,11 @@ private struct FriendsAnswersView: View {
                 .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Color.border))
                 .accessibilityLabel("Link: \(link.url.absoluteString)")
                 .accessibilityIdentifier("request-link-url")
-            Text("For \(dayText(link)), \(rangeText(link)).")
+            Text("For \(AskFriendsText.day(link, now: AppClock.now)), \(rangeText(link)).")
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(statusText(link, details))
+            Text(AskFriendsText.status(link, details, now: AppClock.now))
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -399,7 +438,7 @@ private struct FriendsAnswersView: View {
                     }
                     .buttonStyle(.secondary)
                     .accessibilityIdentifier("request-copy-link")
-                    ShareLink(item: link.url, message: Text("What works for you on \(dayText(link))? Answer here and I'll make the plan.")) {
+                    ShareLink(item: link.url, message: Text(AskFriendsText.shareMessage(link, now: AppClock.now))) {
                         HStack(spacing: Space.xs) {
                             Icon(.share, size: 18)
                             Text("Send link")
@@ -411,25 +450,6 @@ private struct FriendsAnswersView: View {
             }
         }
         .planditCard()
-    }
-
-    private func statusText(_ link: PlanRequestLink, _ details: PlanRequest?) -> String {
-        switch details?.status {
-        case .built?:
-            return "Done. The link now opens your plan."
-        case .closed?:
-            return "Not taking answers any more. You can still build the plan."
-        case .open?, nil:
-            let deadline = details?.answersBy ?? link.answersBy
-            let when = Calendar.current.isDate(deadline, inSameDayAs: AppClock.now)
-                ? deadline.shortTime : "\(deadline.shortDay), \(deadline.shortTime)"
-            return "Friends can answer until \(when)."
-        }
-    }
-
-    private func dayText(_ link: PlanRequestLink) -> String {
-        if link.isToday(now: AppClock.now) { return "today" }
-        return link.dayDate?.longDay ?? link.day
     }
 
     private func rangeText(_ link: PlanRequestLink) -> String {
@@ -450,7 +470,7 @@ private struct FriendsAnswersView: View {
             }
             if let details {
                 if details.answers.isEmpty {
-                    Text("No answers yet. You can build the plan any time with whoever has answered.")
+                    Text("No answers yet. You can build the plan on the day with whoever has answered.")
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -605,7 +625,8 @@ private struct FriendsAnswersView: View {
 
     // MARK: - The plan (GI-5, GI-6)
 
-    @ViewBuilder private func planSection(_ link: PlanRequestLink, _ result: GroupInputs.Result?, _ outcome: DayPlanner.Outcome?) -> some View {
+    @ViewBuilder private func planSection(_ link: PlanRequestLink, _ result: GroupInputs.Result?, _ outcome: DayPlanner.Outcome?,
+                                          canBuild: Bool) -> some View {
         switch result {
         case .clash(let members)?:
             clashCard(members)
@@ -618,7 +639,7 @@ private struct FriendsAnswersView: View {
                             Text("Everyone's free \(plan.start.shortTime) to \(plan.end.shortTime).")
                                 .font(.bodyText)
                                 .foregroundStyle(.ink)
-                            Text("Budget: \(plan.budget.wholeDollarsText) each")
+                            Text(AskFriendsText.budget(plan))
                                 .font(.bodyText)
                                 .foregroundStyle(.ink)
                             if plan.candidates.contains(where: { $0.stars > 0 }) {
@@ -635,14 +656,18 @@ private struct FriendsAnswersView: View {
                     .planditCard()
                 }
                 if let outcome {
-                    PlanPreview(outcome: outcome, lockedCount: 0, spent: outcome.cost + store.today.extras.total,
-                                budget: plan.budget, end: link.dayDate.flatMap { plan.end.date(on: $0, calendar: link.calendar) })
-                } else {
-                    Text("You can build the plan on \(dayText(link)), the day of the plan. Answers stay here until then.")
-                        .font(.metadata)
-                        .foregroundStyle(.inkMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("request-later-day")
+                    VStack(alignment: .leading, spacing: Space.sm) {
+                        if !canBuild {
+                            // A later day: the plan as it looks so far, on that day's hours (D1).
+                            Text(AskFriendsText.laterDay(link, now: AppClock.now))
+                                .font(.metadata)
+                                .foregroundStyle(.inkMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("request-later-day")
+                        }
+                        PlanPreview(outcome: outcome, lockedCount: 0, spent: outcome.cost + (canBuild ? store.today.extras.total : 0),
+                                    budget: plan.budget, end: link.dayDate.flatMap { plan.end.date(on: $0, calendar: link.calendar) })
+                    }
                 }
             }
         case nil:
