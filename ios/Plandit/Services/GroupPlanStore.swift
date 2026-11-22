@@ -112,6 +112,10 @@ final class GroupPlanStore {
         /// The version of `plan`; 0 before the first fetch.
         var version: Int
         var membersVersion: Int
+        /// The `membersVersion` of the last whole group fetched: what `inviteUrl`, `memberId` and
+        /// `isOrganizer` are from. A PUT's answer or a 409 brings newer members without them; until a
+        /// GET brings the rest, no ETag is kept, so the next refresh fetches the whole group.
+        var detailMembersVersion: Int
         /// Exactly as the server sent it, for `If-None-Match`; nil when it doesn't name what's held.
         var etag: String?
         /// The server's plan, without this phone's queued edits.
@@ -129,6 +133,7 @@ final class GroupPlanStore {
             date = detail.date
             version = detail.version
             membersVersion = detail.membersVersion
+            detailMembersVersion = detail.membersVersion
             self.etag = etag
             plan = detail.plan
             members = detail.members
@@ -145,6 +150,7 @@ final class GroupPlanStore {
             date = summary.date
             version = 0
             membersVersion = 0
+            detailMembersVersion = 0
             plan = nil
             members = []
             memberId = summary.memberId
@@ -156,7 +162,8 @@ final class GroupPlanStore {
 
         /// Takes what's newer: the plan by `version`, the members by `membersVersion`; an older
         /// answer (a poll that crossed a PUT) changes nothing (RB-7). The ETag is kept only while
-        /// it names exactly the plan and members held.
+        /// it names exactly the plan and members held, and the whole group was fetched at those
+        /// members (a 304 would otherwise keep a link replaced on another phone).
         mutating func absorb(version: Int, membersVersion: Int, plan: DayPlan?, members: [GroupPlanMember], etag: String?) {
             let planNewer = plan != nil && (self.plan == nil || version > self.version)
             let membersNewer = membersVersion > self.membersVersion
@@ -171,21 +178,23 @@ final class GroupPlanStore {
                 if let organizer = members.first(where: \.isOrganizer) { organizerName = organizer.name }
                 if let me = members.first(where: { $0.id == memberId }) { isOrganizer = me.isOrganizer }
             }
-            if self.version == version, self.membersVersion == membersVersion {
+            if self.version == version, self.membersVersion == membersVersion, detailMembersVersion == membersVersion {
                 self.etag = etag
             } else if planNewer || membersNewer {
                 self.etag = nil
             }
         }
 
+        /// A whole group (a GET, create or join): also the link and this person's place in it, when
+        /// newer than the ones held, even if a PUT's answer already brought these members.
         mutating func absorb(_ detail: GroupPlanDetail, etag: String?) {
-            let membersNewer = detail.membersVersion > membersVersion
-            absorb(version: detail.version, membersVersion: detail.membersVersion, plan: detail.plan, members: detail.members, etag: etag)
-            if membersNewer {
+            if detail.membersVersion > detailMembersVersion {
+                detailMembersVersion = detail.membersVersion
                 memberId = detail.memberId
                 isOrganizer = detail.isOrganizer
                 inviteUrl = detail.inviteUrl
             }
+            absorb(version: detail.version, membersVersion: detail.membersVersion, plan: detail.plan, members: detail.members, etag: etag)
         }
     }
 

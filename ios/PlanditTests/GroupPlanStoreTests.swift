@@ -1133,6 +1133,44 @@ import XCTest
         XCTAssertTrue(messages.isEmpty)
     }
 
+    /// The organizer's other phone made a new link. This phone's edit is answered with the newer
+    /// members but no link, so the next refresh fetches the whole group, link included.
+    func testANewLinkMadeOnAnotherPhoneArrivesAfterAnEdit() async throws {
+        let id = try await makeStore().create(from: day()).get()
+        let store = stores[0]
+        let newLink = try await server.newInvite(id)
+        XCTAssertNotNil(newLink)
+
+        store.apply(try removeEdit(store, id, 1), to: id)
+        await waitUntilSent(store, id)
+        await store.refresh(id)
+
+        XCTAssertEqual(store.group(id)?.inviteUrl, newLink, "not the old link, which no longer works")
+    }
+
+    /// The same through a 409, and after a relaunch: the cache keeps no ETag that would answer 304.
+    func testANewLinkMadeOnAnotherPhoneArrivesAfterAConflictAndARelaunch() async throws {
+        let id = try await makeStore().create(from: day()).get()
+        let first = stores[0]
+        let newLink = try await server.newInvite(id)
+        await server.addMember("Jordan", to: id)
+        await retitle(id, "Jordan's title", by: "Jordan")
+
+        first.apply(try removeEdit(first, id, 1), to: id)
+        await waitUntilSent(first, id)
+        let updates = await server.updates
+        XCTAssertEqual(updates.map(\.baseVersion), [1, 2], "a 409, then the rebase")
+        XCTAssertEqual(first.group(id)?.members.map(\.name), ["Sofia", "Jordan"], "the 409's members")
+        first.close()
+
+        let relaunched = makeStore()
+        await relaunched.refreshList()
+
+        XCTAssertEqual(relaunched.group(id)?.inviteUrl, newLink)
+        XCTAssertEqual(relaunched.group(id)?.members.map(\.name), ["Sofia", "Jordan"])
+        XCTAssertEqual(relaunched.group(id)?.version, 3)
+    }
+
     /// RO-1's boundary: 4 AM New York time the morning after, also across the clock change.
     func testAGroupDayEndsAtFourTheNextMorningInNewYork() {
         XCTAssertEqual(GroupPlanDay.end(of: "2026-11-20"), at(4, day: 21))
