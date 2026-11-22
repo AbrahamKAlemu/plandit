@@ -48,6 +48,9 @@ final class PlanditStore {
     @ObservationIgnored private var answersChanges = 0
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
+    /// "Build our plan" is putting the plan on friends' link (`shareGroupPlan`). Until that ends,
+    /// its Undo is held back: the server may already have the built plan (round 3 review, R1).
+    private(set) var isSharingGroupPlan = false
     /// The "Ask friends what works" link (plandit.app/g/<slug>), kept in the snapshot.
     private(set) var planRequest: PlanRequestLink?
     /// Makes and reads those links; nil when signed out of the server (the local test account).
@@ -984,13 +987,17 @@ final class PlanditStore {
     /// With `request`, the plan was built from that "Ask friends what works" link, which then opens
     /// this plan (GI-7).
     @discardableResult
-    func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true, request: String? = nil) async throws -> SharedLink {
+    /// `stillWanted` is asked again right before the plan goes out, once it's this request's turn:
+    /// false drops it (`CancellationError`), and the link stays as it was.
+    func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true, request: String? = nil,
+                    stillWanted: (() -> Bool)? = nil) async throws -> SharedLink {
         guard let sharing else { throw APIError.network }
         // Nothing older may land after this (`holdPageUpdates`).
         holdPageUpdates()
         let sent: (slug: String, url: URL, payload: SharedPlanPayload)
         do {
             sent = try await inTurn {
+                if let stillWanted, !stillWanted() { throw CancellationError() }
                 var payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
                 payload.request = request
                 let created = try await sharing.publish(payload)
@@ -1384,11 +1391,17 @@ final class PlanditStore {
     /// /g/ link now opens it (GI-7). It goes out like Share plan, one at a time with page updates.
     /// An existing link keeps its settings; a new one shows prices, and no swaps, since the
     /// organizer hasn't seen swap options for this plan (GV-9).
+    /// While it's out, Undo is held back (`canUndo`), and once it's this request's turn to go out
+    /// the built plan must still be Today's, or nothing is sent: a plan waiting behind a page
+    /// update could otherwise have been changed meanwhile.
     func shareGroupPlan() async throws {
         guard groupPlanAwaitsLink, let link = planRequest else { throw APIError.invalidResponse }
+        isSharingGroupPlan = true
+        defer { isSharingGroupPlan = false }
         let current = todayLink
         try await shareToday(showPrices: current?.showPrices ?? true, note: current?.note ?? "",
-                             suggestsSwaps: current?.suggestsSwaps ?? false, request: link.slug)
+                             suggestsSwaps: current?.suggestsSwaps ?? false, request: link.slug,
+                             stillWanted: { [unowned self] in self.groupPlanAwaitsLink && self.planRequest?.slug == link.slug })
         // Friends' link opens this plan now: undoing the build would put the old one there.
         if undo?.isGroupBuild == true { undo = nil }
         requestChanges += 1
@@ -1433,6 +1446,14 @@ final class PlanditStore {
         var isGroupBuild = false
     }
 
+    /// The undo bar offers Undo. Not for "Build our plan" while it's going on friends' link: the
+    /// server may already have it, and the old plan would then go out after it (R1). If that
+    /// fails, Undo is offered again.
+    var canUndo: Bool {
+        guard let undo else { return false }
+        return !(undo.isGroupBuild && isSharingGroupPlan)
+    }
+
     /// Call before changing `today`.
     private func remember(_ message: String, isGroupBuild: Bool = false) {
         undo = PlanUndo(message: message, plan: today, isGroupBuild: isGroupBuild)
@@ -1440,7 +1461,7 @@ final class PlanditStore {
 
     /// Puts today's plan back the way it was before the last change.
     func undoLastChange() {
-        guard let undo else { return }
+        guard canUndo, let undo else { return }
         today = undo.plan
         self.undo = nil
         if undo.isGroupBuild, var link = planRequest {

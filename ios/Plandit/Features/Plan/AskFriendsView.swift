@@ -372,6 +372,8 @@ private struct FriendsAnswersView: View {
             Text("Friends' answers are deleted and the link stops working.")
         }
         .sensoryFeedback(.success, trigger: built)
+        // Swiping the planner down mid-build would leave the plan half on the link (review R1).
+        .interactiveDismissDisabled(isWorking)
     }
 
     private func content(_ link: PlanRequestLink) -> some View {
