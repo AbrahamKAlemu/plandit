@@ -8,6 +8,8 @@ nonisolated enum ShareIntakeResult: Equatable, Sendable {
     case link(URL, sharedText: String?)
     /// A video copied into `TemporaryMedia/` under this file name.
     case video(stagedFileName: String)
+    /// A group plan's invite link (`…/j/<token>`): for the app's join sheet, never saved as a place.
+    case invite(token: String)
     case problem(ShareProblem)
 }
 
@@ -47,7 +49,8 @@ nonisolated enum ShareProblem: Equatable, Sendable {
 }
 
 /// Reads a share sheet's attachments: a movie file first, then a URL, then the first supported link
-/// in shared text. A video is copied into Plandit's own folder before anything is queued.
+/// in shared text. A group plan invite link counts wherever a supported link would. A video is
+/// copied into Plandit's own folder before anything is queued.
 struct ShareIntake {
     /// Nil when the build has no App Group container.
     let mediaStore: TemporaryMediaStore?
@@ -77,6 +80,9 @@ struct ShareIntake {
                 return await stage(fileURL: url)
             }
             sawLink = true
+            if let token = InviteLink.token(in: url) {
+                return .invite(token: token)
+            }
             if let supported = try? SupportedSocialURL(url) {
                 return .link(supported.canonicalURL, sharedText: sharedText)
             }
@@ -86,6 +92,9 @@ struct ShareIntake {
         for text in texts {
             for url in LinkParser.webURLs(in: text) {
                 sawLink = true
+                if let token = InviteLink.token(in: url) {
+                    return .invite(token: token)
+                }
                 if let supported = try? SupportedSocialURL(url) {
                     return .link(supported.canonicalURL, sharedText: sharedText)
                 }
@@ -164,6 +173,8 @@ struct ShareSummary: Equatable {
             )
         case .video, .problem:
             self.init(platform: .video)
+        case .invite:
+            self.init(platform: .web)
         }
     }
 
@@ -193,9 +204,13 @@ final class ShareFlow {
         case problem(ShareProblem)
         /// Undo came too late: Plandit had already taken the share.
         case alreadyTaken
+        /// A group plan invite, left for the app to open: nothing was saved.
+        case invite
     }
 
     static let alreadyTakenMessage = "Plandit already has this one. You can remove it in Saved."
+    static let inviteTitle = "Open Plandit to join"
+    static let inviteMessage = "This link invites you to plan a day together. Open Plandit to see whose plan it is and join."
 
     private(set) var state: State = .saving
     /// The queued share this sheet added, which Undo takes back. Nil when the link was already
@@ -231,6 +246,11 @@ final class ShareFlow {
             share = IncomingShare(url: url, sharedText: sharedText)
         case .video(let fileName):
             share = IncomingShare(videoFileName: fileName)
+        case .invite(let token):
+            // Not a place: the app opens its join sheet the next time it's active (JN-1).
+            InviteInbox.hold(token)
+            state = .invite
+            return
         }
         let stored = ShareInbox.enqueue(share)
         addedShareID = stored.isNew ? stored.share.id : nil

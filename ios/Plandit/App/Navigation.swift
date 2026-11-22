@@ -46,7 +46,11 @@ final class SheetRouter {
     var isPlanning = UserDefaults.standard.bool(forKey: "openPlanner")
     /// The plan Today shows when there are group plans; nil until one is picked.
     var todayChoice: TodayChoice?
-    /// A group plan to show in Today, set from outside (a join link). Taken by `openRequestedGroupPlan`.
+    /// The group plan invite the join sheet shows: pasted in "Add a link", or shared from another
+    /// app and picked up when Plandit became active (JN-1). Nil closes the sheet.
+    var inviteToJoin: GroupInvite?
+    /// A group plan to show in Today, set from outside Today (after joining one). Taken by
+    /// `openRequestedGroupPlan`, which selects it and clears this.
     var groupPlanToOpen: UUID?
 
     /// Shows Today with the group plan that was asked for selected, then forgets the request.

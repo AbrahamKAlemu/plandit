@@ -286,6 +286,20 @@ import XCTest
         XCTAssertNil(router.groupPlanToOpen)
     }
 
+    /// The join sheet's hand-off (`openGroupPlan`) is what Today takes: the group joined, selected.
+    func testAGroupJustJoinedIsSelectedInToday() {
+        let router = SheetRouter()
+        router.tab = .saved
+        router.inviteToJoin = GroupInvite(token: "fake-invite-for-tests")
+        let id = UUID()
+        router.openGroupPlan(id)
+        router.openRequestedGroupPlan()
+        XCTAssertNil(router.inviteToJoin)
+        XCTAssertEqual(router.tab, .today)
+        XCTAssertEqual(router.todayChoice, .group(id))
+        XCTAssertNil(router.groupPlanToOpen)
+    }
+
     func testNothingToOpenChangesNothing() {
         let router = SheetRouter()
         router.tab = .saved

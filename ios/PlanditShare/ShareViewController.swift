@@ -34,6 +34,9 @@ final class ShareViewController: UIViewController {
             if case .saved = flow.state {
                 UIAccessibility.post(notification: .announcement, argument: "Saved to Plandit")
                 scheduleAutoClose()
+            } else if flow.state == .invite {
+                // Stays until Done: the person needs to read where to go next.
+                UIAccessibility.post(notification: .announcement, argument: ShareFlow.inviteTitle)
             }
         }
     }

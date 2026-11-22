@@ -219,12 +219,14 @@ private struct SheetContainer: View {
             .sheet(isPresented: $router.isPlanning) {
                 PlanBuilderSheet()
             }
+            // A group plan invite, from "Add a link" or the share sheet, over any tab (JN-1).
+            .joinGroupSheet()
             // The group plan on screen is polled for everyone else's changes; no other is.
             .onChange(of: polledGroup, initial: true) { old, new in
                 if let old, old != new { groups?.hide(old) }
                 if let new { groups?.show(new) }
             }
-            // A group plan asked for from outside Today (a join link).
+            // A group plan asked for from outside Today (after joining one): Today, with it selected.
             .onChange(of: router.groupPlanToOpen, initial: true) {
                 router.openRequestedGroupPlan()
             }

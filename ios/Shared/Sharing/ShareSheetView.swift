@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Share → Plandit. It saves without a tap: "Saved to Plandit" with Done and Undo, or a plain
-/// problem with Close. In `Shared/` so the app's tests can render it too.
+/// problem with Close. A group plan invite says to open Plandit to join, with Done. In `Shared/`
+/// so the app's tests can render it too.
 struct ShareSheetView: View {
     let state: ShareFlow.State
     let onDone: () -> Void
@@ -34,6 +35,20 @@ struct ShareSheetView: View {
                 Button("Close", action: onClose)
                     .buttonStyle(.secondary)
                     .accessibilityIdentifier("share-close")
+            case .invite:
+                Text(ShareFlow.inviteTitle)
+                    .font(.sectionHeading)
+                    .foregroundStyle(.ink)
+                    .accessibilityAddTraits(.isHeader)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(ShareFlow.inviteMessage)
+                    .font(.bodyText)
+                    .foregroundStyle(.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Done", action: onDone)
+                    .buttonStyle(.primary)
+                    .accessibilityIdentifier("share-done")
             case .problem(let problem):
                 Text(problem.title)
                     .font(.sectionHeading)

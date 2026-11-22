@@ -16,10 +16,13 @@ struct PickedVideo: Transferable {
     }
 }
 
-/// Manual fallback for the share extension: paste a TikTok or Reel link.
+/// Manual fallback for the share extension: paste a TikTok or Reel link. A group plan invite
+/// link pasted here goes to the join sheet instead (JN-1).
 struct AddLinkSheet: View {
     /// Called with the saved post's id after the sheet closes.
     var onSaved: (UUID) -> Void = { _ in }
+    /// Called with an invite link's token, just before the sheet closes for the join sheet.
+    var onInvite: (String) -> Void = { _ in }
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
@@ -65,6 +68,8 @@ struct AddLinkSheet: View {
                         PasteButton(payloadType: String.self) { strings in
                             text = strings.first ?? ""
                             errorMessage = nil
+                            // An invite goes straight to its join sheet; a post waits for Save.
+                            if InviteLink.token(in: text) != nil { save() }
                         }
                         .labelStyle(.titleOnly)
                         .tint(Color.ink)
@@ -159,6 +164,12 @@ struct AddLinkSheet: View {
     }
 
     private func save() {
+        // A group plan invite opens the join sheet, not place finding (JN-1).
+        if let token = InviteLink.token(in: text) {
+            onInvite(token)
+            dismiss()
+            return
+        }
         guard let url = LinkParser.firstWebURL(in: text) else {
             errorMessage = "Paste a link to a TikTok or an Instagram post or Reel."
             return
