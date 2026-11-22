@@ -16,7 +16,10 @@
 
 .window { margin: 0 0 18px; padding: 0; border: 0; min-width: 0; }
 .window legend { padding: 0; }
-.times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.times { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+/* Under about 370px wide the two time fields don't fit side by side at 17px: each would run past
+   the card, so they stack. */
+@media (max-width: 369px) { .times { grid-template-columns: minmax(0, 1fr); } }
 .times label { display: grid; gap: 6px; font-size: 14px; font-weight: 700; color: var(--on-dark-muted); }
 /* 17px keeps iPhone Safari from zooming in when the field gets focus. */
 .answer input[type="time"], .answer select {
