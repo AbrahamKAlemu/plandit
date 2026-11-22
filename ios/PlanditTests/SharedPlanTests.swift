@@ -51,9 +51,10 @@ import XCTest
     func testThePayloadMatchesTheServersFieldNames() throws {
         let data = try JSONEncoder().encode(cleanDay().sharedPayload(showPrices: true, note: ""))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(Set(json.keys), ["planId", "title", "dateText", "timeText", "note", "costText", "stops", "legs"])
+        XCTAssertEqual(Set(json.keys), ["planId", "title", "dateText", "timeText", "note", "costText", "answers", "date", "stops", "legs"])
         let stop = try XCTUnwrap((json["stops"] as? [[String: Any]])?.first)
-        XCTAssertEqual(Set(stop.keys), ["name", "place", "address", "timeText", "durationText", "costText", "latitude", "longitude"])
+        XCTAssertEqual(Set(stop.keys), ["id", "name", "place", "address", "timeText", "durationText", "costText", "latitude", "longitude"],
+                       "no alternates key when a stop has none")
     }
 
     func testCreatingAndStoppingALink() async throws {
@@ -120,5 +121,12 @@ import XCTest
 
         let store = PlanditStore(snapshot: try SnapshotStore.decode(data))
         XCTAssertEqual(store.todayLink?.slug, "abc")
+    }
+
+    func testALinkSavedBeforeFriendsCouldAnswerLoadsWithSwapsOn() throws {
+        let json = #"{"slug": "abc", "url": "https://plandit.app/p/abc", "planID": "6F1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6", "showPrices": true, "note": ""}"#
+        let link = try JSONDecoder().decode(SharedLink.self, from: Data(json.utf8))
+        XCTAssertTrue(link.suggestsSwaps)
+        XCTAssertEqual(link.keptSwaps, [])
     }
 }

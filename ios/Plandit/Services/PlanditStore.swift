@@ -942,13 +942,16 @@ final class PlanditStore {
 
     var canShareLinks: Bool { sharing != nil }
 
-    /// Creates today's link (or updates its page with new options) and remembers it.
+    /// Creates today's link (or updates its page with new options) and remembers it. With
+    /// `suggestsSwaps`, the page offers friends up to two saved places per stop (`swapOptions`).
     @discardableResult
-    func shareToday(showPrices: Bool, note: String) async throws -> SharedLink {
+    func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true) async throws -> SharedLink {
         guard let sharing else { throw APIError.network }
-        let payload = today.sharedPayload(showPrices: showPrices, note: note)
+        let payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
         let created = try await sharing.publish(payload)
-        let link = SharedLink(slug: created.slug, url: created.url, planID: payload.planId, showPrices: showPrices, note: note)
+        var link = SharedLink(slug: created.slug, url: created.url, planID: payload.planId, showPrices: showPrices,
+                              note: note, suggestsSwaps: suggestsSwaps)
+        if let previous = sharedLink, previous.slug == link.slug { link.keptSwaps = previous.keptSwaps }
         lastPublished = payload
         sharedLink = link
         persist()
@@ -965,11 +968,21 @@ final class PlanditStore {
         persist()
     }
 
+    /// The saved places friends could pick instead of each stop still ahead: what the share preview
+    /// lists and the page offers with "Let friends suggest swaps" on.
+    var swapOptions: [UUID: [SavedPost]] {
+        SwapOptions.all(for: today, saves: saved)
+    }
+
+    private func sharedPayload(showPrices: Bool, note: String, suggestsSwaps: Bool) -> SharedPlanPayload {
+        today.sharedPayload(showPrices: showPrices, note: note, alternates: suggestsSwaps ? swapOptions : [:])
+    }
+
     /// After a change to a shared plan, the page catches up a moment later. Failures are quiet:
     /// the next change tries again.
     private func scheduleShareUpdate() {
         guard let link = todayLink, let sharing else { return }
-        let payload = today.sharedPayload(showPrices: link.showPrices, note: link.note)
+        let payload = sharedPayload(showPrices: link.showPrices, note: link.note, suggestsSwaps: link.suggestsSwaps)
         guard payload != lastPublished else { return }
         pendingShareUpdate?.cancel()
         pendingShareUpdate = Task { [weak self] in
