@@ -118,8 +118,14 @@ struct StartGroupButton: View {
             }
             .buttonStyle(.secondary)
             .disabled(isStarting)
-            .accessibilityHint("Makes a copy of this plan your friends can change with you, then lets you send them the link")
+            // The line below says who can change it and what they see; VoiceOver reads it next.
+            .accessibilityHint("Makes a copy of this plan, then lets you send your friends the link")
             .accessibilityIdentifier("start-group")
+            Text(GroupMembersText.startGroupNote)
+                .font(.metadata)
+                .foregroundStyle(.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("start-group-note")
             if let error {
                 Text(error)
                     .font(.metadata)

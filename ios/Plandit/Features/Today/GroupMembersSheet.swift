@@ -57,7 +57,10 @@ enum GroupMembersText {
         "Who's in: " + members.map { GroupToday.firstName($0.name) }.formatted(.list(type: .and))
     }
 
-    static let shareMessage = "Let's plan today together on Plandit. Open the link to see the plan and change it with me."
+    /// Sent with the invite link. The link's page can't show the plan; joining needs the app.
+    static let shareMessage = "Let's plan today together. Open this in the Plandit app to see the plan and change it with me."
+    /// Under "Edit with friends": who can change the plan, and what they'll see.
+    static let startGroupNote = "Friends with Plandit can change it with you. They'll see your first name and the whole plan, budget included."
     static let organizerCantLeave = "You're the organizer, so you can end the plan but not leave it."
 }
 

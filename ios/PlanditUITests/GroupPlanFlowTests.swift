@@ -138,6 +138,8 @@ final class GroupPlanFlowTests: XCTestCase {
         XCTAssertTrue(start.waitForExistence(timeout: 10))
         XCTAssertFalse(switcher(app).exists, "no group plans yet")
         scrollTo(start, in: app)
+        XCTAssertEqual(app.staticTexts["start-group-note"].label,
+                       "Friends with Plandit can change it with you. They'll see your first name and the whole plan, budget included.")
         start.tap()
 
         XCTAssertTrue(waitForShareSheet(app), "the link goes out through the share sheet")

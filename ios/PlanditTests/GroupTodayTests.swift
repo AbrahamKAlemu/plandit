@@ -226,6 +226,12 @@ import XCTest
         XCTAssertEqual(GroupToday.failureText(.tooLarge(nil), for: .start), "This plan is too big to share. Remove a stop and try again.")
         XCTAssertEqual(GroupToday.failureText(.unreadable, for: .start), "This version of Plandit can't do that. Update the app and try again.")
     }
+
+    /// The link's page can't show the plan, so the message sends friends to the app.
+    func testTheInviteMessageSaysToOpenItInTheApp() {
+        XCTAssertEqual(GroupMembersText.shareMessage,
+                       "Let's plan today together. Open this in the Plandit app to see the plan and change it with me.")
+    }
 }
 
 /// The banner's messages: one at a time, in order, no repeats back to back.
