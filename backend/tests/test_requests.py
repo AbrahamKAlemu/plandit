@@ -802,6 +802,9 @@ def test_a_share_links_cookie_does_not_answer_for_a_request(auth_client, browser
 
 
 def test_the_page_shows_only_how_many_answered(browser, group):
+    # The deadline on the hour, so the page's own times can't look like a friend's.
+    group.answers_by = datetime.combine(group.day, time(20), tzinfo=ZoneInfo(TZ))
+    group.save(update_fields=["answers_by"])
     add_answer(group, name="Zelda", budget=137, free_from=time(13, 37), free_until=time(19, 41), stars=[PIZZA])
     add_answer(group, name="Quinn", budget=123, free_from=time(12, 23), free_until=time(17, 47), stars=[PIZZA])
     body = html(request_page(browser, group.slug))
