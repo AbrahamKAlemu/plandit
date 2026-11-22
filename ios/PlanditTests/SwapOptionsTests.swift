@@ -165,6 +165,26 @@ import XCTest
         XCTAssertEqual(store.todayLink?.suggestsSwaps, true, "on by default")
     }
 
+    func testThePlansDateIsGregorianWhateverThePhonesCalendar() throws {
+        // Noon on Nov 22, 2026 in New York: year 2569 in the Buddhist calendar, Reiwa 8 in the
+        // Japanese one. The server takes only the Gregorian day.
+        let newYork = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = newYork
+        let noon = try XCTUnwrap(gregorian.date(from: DateComponents(year: 2026, month: 11, day: 22, hour: 12)))
+        for identifier in [Calendar.Identifier.buddhist, .japanese, .gregorian] {
+            var calendar = Calendar(identifier: identifier)
+            calendar.timeZone = newYork
+            XCTAssertEqual(DayPlan.isoDay(noon, calendar: calendar), "2026-11-22", "\(identifier)")
+        }
+
+        // Still the plan's own day: 11 PM in New York is already the 23rd in UTC.
+        let lateEvening = try XCTUnwrap(gregorian.date(from: DateComponents(year: 2026, month: 11, day: 22, hour: 23)))
+        var buddhist = Calendar(identifier: .buddhist)
+        buddhist.timeZone = newYork
+        XCTAssertEqual(DayPlan.isoDay(lateEvening, calendar: buddhist), "2026-11-22")
+    }
+
     // MARK: - Helpers
 
     private func makeStore(sharing: FakePlanSharing) -> PlanditStore {

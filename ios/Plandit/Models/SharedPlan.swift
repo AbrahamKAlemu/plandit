@@ -118,9 +118,13 @@ extension DayPlan {
         )
     }
 
-    /// "2026-11-22": the day in this phone's time zone, as the server's `date` takes it.
+    /// "2026-11-22": the day in this phone's time zone, as the server's `date` takes it. Always
+    /// Gregorian: only `calendar`'s time zone counts, so a phone set to the Buddhist or Japanese
+    /// calendar still sends 2026, not 2569 or 0008.
     static func isoDay(_ date: Date, calendar: Calendar = .current) -> String {
-        let day = calendar.dateComponents([.year, .month, .day], from: date)
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        let day = gregorian.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
     }
 }
