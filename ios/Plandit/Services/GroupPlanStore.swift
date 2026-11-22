@@ -393,11 +393,24 @@ final class GroupPlanStore {
         while !Task.isCancelled, !isClosed, !readOnly.contains(id) {
             dropEditsThatNoLongerApply(id)
             guard let held = record(id), let head = held.pending.first, let serverPlan = held.plan else { return }
-            guard case .applied(let sent) = PlanEdit.apply(head.edit, to: serverPlan, now: now(), calendar: calendar) else { continue }
-            let base = held.version
+            let base: Int
+            let sent: DayPlan?
+            switch PlanEdit.apply(head.edit, to: serverPlan, now: now(), calendar: calendar) {
+            case .applied(let plan):
+                base = held.version
+                sent = plan
+            case .noLongerApplies where head.mayHaveLanded:
+                // Its answer was lost and the plan has moved on since, maybe with it. The server
+                // looks up a known editId before the base, so the same editId on the version it was
+                // made on (one the server has passed) is 200 if it was stored and 409 if not.
+                base = head.madeOn
+                sent = nil
+            default:
+                continue
+            }
             let body = GroupPlanUpdate(baseVersion: base, editId: head.editId,
-                                         edit: .init(kind: head.edit.kind, stopIds: head.edit.stopIDs(before: serverPlan, after: sent)),
-                                         plan: sent)
+                                         edit: .init(kind: head.edit.kind, stopIds: head.edit.stopIDs(before: serverPlan, after: sent ?? serverPlan)),
+                                         plan: sent ?? serverPlan)
             updatePending(id, head.editId) { $0.sending = true }
             save()
 
@@ -425,7 +438,7 @@ final class GroupPlanStore {
             switch answer {
             case let .saved(saved, etag):
                 // Stored just now on `base`: the server's plan is exactly the one sent.
-                let fresh = !head.mayHaveLanded && saved.version == base + 1
+                let fresh = sent != nil && !head.mayHaveLanded && saved.version == base + 1
                 if !fresh {
                     // Stored earlier (MF-B): fetch the server's plan before letting the edit go, so it
                     // doesn't flicker away, and never add it twice.
@@ -465,7 +478,8 @@ final class GroupPlanStore {
     }
 
     /// Makes the queue again on the server's plan, in order: an edit the plan already shows goes
-    /// quietly; edits that no longer apply go with one message.
+    /// quietly; edits that no longer apply go with one message. One the server may already have
+    /// (its answer was lost) stays until the server says whether it was stored.
     private func dropEditsThatNoLongerApply(_ id: UUID) {
         guard let index = index(id), var plan = records[index].plan else { return }
         var kept: [PendingEdit] = []
@@ -477,6 +491,8 @@ final class GroupPlanStore {
                 kept.append(pending)
             case .alreadyApplied:
                 continue
+            case .noLongerApplies where pending.mayHaveLanded:
+                kept.append(pending)
             case .noLongerApplies(let reason):
                 dropped.append((pending.edit, reason))
             }

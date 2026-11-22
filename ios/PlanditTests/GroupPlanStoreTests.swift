@@ -441,6 +441,54 @@ import XCTest
         XCTAssertEqual(version, 2, "no second version")
     }
 
+    /// RB-8, MF-B: the server took the edit but the answer was lost, then someone else changed that
+    /// stop. The server's list of edits says it was stored, so there's no message.
+    func testRB8_ALandedEditIsNotReportedAsNotMadeWhenTheStopChangedSince() async throws {
+        let (store, id) = await joinedGroup()
+        let stop = try shown(store, id).stops[1].id
+        await server.script(.put, .lostAfterSaving)
+        store.apply(try XCTUnwrap(PlanEdit.status(.arrive, stopID: stop, in: try shown(store, id))), to: id)
+        await eventually("the retry waits") { self.clock.sleeping == 1 }
+        let landed = await server.info(id)?.version
+        XCTAssertEqual(landed, 2, "the server has the arrive")
+        await members.edit("Maya", id) { PlanEdit.status(.complete, stopID: stop, in: $0) }
+        await store.refresh(id)
+        clock.advance(by: .seconds(60))
+        await waitUntilSent(store, id)
+
+        XCTAssertEqual(messages.map(\.kind), [], "the arrive landed at v2, yet: \(messages.map(\.text))")
+        let updates = await server.updates
+        XCTAssertEqual(updates.count, 2, "the server was asked")
+        XCTAssertEqual(updates.first?.editId, updates.last?.editId)
+        let version = await server.info(id)?.version
+        XCTAssertEqual(version, 3, "nothing stored again")
+        let latest = await serverPlan(id)
+        XCTAssertEqual(store.group(id)?.plan, latest)
+    }
+
+    /// RB-8: the answer was lost and the edit wasn't stored, then someone else changed that stop.
+    /// The message comes only once the server says it doesn't have the edit (its 409), naming who.
+    func testRB8_AnEditThatDidntLandIsReportedOnceTheServerSaysSo() async throws {
+        let (store, id) = await joinedGroup()
+        let stop = try shown(store, id).stops[1].id
+        await server.script(.put, .network)
+        store.apply(try XCTUnwrap(PlanEdit.status(.arrive, stopID: stop, in: try shown(store, id))), to: id)
+        await eventually("the retry waits") { self.clock.sleeping == 1 }
+        await members.edit("Maya", id) { PlanEdit.status(.complete, stopID: stop, in: $0) }
+        await store.refresh(id)
+        clock.advance(by: .seconds(60))
+        await waitUntilSent(store, id)
+
+        let updates = await server.updates
+        XCTAssertEqual(updates.count, 2, "the server was asked")
+        XCTAssertEqual(updates.first?.editId, updates.last?.editId)
+        let version = await server.info(id)?.version
+        XCTAssertEqual(version, 2, "nothing stored")
+        XCTAssertEqual(messages.map(\.kind), [.editsNotMade(count: 1, author: "Maya", reason: .stopChanged(stop))])
+        let latest = await serverPlan(id)
+        XCTAssertEqual(store.group(id)?.plan, latest)
+    }
+
     /// RB-9: 404 on the PUT drops the group, its edits and its cache, with a message; no retry.
     func testRB9_A404OnThePutDropsTheGroupWithAMessage() async throws {
         let (store, id) = await joinedGroup()
