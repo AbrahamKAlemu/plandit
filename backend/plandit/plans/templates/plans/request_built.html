@@ -1,6 +1,6 @@
 {% extends "shares/base.html" %}
 {% load static %}
-{% block title %}The plan is ready · Plandit{% endblock %}
+{% block title %}The plan for {{ day_text }} is ready · Plandit{% endblock %}
 {% block stylesheets %}
   <link rel="stylesheet" href="{% static 'shares/not_found.css' %}">
   <link rel="stylesheet" href="{% static 'plans/request.css' %}">
@@ -8,9 +8,9 @@
 {% block content %}
   <a class="brand" href="https://plandit.app" rel="noreferrer"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
   {# Only for a browser whose answer is still on the request; everyone else is sent straight to the plan. #}
-  <h1>The plan is ready</h1>
+  <h1>The plan for {{ day_text }} is ready</h1>
   <a class="cta" href="{{ plan_path }}">See the plan</a>
-  <p>Only the person who sent this link sees your answer.</p>
+  <p>Taking your answer back won't change the plan.</p>
   <form method="post" action="{% url 'plan-request-answer-delete' slug %}" class="take-back">
     {% csrf_token %}
     <button type="submit" class="link">Take back my answer</button>

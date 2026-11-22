@@ -966,9 +966,9 @@ def test_once_built_a_friend_who_answered_gets_the_plans_link_and_can_take_back_
     page = request_page(browser, group.slug)
     assert page.status_code == 200
     body = html(page)
-    assert "The plan is ready" in body
+    assert f"<h1>The plan for {request_views.day_text(group.day)} is ready</h1>" in body
     assert re.search(rf'<a class="cta" href="/p/{shared.slug}">See the plan</a>', body)
-    assert "Only the person who sent this link sees your answer." in body
+    assert "Taking your answer back won't change the plan." in body
     assert re.findall(r'<form[^>]*action="([^"]+)"', body) == [f"/g/{group.slug}/answer/delete"]
     assert "Take back my answer" in body
     assert 'name="budget"' not in body and "Maya" not in body

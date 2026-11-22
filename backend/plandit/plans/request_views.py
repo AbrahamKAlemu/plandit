@@ -354,7 +354,12 @@ def _built_page(request, group, plan_path):
     response = render(
         request,
         "plans/request_built.html",
-        {"slug": group.slug, "page_url": request_url(request, group.slug), "plan_path": plan_path},
+        {
+            "slug": group.slug,
+            "page_url": request_url(request, group.slug),
+            "plan_path": plan_path,
+            "day_text": day_text(group.day),
+        },
     )
     return with_page_headers(response, takes_answers=True)
 
