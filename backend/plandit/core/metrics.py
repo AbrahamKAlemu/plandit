@@ -11,15 +11,20 @@ after the plan's date, so these describe the answers kept now, not all time.
 
 Friends' input links (mode 2) are counted the same way: how many there are, and how many were
 built into a plan. Their answers aren't read at all. Requests are deleted 30 days after their day.
+
+Group plans that members edit together (mode 3) are counted too: how many there are, how many have
+at least one friend in them, and how many edits were made (each adds one to the plan's version).
+Never the plans, the members or their names. They're deleted 30 days after their date.
 """
 
 from datetime import UTC, date, datetime, time, timedelta
 
 from django.conf import settings
-from django.db.models import Count
+from django.db.models import Count, F, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
+from plandit.groups.models import GroupPlan
 from plandit.plans.models import GroupRequest
 from plandit.shares.models import ShareAnswer
 from plandit.waitlist.models import WaitlistSignup
@@ -75,6 +80,18 @@ def _request_totals() -> dict:
     }
 
 
+def _group_plan_totals() -> dict:
+    groups = GroupPlan.objects.filter(owner__is_anonymous=False)
+    counts = groups.aggregate(groups=Count("id"), edits=Sum(F("version") - 1))
+    total, edits = counts["groups"], counts["edits"] or 0
+    return {
+        "group_plans": total,
+        "group_plans_with_friends": groups.annotate(people=Count("members")).filter(people__gte=2).count(),
+        "group_plan_edits": edits,
+        "edits_per_group_plan": round(edits / total, 1) if total else 0.0,
+    }
+
+
 def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
     now = timezone.now()
     today = timezone.localdate(now)
@@ -105,6 +122,7 @@ def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
         "anonymous_sessions": Profile.objects.filter(is_anonymous=True).count(),
         **_answer_totals(),
         **_request_totals(),
+        **_group_plan_totals(),
     }
 
     daily = {
