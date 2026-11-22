@@ -28,10 +28,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from plandit.core.metrics import iso_utc
+from plandit.core.models import Profile
 from plandit.core.public_forms import (
     RESPONDER_COOKIE_MAX_AGE,
     clean_first_name,
     client_ip,
+    first_name_of,
     public_page_csp,
     rate_limited,
     responder_token,
@@ -329,6 +331,7 @@ def _open_page(request, group, *, form=None, error="", invalid="", status=200):
             "budget_choices": BUDGET_CHOICES,
             "error": error,
             "invalid": invalid,
+            "organizer_name": _organizer_name(group),
         },
         status=status,
     )
@@ -359,9 +362,17 @@ def _built_page(request, group, plan_path):
             "page_url": request_url(request, group.slug),
             "plan_path": plan_path,
             "day_text": day_text(group.day),
+            "organizer_name": _organizer_name(group),
         },
     )
     return with_page_headers(response, takes_answers=True)
+
+
+def _organizer_name(group) -> str:
+    """Whose link it is: the organizer's first name as group plan members see it, or "" for none,
+    and the page reads as it did before names were shown. Only on the pages, never in the API. Read
+    by key, so an account deleted since the request was read gives "" rather than an error."""
+    return first_name_of(Profile.objects.filter(pk=group.owner_id).values_list("name", flat=True).first())
 
 
 def _has_own_answer(request, group) -> bool:

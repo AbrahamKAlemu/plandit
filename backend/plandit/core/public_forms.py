@@ -4,6 +4,7 @@
 - `responder_token` recognizes the same browser again through a cookie, storing only a hash.
 - `client_ip` is the address to rate limit by; `describe_forwarding` helps measure the proxy chain.
 - `clean_first_name` is the only free text a friend can type (brief GS-4).
+- `first_name_of` is what other people see of an account's name.
 - `public_page_csp` is the Content Security Policy for the pages themselves (brief GS-3).
 """
 
@@ -208,6 +209,19 @@ def clean_first_name(value) -> str:
     if any(word in blocked for word in words):
         raise ValidationError("That name can't be used here. Try another.", code="blocked")
     return name
+
+
+def first_name_of(full_name: str | None) -> str:
+    """The first word of an account's name, cut to FIRST_NAME_MAX_LENGTH and checked like a friend's
+    first name, or "" when there's none that passes. All a group plan's members see of each other,
+    and all a friend sees of whoever sent them a /g/ link."""
+    words = (full_name or "").split()
+    if not words:
+        return ""
+    try:
+        return clean_first_name(words[0][:FIRST_NAME_MAX_LENGTH])
+    except ValidationError:
+        return ""
 
 
 def _letters_spaces_hyphens_apostrophes(name: str) -> bool:

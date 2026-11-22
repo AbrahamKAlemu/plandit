@@ -967,7 +967,7 @@ def test_once_built_a_friend_who_answered_gets_the_plans_link_and_can_take_back_
     page = request_page(browser, group.slug)
     assert page.status_code == 200
     body = html(page)
-    assert f"<h1>The plan for {request_views.day_text(group.day)} is ready</h1>" in body
+    assert f"<h1>Abraham's plan for {request_views.day_text(group.day)} is ready</h1>" in body
     assert re.search(rf'<a class="cta" href="/p/{shared.slug}">See the plan</a>', body)
     assert "Taking your answer back won't change the plan." in body
     assert re.findall(r'<form[^>]*action="([^"]+)"', body) == [f"/g/{group.slug}/answer/delete"]
@@ -1007,6 +1007,102 @@ def test_once_built_with_its_plan_no_longer_shared_an_answer_gets_the_closed_pag
     built_and_no_longer_shared(group)
     body = html(request_page(browser, group.slug))
     assert CLOSED in body and "Take back my answer" in body and "See the plan" not in body
+
+
+# --- Whose link it is: the organizer's first name on the form and the ready page --------------
+
+
+FORM_HEADING = '<h2 id="answer-title">What works for you?</h2>'
+
+
+def named(profile, name: str):
+    profile.name = name
+    profile.save(update_fields=["name"])
+
+
+def form_heading(name: str) -> str:
+    return f'<h2 id="answer-title">{name} wants to know what works for you</h2>'
+
+
+def ready_heading(group, name: str | None = None) -> str:
+    whose = f"{name}'s plan" if name else "The plan"
+    return f"<h1>{whose} for {request_views.day_text(group.day)} is ready</h1>"
+
+
+def ready_page(browser, group, profile) -> str:
+    friend_answer(browser, group.slug, name="Jordan")
+    built(group, profile)
+    page = request_page(browser, group.slug)
+    assert page.status_code == 200
+    return html(page)
+
+
+@pytest.mark.parametrize(
+    ("name", "shown"),
+    [("Maya Lopez", "Maya"), ("  Jordan   Lee ", "Jordan"), ("Mary-Ann Okafor", "Mary-Ann"), ("A" * 40, "A" * 30)],
+)
+def test_the_form_and_the_ready_page_name_the_organizer_by_first_name(browser, group, profile, name, shown):
+    """The first word of the organizer's profile name, at most 30 characters, as group plan members
+    see each other (GroupMember.display_name)."""
+    named(profile, name)
+    body = html(request_page(browser, group.slug))
+    assert form_heading(shown) in body
+    assert FORM_HEADING not in body
+    assert ready_heading(group, shown) in ready_page(browser, group, profile)
+
+
+def test_only_the_first_name_is_shown(browser, group, profile):
+    named(profile, "Maya Lopez")
+    assert "Lopez" not in html(request_page(browser, group.slug))
+    assert "Lopez" not in ready_page(browser, group, profile)
+
+
+def test_a_form_sent_back_with_an_error_still_names_the_organizer(browser, group, profile):
+    named(profile, "Maya Lopez")
+    response = friend_answer(browser, group.slug, name="")
+    assert response.status_code == 400
+    assert form_heading("Maya") in html(response)
+
+
+@pytest.mark.parametrize("name", ["", "   ", "🎉 Party", "J. Lee", "<b>Al</b>"])
+def test_without_a_first_name_the_pages_are_as_before(browser, group, profile, name):
+    """No name, or none that passes the first-name check: the old headings, and no placeholder."""
+    named(profile, name)
+    body = html(request_page(browser, group.slug))
+    assert FORM_HEADING in body
+    assert "wants to know" not in body
+    ready = ready_page(browser, group, profile)
+    assert ready_heading(group) in ready
+    assert "'s plan" not in ready
+
+
+def test_the_organizers_name_is_escaped(browser, group, profile):
+    """`<b>Al</b>` isn't a first name, so it's never shown, as markup or as text; a name that is
+    one is still HTML-escaped, apostrophes included."""
+    named(profile, "<b>Al</b>")
+    body = html(request_page(browser, group.slug))
+    assert "<b>Al" not in body and "&lt;b&gt;Al" not in body
+    named(profile, "D'Andre Smith")
+    body = html(request_page(browser, group.slug))
+    assert form_heading("D&#x27;Andre") in body
+    assert "D'Andre" not in body
+    assert ready_heading(group, "D&#x27;Andre") in ready_page(browser, group, profile)
+
+
+def test_the_not_found_page_never_names_the_organizer(auth_client, browser, group, profile):
+    named(profile, "Priya Shah")
+    friend_answer(browser, group.slug)
+    assert "Priya" not in html(request_page(browser, "doesnotexist"))
+    auth_client.delete(f"/api/plan-requests/{group.slug}/")
+    for response in (request_page(browser, group.slug), friend_answer(browser, group.slug)):
+        assert response.status_code == 404
+        assert "Priya" not in html(response)
+
+
+def test_the_organizers_name_is_not_added_to_the_api(auth_client, group, profile):
+    """Only the pages show it; the owner's own JSON is unchanged."""
+    named(profile, "Maya Lopez")
+    assert "Maya" not in auth_client.get(f"/api/plan-requests/{group.slug}/").content.decode()
 
 
 # --- Missing links and methods ---------------------------------------------------------------

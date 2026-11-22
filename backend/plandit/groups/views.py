@@ -24,7 +24,6 @@ import re
 from contextlib import contextmanager
 
 from django.conf import settings
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, connection, transaction
 from django.db.models import Count, F
 from django.utils.cache import get_conditional_response
@@ -34,7 +33,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from plandit.core.models import Profile
-from plandit.core.public_forms import FIRST_NAME_MAX_LENGTH, clean_first_name
+from plandit.core.public_forms import first_name_of
 from plandit.core.retention import purge_expired
 
 from .models import (
@@ -91,13 +90,7 @@ def etag(group: GroupPlan) -> str:
 def display_name(profile: Profile) -> str:
     """The first word of the profile's name, checked like a friend's first name on the public pages,
     or "Friend" (N-10). It's all other members see of each other."""
-    words = (profile.name or "").split()
-    if not words:
-        return FALLBACK_NAME
-    try:
-        return clean_first_name(words[0][:FIRST_NAME_MAX_LENGTH])
-    except DjangoValidationError:
-        return FALLBACK_NAME
+    return first_name_of(profile.name) or FALLBACK_NAME
 
 
 def try_again_on_lock_timeout(view_method):

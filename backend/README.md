@@ -210,7 +210,10 @@ included), when they're free inside the range, and up to 3 starred places. The p
 friend only how many have answered. The organizer reads every answer through
 `/api/plan-requests/<slug>/`, builds the plan on the phone, and shares it with `request=<slug>`;
 the request is then `built` and its link redirects to the plan's `/p/` page. A friend whose
-answer is still on it gets the plan's link and "Take back my answer" instead.
+answer is still on it gets the plan's link and "Take back my answer" instead. The form and that
+page name the organizer by the first word of their profile name, as group plan members see each
+other (`first_name_of`); with no name that passes the first-name check, they name no one. The name
+is only on the pages, never in the API.
 
 The answer form has the same protections as `/p/`'s, from the same helpers: Django's CSRF token,
 20 answers an hour from one address on each link, 50 per link, the first-name check and the `pa`
