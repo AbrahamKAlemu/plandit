@@ -182,10 +182,13 @@ CORS_URLS_REGEX = r"^/api/.*$"
 # The proxy also passes the client's address in X-Forwarded-For. plandit.core.public_forms.client_ip
 # reads that header only when this is on; without a proxy in front, anyone could set it.
 BEHIND_TRUSTED_PROXY = not DEBUG
-# How many entries at the right end of X-Forwarded-For our own proxies added. Render's proxy keeps
-# whatever the client sent and appends the address it saw, so only the last entry can be trusted;
-# the first one is whatever the client chose to send.
-TRUSTED_PROXY_HOPS = int(env("TRUSTED_PROXY_HOPS", "1"))
+# How many X-Forwarded-For entries, counted from the right, our own proxies added, the client's
+# address included: plandit.core.public_forms.client_ip uses the entry this far from the right.
+# Entries further left are whatever the client sent. Public reports of Render's chain show
+# "<client-sent>, <client>, <Cloudflare edge>, <Render internal>", so the default is 3. Not yet
+# measured on our service: the shared plan page logs the chain's shape (describe_forwarding), and
+# no form may rely on client_ip until that log confirms this value (group plans, slice G1a).
+TRUSTED_PROXY_HOPS = int(env("TRUSTED_PROXY_HOPS", "3"))
 if BEHIND_TRUSTED_PROXY:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True

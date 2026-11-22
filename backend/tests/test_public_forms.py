@@ -204,10 +204,50 @@ def test_a_missing_garbled_or_short_forwarded_header_falls_back_to_the_peer(sett
     assert client_ip(request) == "198.51.100.4"
 
 
-def test_ipv6_addresses_are_normalized(settings):
+def test_ipv6_addresses_count_as_their_64_network(settings):
+    """One device usually owns a whole /64, so stepping through it mustn't give fresh limits."""
     settings.BEHIND_TRUSTED_PROXY = True
-    request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="2001:DB8:0:0::1", REMOTE_ADDR="10.0.0.2")
-    assert client_ip(request) == "2001:db8::1"
+    settings.TRUSTED_PROXY_HOPS = 1
+    for typed in ("2001:DB8:0:0::1", "2001:db8::ffff:1234", "2001:db8:0:0:abcd::9"):
+        request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR=typed, REMOTE_ADDR="10.0.0.2")
+        assert client_ip(request) == "2001:db8::/64"
+    other = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="2001:db8:0:1::1", REMOTE_ADDR="10.0.0.2")
+    assert client_ip(other) == "2001:db8:0:1::/64"
+
+
+def test_an_ipv4_mapped_ipv6_address_counts_as_the_ipv4_address(settings):
+    settings.BEHIND_TRUSTED_PROXY = False
+    request = RequestFactory().get("/", REMOTE_ADDR="::ffff:203.0.113.7")
+    assert client_ip(request) == "203.0.113.7"
+
+
+def test_the_default_matches_the_reported_render_chain(settings):
+    """Client-sent entry, the client, a Cloudflare edge, a Render internal address."""
+    settings.BEHIND_TRUSTED_PROXY = True
+    settings.TRUSTED_PROXY_HOPS = 3
+    request = RequestFactory().get(
+        "/", HTTP_X_FORWARDED_FOR="198.51.100.1, 203.0.113.7, 172.71.0.5, 10.0.0.1", REMOTE_ADDR="10.0.0.2"
+    )
+    assert client_ip(request) == "203.0.113.7"
+
+
+def test_describe_forwarding_has_the_chain_shape_and_no_addresses():
+    request = RequestFactory().get(
+        "/",
+        HTTP_X_FORWARDED_FOR="198.51.100.1, 203.0.113.7, 172.71.0.5, 10.0.0.1",
+        HTTP_TRUE_CLIENT_IP="203.0.113.7",
+    )
+    described = public_forms.describe_forwarding(request)
+    # Python counts the documentation ranges (198.51.100.0/24, 203.0.113.0/24) as private.
+    assert described == (
+        "forwarded_entries=4 private_from_right=p-pp true_client_ip=present true_client_ip_from_right=3"
+    )
+    assert "203.0.113" not in described and "10.0.0" not in described
+
+
+def test_describe_forwarding_without_headers():
+    described = public_forms.describe_forwarding(RequestFactory().get("/"))
+    assert described == "forwarded_entries=0 private_from_right=- true_client_ip=absent true_client_ip_from_right=none"
 
 
 # --- clean_first_name ---------------------------------------------------------

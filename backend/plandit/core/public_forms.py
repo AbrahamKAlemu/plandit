@@ -2,7 +2,7 @@
 
 - `rate_limited` counts requests per key (an IP address, a link) in the `throttle` cache.
 - `responder_token` recognizes the same browser again through a cookie, storing only a hash.
-- `client_ip` is the address to rate limit by.
+- `client_ip` is the address to rate limit by; `describe_forwarding` helps measure the proxy chain.
 - `clean_first_name` is the only free text a friend can type (brief GS-4).
 - `public_page_csp` is the Content Security Policy for the pages themselves (brief GS-3).
 """
@@ -53,8 +53,10 @@ def rate_limited(key: str, limit: int, window_seconds: int) -> bool:
     digest = salted_hmac("plandit.core.public_forms.rate_limited", key, algorithm="sha256").hexdigest()
     slots = [f"rl:{digest}:{window_seconds}:{window}:{n}" for n in range(limit)]
     taken = throttle.get_many(slots) if slots else {}
+    # The extra minute keeps a slot alive past the window's end, so a request that worked out the
+    # window just before it ended can't find the slots expired and claim them again.
     for slot in slots:
-        if slot not in taken and throttle.add(slot, 1, timeout=seconds_left):
+        if slot not in taken and throttle.add(slot, 1, timeout=seconds_left + 60):
             return False
     return True
 
@@ -94,25 +96,66 @@ def responder_token(request, response, scope: str) -> str:
 
 
 def client_ip(request) -> str:
-    """The address to rate limit by. Behind the deployed proxy (settings.BEHIND_TRUSTED_PROXY), the
-    X-Forwarded-For entry our own proxies added: settings.TRUSTED_PROXY_HOPS from the right. Entries
-    to the left of it came from the client and can be anything, so the first entry is never used.
-    Otherwise, or when that entry is missing or isn't an address, the connecting peer (REMOTE_ADDR).
-    Addresses come back normalized, so one IPv6 address has one spelling."""
+    """The address to rate limit by.
+
+    Behind the deployed proxy (settings.BEHIND_TRUSTED_PROXY), it's the X-Forwarded-For entry that
+    is settings.TRUSTED_PROXY_HOPS from the right: the client's address as the first of our proxies
+    saw it. Entries further left came from the client and can be anything, and entries to the right
+    are our proxies' own addresses. Otherwise, or when that entry is missing or isn't an address,
+    it's the connecting peer (REMOTE_ADDR).
+
+    An IPv6 address comes back as its /64 network, because one device usually owns a whole /64 and
+    could otherwise step through addresses to get past a per-address limit. An IPv4 address comes
+    back as it is, normalized."""
     if getattr(settings, "BEHIND_TRUSTED_PROXY", False):
         hops = max(1, int(getattr(settings, "TRUSTED_PROXY_HOPS", 1)))
-        entries = [entry.strip() for entry in request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")]
+        entries = _forwarded_entries(request)
         if len(entries) >= hops and (address := _normalized(entries[-hops])):
             return address
     remote = request.META.get("REMOTE_ADDR", "")
     return _normalized(remote) or remote
 
 
-def _normalized(value: str) -> str:
+def describe_forwarding(request) -> str:
+    """How the proxy chain shaped this request, with no addresses in it: how many X-Forwarded-For
+    entries arrived, whether each of the last four (counted from the right) is a private address,
+    and which one, if any, equals the True-Client-IP header. Logged by the shared plan page so the
+    right TRUSTED_PROXY_HOPS can be read from Render's logs before any form relies on client_ip.
+    Remove it once the hop count is measured (group plans, slice G1a)."""
+    entries = _forwarded_entries(request)
+    true_client = _parsed(request.META.get("HTTP_TRUE_CLIENT_IP", "").strip())
+    private = ""
+    match = "none"
+    for position in range(1, min(4, len(entries)) + 1):
+        address = _parsed(entries[-position])
+        private += "?" if address is None else ("p" if address.is_private else "-")
+        if address is not None and address == true_client and match == "none":
+            match = str(position)
+    return (
+        f"forwarded_entries={len(entries)} private_from_right={private or '-'} "
+        f"true_client_ip={'absent' if true_client is None else 'present'} true_client_ip_from_right={match}"
+    )
+
+
+def _forwarded_entries(request) -> list[str]:
+    header = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    return [entry.strip() for entry in header.split(",")] if header.strip() else []
+
+
+def _parsed(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
-        return str(ipaddress.ip_address(value))
+        return ipaddress.ip_address(value)
     except ValueError:
+        return None
+
+
+def _normalized(value: str) -> str:
+    address = _parsed(value)
+    if address is None:
         return ""
+    if address.version == 6 and address.ipv4_mapped is None:
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return str(getattr(address, "ipv4_mapped", None) or address)
 
 
 # --- First names ------------------------------------------------------------------------------
