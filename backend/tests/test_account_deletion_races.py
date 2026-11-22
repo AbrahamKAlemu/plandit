@@ -16,8 +16,12 @@ import pytest
 
 from plandit.core import views as core_views
 from plandit.core.models import AppSnapshot, Profile
-from tests.test_group_plan_races import delete_account_later, first_holds_until_second_waits, second_device
+from plandit.plans.models import GroupRequest
+from plandit.shares.models import SharedPlan
+from tests.test_group_plan_races import delete_account_later, first_holds_until_second_waits, second_device, warm
 from tests.test_group_plans import person, plan_json, with_and_without_supabase
+from tests.test_requests import make_request
+from tests.test_shares import plan_payload, share
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -71,3 +75,58 @@ def test_a_sync_and_the_accounts_deletion_both_finish(maya, settings, monkeypatc
         assert synced.json() == ACCOUNT_DELETED
     assert not Profile.objects.filter(pk=maya.id).exists()
     assert not AppSnapshot.objects.exists()
+
+
+# --- Sharing a plan from another device ----------------------------------------------------------
+
+
+@with_and_without_supabase
+@pytest.mark.parametrize("plan_is", ["new", "shared before"])
+@pytest.mark.parametrize("first", ["share", "deletion"])
+def test_a_share_and_the_accounts_deletion_both_finish(maya, settings, monkeypatch, with_supabase, plan_is, first):
+    """A share without `request` never locked the profile. A new link's row checks its owner when
+    the share commits (Django's foreign keys are deferred), so a share that committed after the
+    deletion failed with an IntegrityError, a 500. It now takes the profile's lock first, as a share
+    with `request` does: the deletion waits for it and deletes the new link, or it waits for the
+    deletion and gets the same 401 as any request from a deleted account."""
+    warm(maya)
+    phone = second_device(maya)
+    payload = plan_payload()
+    if plan_is == "shared before":
+        assert share(maya.client, payload).status_code == 201
+    delete = delete_account_later(maya, settings, monkeypatch, with_supabase)
+    if first == "share":
+        # Held once the link is written, inside the share's transaction.
+        results = first_holds_until_second_waits(
+            monkeypatch, SharedPlan.objects, "update_or_create", lambda: share(phone.client, payload), delete
+        )
+        shared, deleted = results["first"], results["second"]
+    else:
+        results = first_holds_until_second_waits(
+            monkeypatch, core_views, "_lock_group_plans", delete, lambda: share(phone.client, payload)
+        )
+        deleted, shared = results["first"], results["second"]
+
+    shared_status = {"share": 201 if plan_is == "new" else 200, "deletion": 401}[first]
+    assert (deleted.status_code, shared.status_code) == (204, shared_status)
+    if first == "deletion":
+        assert shared.json() == ACCOUNT_DELETED
+    assert not Profile.objects.filter(pk=maya.id).exists()
+    assert not SharedPlan.objects.exists()
+
+
+@with_and_without_supabase
+def test_a_share_with_request_that_waited_for_the_accounts_deletion_is_401(maya, settings, monkeypatch, with_supabase):
+    """It answered 400 "No such request." when the request had gone with the account; now it gets
+    the answer a deleted account gets everywhere else. (The other order is in test_request_races.py.)"""
+    warm(maya)
+    phone = second_device(maya)
+    slug = make_request(maya.profile).slug
+    delete = delete_account_later(maya, settings, monkeypatch, with_supabase)
+    results = first_holds_until_second_waits(
+        monkeypatch, core_views, "_lock_group_plans", delete, lambda: share(phone.client, plan_payload(request=slug))
+    )
+    assert (results["first"].status_code, results["second"].status_code) == (204, 401)
+    assert results["second"].json() == ACCOUNT_DELETED
+    assert not SharedPlan.objects.exists()
+    assert not GroupRequest.objects.exists()
