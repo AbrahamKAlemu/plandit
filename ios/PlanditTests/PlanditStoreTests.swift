@@ -574,4 +574,93 @@ final class PlanditStoreTests: XCTestCase {
         store.leave(first.id)
         XCTAssertTrue(store.postsDoneToday.isEmpty, "back to planned: not done after all")
     }
+    @MainActor func testAStoredDayInTheFutureDoesNotStopRecordingToday() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        // Left by a phone clock that was wrong, or a different calendar setting.
+        try storage.saveDoneToday(DoneToday(day: "9999-12-31", postIDs: [UUID()]))
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertTrue(store.postsDoneToday.isEmpty)
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+        for stop in store.today.stops { store.removeStop(stop.id) }
+        XCTAssertEqual(store.postsDoneToday, [done])
+        XCTAssertEqual(storage.loadDoneToday(), DoneToday(day: DoneToday.key(for: .now), postIDs: [done]))
+    }
+
+    @MainActor func testALaterDayFromSyncLeavesTodaysPlacesDoneOnThePhone() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+
+        // Another phone, its clock a day ahead, sends its copy.
+        var tomorrows = store.snapshot
+        tomorrows.today = .empty(for: try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 1, to: .now)), budget: 60)
+        store.replace(with: tomorrows)
+
+        XCTAssertEqual(storage.loadDoneToday(), DoneToday(day: DoneToday.key(for: .now), postIDs: [done]))
+    }
+
+    @MainActor func testAnEarlierDayFromSyncKeepsTodaysPlacesDone() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+        for stop in store.today.stops { store.removeStop(stop.id) }
+        XCTAssertEqual(store.postsDoneToday, [done])
+
+        // Another phone's copy, still dated yesterday, arrives through sync.
+        var yesterdays = store.snapshot
+        yesterdays.today = .empty(for: try XCTUnwrap(Calendar.current.date(byAdding: .day, value: -1, to: .now)), budget: 60)
+        store.replace(with: yesterdays)
+
+        XCTAssertTrue(Calendar.current.isDateInToday(store.today.date))
+        XCTAssertEqual(store.postsDoneToday, [done])
+        XCTAssertEqual(storage.loadDoneToday()?.postIDs, [done])
+        store.refreshSuggestions()
+        XCTAssertFalse(store.suggestions.isEmpty)
+        XCTAssertFalse(store.suggestions.contains { $0.postIDs.contains(done) })
+    }
+
+    @MainActor func testAnUnreadablePlacesDoneFileStillLeavesSuggestions() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        try Data("not json".utf8).write(to: storage.doneTodayURL)
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertTrue(store.postsDoneToday.isEmpty)
+        XCTAssertFalse(store.suggestions.isEmpty)
+    }
 }

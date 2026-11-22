@@ -1180,13 +1180,18 @@ final class PlanditStore {
     /// Keeps `postsDoneToday` in step with the plan: a stop marked done adds its post, a stop in
     /// the plan that isn't done (Undo, "Not here yet") takes it out, and a stop removed from the
     /// plan leaves it as it was. Written to this phone only, beside the snapshot.
+    ///
+    /// Only a plan for the real current day is recorded. Another phone's copy from another day
+    /// (after sync, written before `replace(with:)` rolls it over) leaves today's set alone.
     private func noteDoneStops() {
+        guard Calendar.current.isDate(today.date, inSameDayAs: .now) else { return }
+        let day = DoneToday.key(for: today.date)
         var done = postsDoneToday
         for stop in today.stops {
             guard let postID = stop.sourcePostID else { continue }
             if stop.status == .done { done.insert(postID) } else { done.remove(postID) }
         }
-        let next = DoneToday(day: DoneToday.key(for: today.date), postIDs: done)
+        let next = DoneToday(day: day, postIDs: done)
         guard next != doneToday else { return }
         doneToday = next
         guard let storage, !isClosed else { return }
