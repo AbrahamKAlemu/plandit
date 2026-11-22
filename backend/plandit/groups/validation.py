@@ -25,6 +25,9 @@ MAX_STOPS = 20
 MAX_DEPTH = 32
 # How far ahead a group plan's day may be, in New York days (settings.TIME_ZONE).
 MAX_DAYS_AHEAD = 366
+# A plan's day ends at 4 AM New York time the morning after its date, so a night out stays editable
+# while people are still out. (The app's own planning day ends at 2 AM.)
+DAY_ENDS_AT_HOUR = 4
 # An edit names what it did (`kind`, the app's own words, such as "remove" or "setTime") and which
 # stops it touched; the server only stores them for the 409's "who changed what".
 _EDIT_KIND = re.compile(r"\A[A-Za-z]{1,16}\Z")
@@ -85,16 +88,28 @@ def is_whole_number(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def current_day() -> date:
+    """The earliest plan day that isn't over: today in New York from 4 AM, yesterday before then.
+    Wall-clock arithmetic, so on the nights the clocks change the day still ends at 4 AM local."""
+    return (timezone.localtime() - timedelta(hours=DAY_ENDS_AT_HOUR)).date()
+
+
+def day_is_over(day: date) -> bool:
+    """Whether a plan's day has passed: edits are refused, and its link no longer previews or joins.
+    Members can still read it until it expires, 30 days after its date."""
+    return day < current_day()
+
+
 def parse_day(value) -> date:
-    """`YYYY-MM-DD`, from today to MAX_DAYS_AHEAD days ahead in New York time."""
+    """`YYYY-MM-DD`, from the earliest day that isn't over (`current_day`) to MAX_DAYS_AHEAD days
+    after today, in New York time."""
     if not isinstance(value, str) or not _ISO_DATE.match(value):
         raise ValidationError({"date": ["Use a date like 2026-11-28."]})
     try:
         day = date.fromisoformat(value)
     except ValueError as exc:
         raise ValidationError({"date": ["Use a date like 2026-11-28."]}) from exc
-    today = timezone.localdate()
-    if not today <= day <= today + timedelta(days=MAX_DAYS_AHEAD):
+    if not current_day() <= day <= timezone.localdate() + timedelta(days=MAX_DAYS_AHEAD):
         raise ValidationError({"date": [DAY_RANGE]})
     return day
 

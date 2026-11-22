@@ -27,7 +27,6 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, connection, transaction
 from django.db.models import Count, F
-from django.utils import timezone
 from django.utils.cache import get_conditional_response
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ParseError, PermissionDenied, ValidationError
@@ -52,6 +51,7 @@ from .validation import (
     MAX_REQUEST_BYTES,
     PLAN_MAX_BYTES,
     PlanTooLarge,
+    day_is_over,
     parse_day,
     parse_edit,
     parse_plan,
@@ -340,9 +340,10 @@ def _invited_group(token: str) -> GroupPlan | None:
 
 def _can_use_invite(group: GroupPlan, profile: Profile) -> tuple[bool, GroupMember | None]:
     """Whether the invite works for this caller, and their membership if they have one. It doesn't
-    once the plan's day is over (N-7), for someone the organizer removed (MF-G), or for a newcomer
-    when the group is full (brief GE-1). The four cases look the same to the caller (N-17)."""
-    if group.date < timezone.localdate():
+    once the plan's day is over (N-7; at 4 AM the morning after, `day_is_over`), for someone the
+    organizer removed (MF-G), or for a newcomer when the group is full (brief GE-1). The four cases
+    look the same to the caller (N-17)."""
+    if day_is_over(group.date):
         return False, None
     if GroupRemoval.objects.filter(group=group, profile_id=profile.pk).exists():
         return False, None
@@ -480,7 +481,7 @@ class GroupPlanDetailView(APIView):
                 return _saved_response(group, logged.version)
             if parse_uuid(plan["id"]) != group.plan_id:
                 raise ValidationError({"plan": [NOT_THIS_PLAN]})
-            if group.date < timezone.localdate():
+            if day_is_over(group.date):
                 return Response({"detail": DAY_OVER}, status=status.HTTP_400_BAD_REQUEST)
             if base != group.version:
                 return _conflict_response(group, base)

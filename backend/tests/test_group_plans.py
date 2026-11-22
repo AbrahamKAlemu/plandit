@@ -10,7 +10,8 @@ isolation tests here are what keeps one person's group plans from another (test 
 import copy
 import uuid
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.db import IntegrityError, connection, transaction
@@ -123,6 +124,22 @@ def plan_json(plan_id=None, stops=None, **overrides) -> dict:
 def today() -> date:
     """The plan's day is New York's (settings.TIME_ZONE), as the server checks it (N-8)."""
     return timezone.localdate()
+
+
+NEW_YORK = ZoneInfo("America/New_York")
+
+
+def freeze(monkeypatch, moment: datetime) -> None:
+    """Every `timezone.now()` in the test and its requests returns `moment`. Tokens still expire by
+    the real clock (PyJWT)."""
+    monkeypatch.setattr(timezone, "now", lambda: moment)
+
+
+@pytest.fixture
+def noon(monkeypatch):
+    """Today at noon in New York, so "yesterday is over" holds whenever the tests run: before 4 AM,
+    yesterday's plan is still open."""
+    freeze(monkeypatch, datetime.combine(today(), time(12), tzinfo=NEW_YORK))
 
 
 def make_group(owner: Person, *members: Person, day=None, version=1, members_version=1, plan=None) -> GroupPlan:
@@ -550,7 +567,7 @@ def test_lim_8_create_refuses_a_bad_date(value):
     assert "date" in response.json()
 
 
-def test_lim_8_the_date_is_today_to_366_days_ahead_in_new_york_time():
+def test_lim_8_the_date_is_today_to_366_days_ahead_in_new_york_time(noon):
     maya = person("Maya Lopez")
     assert create(maya, day=today() - timedelta(days=1)).status_code == 400
     assert create(maya, day=today() + timedelta(days=367)).status_code == 400
@@ -1013,7 +1030,7 @@ def test_lim_7_a_put_with_nan_is_400(group, jordan):
     assert response.status_code == 400
 
 
-def test_n_8_edits_end_with_the_plans_day_in_new_york_time(maya, jordan):
+def test_n_8_edits_end_with_the_plans_day_in_new_york_time(maya, jordan, noon):
     over = make_group(maya, jordan, day=today() - timedelta(days=1))
     before = row(over)
     response = put(jordan, over)
@@ -1194,7 +1211,7 @@ def test_inv_9_mf_g_someone_the_organizer_removed_cannot_rejoin_with_the_link(gr
     assert not GroupMember.objects.filter(profile=riley.profile).exists()
 
 
-def test_inv_14_a_group_past_its_day_cannot_be_previewed_or_joined(maya, jordan):
+def test_inv_14_a_group_past_its_day_cannot_be_previewed_or_joined(maya, jordan, noon):
     over = make_group(maya, jordan, day=today() - timedelta(days=1))
     sam = person("Sam Rivera")
     assert sam.client.get(preview_path(token_of(over))).status_code == 404
@@ -1202,6 +1219,42 @@ def test_inv_14_a_group_past_its_day_cannot_be_previewed_or_joined(maya, jordan)
     on_the_day = make_group(person("Ana Cruz"), day=today())
     assert sam.client.get(preview_path(token_of(on_the_day))).status_code == 200
     assert join(sam, on_the_day).status_code == 200
+
+
+NIGHTS = {
+    "an ordinary night": date(2026, 12, 5),
+    "the night the clocks go back": date(2026, 10, 31),  # 2 AM on Nov 1 is 1 AM again
+    "the night the clocks go forward": date(2027, 3, 13),  # 2 AM on Mar 14 is 3 AM
+}
+
+
+@pytest.mark.parametrize("night", list(NIGHTS))
+@pytest.mark.parametrize(("clock", "still_open"), [(time(3, 59, 59), True), (time(4), False)])
+def test_n_8_a_plans_day_ends_at_4_am_new_york_time_the_morning_after(
+    maya, jordan, monkeypatch, night, clock, still_open
+):
+    """A night out stays editable while people are still out (the app's own day ends at 2 AM).
+    The same cutoff for editing, previewing, joining and creating."""
+    from plandit.groups.views import DAY_OVER
+
+    day = NIGHTS[night]
+    group = make_group(maya, jordan, day=day)
+    sam, ana = person("Sam Rivera"), person("Ana Cruz")
+    freeze(monkeypatch, datetime.combine(day + timedelta(days=1), clock, tzinfo=NEW_YORK))
+    before = row(group)
+
+    preview = sam.client.get(preview_path(token_of(group)))
+    edit = put(jordan, group)
+    joined = join(sam, group)
+    created = create(ana, day=day)
+    if still_open:
+        assert (preview.status_code, edit.status_code, joined.status_code, created.status_code) == (200, 200, 200, 201)
+    else:
+        assert (preview.status_code, edit.status_code, joined.status_code, created.status_code) == (404, 400, 404, 400)
+        assert edit.json() == {"detail": DAY_OVER}
+        assert created.json() == {"date": ["Use a day from today to a year from now."]}
+        assert row(group) == before
+        assert group.members.count() == 2
 
 
 @pytest.mark.parametrize(
