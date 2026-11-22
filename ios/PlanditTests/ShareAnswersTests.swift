@@ -232,6 +232,33 @@ import XCTest
         XCTAssertEqual(store.today.stops[index].start, before.stops[index].start)
     }
 
+    func testUndoingASwapBeforeThePageUpdatesPublishesNothing() async throws {
+        let sharing = FakePlanSharing()
+        let (store, _) = try await sharedStore(sharing: sharing)
+        let before = await sharing.published.count
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        store.undoLastChange()
+
+        try await Task.sleep(for: .milliseconds(400))
+        let published = await sharing.published
+        XCTAssertEqual(published.count, before, "the page already shows the plan as it is again")
+        XCTAssertFalse(published.contains { $0.stops.contains { $0.name == "Little Island" } }, "the swapped plan never goes out")
+    }
+
+    func testAChangeKeptThroughAnotherSaveStillPublishesOnce() async throws {
+        let sharing = FakePlanSharing()
+        let (store, _) = try await sharedStore(sharing: sharing)
+        let before = await sharing.published.count
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        // Another save before the page updates, which doesn't change what the page shows.
+        store.updateProfile { $0.name = "Abe" }
+
+        try await Task.sleep(for: .milliseconds(400))
+        let published = await sharing.published
+        XCTAssertEqual(published.count, before + 1)
+        XCTAssertTrue(published.last?.stops.contains { $0.name == "Little Island" } ?? false)
+    }
+
     func testTheSwapUndoBarOnlyMentionsTheLinkWhenItUpdates() async throws {
         let unshared = makeStore()
         XCTAssertTrue(unshared.swap(stopID: stop(named: "The High Line", in: unshared).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))

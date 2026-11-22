@@ -992,12 +992,13 @@ final class PlanditStore {
     }
 
     /// After a change to a shared plan, the page catches up a moment later. Failures are quiet:
-    /// the next change tries again.
+    /// the next change tries again. Whatever was waiting to go out is dropped first, so a change
+    /// undone (or shared again from Share plan) before then sends nothing.
     private func scheduleShareUpdate() {
         guard let link = todayLink, let sharing else { return }
         let payload = sharedPayload(showPrices: link.showPrices, note: link.note, suggestsSwaps: link.suggestsSwaps)
-        guard payload != lastPublished else { return }
         pendingShareUpdate?.cancel()
+        guard payload != lastPublished else { return }
         pendingShareUpdate = Task { [weak self] in
             try? await Task.sleep(for: Self.shareUpdateDelay)
             guard !Task.isCancelled else { return }
