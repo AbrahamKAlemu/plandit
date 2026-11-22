@@ -182,13 +182,14 @@ def _letters_spaces_hyphens_apostrophes(name: str) -> bool:
 # --- Content Security Policy for the public pages ---------------------------------------------
 
 # No scripts at all. Styles only from the app's static files and Google Fonts' stylesheet; fonts
-# from Google Fonts. Images from the app, data: URIs and plandit.app, where the logo and favicons
-# live. Forms post back to the same site, nobody can frame the page, and there's no <base>.
+# from Google Fonts. Images from the app, data: URIs and the website, where the logo and favicons
+# live: plandit.app redirects them to www.plandit.app, and the policy checks the redirect too.
+# Forms post back to the same site, nobody can frame the page, and there's no <base>.
 PUBLIC_PAGE_CSP = {
     "default-src": [CSP.NONE],
     "style-src": [CSP.SELF, "https://fonts.googleapis.com"],
     "font-src": ["https://fonts.gstatic.com"],
-    "img-src": [CSP.SELF, "data:", "https://plandit.app"],
+    "img-src": [CSP.SELF, "data:", "https://plandit.app", "https://www.plandit.app"],
     "form-action": [CSP.SELF],
     "frame-ancestors": [CSP.NONE],
     "base-uri": [CSP.NONE],

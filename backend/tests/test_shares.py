@@ -154,7 +154,8 @@ def test_links_use_the_site_address_once_configured(auth_client, settings):
 
 PUBLIC_PAGE_CSP = (
     "default-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
-    "img-src 'self' data: https://plandit.app; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+    "img-src 'self' data: https://plandit.app https://www.plandit.app; "
+    "form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 )
 
 
