@@ -14,8 +14,10 @@ A table whose writes lock its rows before changing what hangs off them (friends'
 group plans) registers with `lock_first=True`: the purge then locks the expired rows in primary-key
 order, as those writes and account deletion do, before the cascade, in one transaction. Deleting
 the children first and the row last would wait on a write that holds the row and waits for those
-children. A table with nothing hanging off it (friends' answers on a shared plan) needs no lock:
-its purge is one DELETE that never holds one row while it waits for another table's.
+children. A table with nothing hanging off it (friends' answers on a shared plan) registers
+without it: its purge is one DELETE of the expired rows, with no lock taken first. Account
+deletion's cascade and `_keep_answers_in_step` (plandit.shares.views) also lock some of those rows,
+and whether the DELETE can take them in an order that deadlocks with either hasn't been shown.
 """
 
 from dataclasses import dataclass
