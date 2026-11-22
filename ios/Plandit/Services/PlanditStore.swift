@@ -48,9 +48,12 @@ final class PlanditStore {
     @ObservationIgnored private var answersChanges = 0
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
-    /// "Build our plan" is putting the plan on friends' link (`shareGroupPlan`). Until that ends,
-    /// its Undo is held back: the server may already have the built plan (round 3 review, R1).
-    private(set) var isSharingGroupPlan = false
+    /// How many "Build our plan" shares are putting the plan on friends' link (`shareGroupPlan`).
+    /// A count, so one ending can't let Undo back while another is still out (round 4 review, N2).
+    private(set) var groupSharesOut = 0
+    /// Until the last share ends, the build's Undo is held back: the server may already have the
+    /// built plan (round 3 review, R1).
+    var isSharingGroupPlan: Bool { groupSharesOut > 0 }
     /// The "Ask friends what works" link (plandit.app/g/<slug>), kept in the snapshot.
     private(set) var planRequest: PlanRequestLink?
     /// Makes and reads those links; nil when signed out of the server (the local test account).
@@ -1404,14 +1407,24 @@ final class PlanditStore {
     /// While it's out, Undo is held back (`canUndo`), and once it's this request's turn to go out
     /// the built plan must still be Today's, or nothing is sent: a plan waiting behind a page
     /// update could otherwise have been changed meanwhile.
+    /// When Today no longer holds the built plan, before or while it goes out, it throws
+    /// `GroupShareError.planChanged` and lets go of the build, so Build is offered again (N1).
     func shareGroupPlan() async throws {
-        guard groupPlanAwaitsLink, let link = planRequest else { throw APIError.invalidResponse }
-        isSharingGroupPlan = true
-        defer { isSharingGroupPlan = false }
+        guard groupPlanAwaitsLink, let link = planRequest else {
+            if forgetReplacedGroupBuild() { throw GroupShareError.planChanged }
+            throw APIError.invalidResponse
+        }
+        groupSharesOut += 1
+        defer { groupSharesOut -= 1 }
         let current = todayLink
-        try await shareToday(showPrices: current?.showPrices ?? true, note: current?.note ?? "",
-                             suggestsSwaps: current?.suggestsSwaps ?? false, request: link.slug,
-                             stillWanted: { [unowned self] in self.groupPlanAwaitsLink && self.planRequest?.slug == link.slug })
+        do {
+            try await shareToday(showPrices: current?.showPrices ?? true, note: current?.note ?? "",
+                                 suggestsSwaps: current?.suggestsSwaps ?? false, request: link.slug,
+                                 stillWanted: { [unowned self] in self.groupPlanAwaitsLink && self.planRequest?.slug == link.slug })
+        } catch is CancellationError {
+            if forgetReplacedGroupBuild() { throw GroupShareError.planChanged }
+            throw CancellationError()
+        }
         // Friends' link opens this plan now: undoing the build would put the old one there.
         if undo?.isGroupBuild == true { undo = nil }
         requestChanges += 1
@@ -1429,6 +1442,24 @@ final class PlanditStore {
     }
 
     static let groupBuildUndoMessage = "Built our plan. It isn't on the link yet."
+
+    enum GroupShareError: Error {
+        /// Today has another plan than the one "Build our plan" made: nothing went on the link.
+        case planChanged
+    }
+
+    /// The plan "Build our plan" made isn't Today's any more (another plan replaced it) and friends'
+    /// link doesn't open it: lets go of it, so Build is offered again. True when it did.
+    private func forgetReplacedGroupBuild() -> Bool {
+        guard var link = planRequest, let builtID = link.builtPlanID, requestDetails?.status != .built else { return false }
+        let stillToday = builtID == today.id && link.builtStopIDs.map { Set($0) == Set(today.stops.map(\.id)) } == true
+        guard !stillToday else { return false }
+        link.builtPlanID = nil
+        link.builtStopIDs = nil
+        planRequest = link
+        persist()
+        return true
+    }
 
     /// The planner's inputs for the answers' plan, on the link's day, so places' hours are that
     /// day's: from the start of everyone's time (or the next quarter hour, if that's later) to its

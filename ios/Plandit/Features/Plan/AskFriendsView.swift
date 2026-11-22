@@ -81,6 +81,9 @@ enum AskFriendsText {
         return clash ? clashHint : notBuildable(link, now: now)
     }
 
+    /// When the plan "Build our plan" made isn't Today's any more, so nothing went on the link.
+    static let planChanged = "Today has a different plan now. Build our plan again."
+
     /// Above the preview of a plan for a later day.
     static func laterDay(_ link: PlanRequestLink, now: Date) -> String {
         "This is how the plan looks with the answers so far. You can build it on \(day(link, now: now))."
@@ -866,6 +869,9 @@ private struct FriendsAnswersView: View {
             try await store.shareGroupPlan()
             built += 1
             router.finishPlanning()
+        } catch PlanditStore.GroupShareError.planChanged {
+            // Not a connection problem: Today has another plan, and Build is offered again (N1).
+            errorText = AskFriendsText.planChanged
         } catch {
             errorText = "Your plan is in Today, but it isn't on the link yet. Check your connection and try again."
         }
