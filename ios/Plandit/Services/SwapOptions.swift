@@ -53,7 +53,7 @@ enum SwapOptions {
     private static func isOpen(_ place: Place, at start: Date, durationMinutes: Int, calendar: Calendar) -> Bool {
         var arrival = start
         if let opens = place.category.earliestStartMinutes,
-           let evening = calendar.date(byAdding: .minute, value: opens, to: calendar.startOfDay(for: start)) {
+           let evening = calendar.date(atClockMinutes: opens, on: start) {
             arrival = max(arrival, evening)
         }
         guard let close = place.closingTime(on: start, calendar: calendar) else { return true }
