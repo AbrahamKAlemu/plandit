@@ -278,8 +278,8 @@ final class PlanBuildingTests: XCTestCase {
         func at(_ h: Int, _ m: Int, _ s: Int = 0) -> Date {
             calendar.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: h, minute: m, second: s))!
         }
-        XCTAssertEqual(PlanBuilderSheet.nextQuarterHour(after: at(10, 7, 30), calendar: calendar), at(10, 15))
-        XCTAssertEqual(PlanBuilderSheet.nextQuarterHour(after: at(10, 15), calendar: calendar), at(10, 30))
-        XCTAssertEqual(PlanBuilderSheet.nextQuarterHour(after: at(10, 59), calendar: calendar), at(11, 0))
+        XCTAssertEqual(PlanDefaults.nextQuarterHour(after: at(10, 7, 30), calendar: calendar), at(10, 15))
+        XCTAssertEqual(PlanDefaults.nextQuarterHour(after: at(10, 15), calendar: calendar), at(10, 30))
+        XCTAssertEqual(PlanDefaults.nextQuarterHour(after: at(10, 59), calendar: calendar), at(11, 0))
     }
 }

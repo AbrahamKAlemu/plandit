@@ -10,7 +10,7 @@ struct ProfileSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(title: "Profile") {
+            SheetHeader(title: "Profile", subtitle: Self.subtitle(visited: store.visited.count, plans: store.stats.plansCompleted)) {
                 EmptyView()
             }
 
@@ -32,6 +32,15 @@ struct ProfileSheet: View {
         }
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    /// What the map behind Profile shows, so the header isn't bare at the peek: "19 places visited ·
+    /// 6 plans completed", or what will appear there.
+    static func subtitle(visited: Int, plans: Int) -> String {
+        var parts: [String] = []
+        if visited > 0 { parts.append(visited == 1 ? "1 place visited" : "\(visited) places visited") }
+        if plans > 0 { parts.append(plans == 1 ? "1 plan completed" : "\(plans) plans completed") }
+        return parts.isEmpty ? "Complete a plan to see it on the map" : parts.joined(separator: " · ")
     }
 
     // MARK: - Sections

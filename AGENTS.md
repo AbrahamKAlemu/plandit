@@ -16,6 +16,8 @@ nearby and on budget, shown on a map.
   feature ideas. Run them by name, e.g. "run persona-sofia on docs/brand_position.md".
 - docs/features/<feature>/: the Feature Forge record for each feature (brief, architecture, plan,
   verification, lessons).
+- README.md, "Usage metrics API": the live sign-up and usage numbers for course staff,
+  `GET https://plandit-api.onrender.com/api/metrics/?days=30` with the key in `X-Metrics-Key`.
 
 ## How to run it
 - Stack: native iOS app (SwiftUI, iOS 17+) in `ios/`, Django + Django REST Framework API on

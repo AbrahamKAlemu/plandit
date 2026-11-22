@@ -40,6 +40,7 @@ EVENT_TOTAL_KEYS = {
     ActivityEventName.PLAN_BUILT: "plans_built",
     ActivityEventName.PLACE_SAVED: "places_saved",
     ActivityEventName.LINK_SAVED: "links_saved",
+    ActivityEventName.SUGGESTION_USED: "suggestions_used",
 }
 
 
@@ -116,6 +117,7 @@ def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
             "plans_built": 0,
             "places_saved": 0,
             "links_saved": 0,
+            "suggestions_used": 0,
         }
         for offset in range(days)
     }
