@@ -359,6 +359,55 @@ import XCTest
         assertConsistent(store.today)
     }
 
+    // MARK: - Swapping one stop
+
+    func testSwappingTheOnlyStopKeepsItsTime() throws {
+        let dinnerPlace = place("Dinner Spot", 40.7424, -74.0061, hours: "Open until 11 PM")
+        let dinner = PlanStop(place: dinnerPlace, start: at(19, on: cleanDay()), durationMinutes: 60, estimatedCost: 20, status: .upcoming)
+        let plan = DayPlan(date: dinner.start, title: "Dinner", budget: 60, stops: [dinner], legs: [])
+        let lunchtime = at(13, on: plan)
+
+        // Swapped at 1 PM, another dinner place still starts at 7.
+        let other = place("Other Dinner", 40.7430, -74.0050, hours: "Open until 11 PM")
+        let swapped = try XCTUnwrap(plan.swapping(dinner.id, for: candidate(other), travel: .walkAndTransit, now: lunchtime))
+        XCTAssertEqual(swapped.stops.map(\.place.name), ["Other Dinner"])
+        XCTAssertEqual(swapped.stops[0].start, dinner.start)
+
+        // A bar that opens at 8 PM starts then.
+        let bar = place("Late Bar", 40.7430, -74.0050, category: .nightlife)
+        let late = try XCTUnwrap(plan.swapping(dinner.id, for: candidate(bar), travel: .walkAndTransit, now: lunchtime))
+        XCTAssertEqual(late.stops[0].start, at(20, on: plan))
+    }
+
+    func testSwappingTheFirstStopAheadAfterOneDoneKeepsItsTime() throws {
+        // Breakfast is done (9-10 AM), dinner is at 7 PM, and the organizer swaps dinner at 1 PM.
+        let base = cleanDay()
+        let breakfast = PlanStop(place: place("Breakfast", 40.7424, -74.0061), start: at(9, on: base), durationMinutes: 60,
+                                 estimatedCost: 10, status: .done)
+        let dinner = PlanStop(place: place("Dinner Spot", 40.7424, -74.0061, hours: "Open until 11 PM"), start: at(19, on: base),
+                              durationMinutes: 60, estimatedCost: 20, status: .upcoming)
+        var plan = DayPlan(date: breakfast.start, title: "Day", budget: 60, stops: [breakfast, dinner], legs: [])
+        plan.relinkLegs(travel: .walkAndTransit)
+        let lunchtime = at(13, on: plan)
+
+        let other = place("Other Dinner", 40.7430, -74.0050, hours: "Open until 11 PM")
+        let swapped = try XCTUnwrap(plan.swapping(dinner.id, for: candidate(other), travel: .walkAndTransit, now: lunchtime))
+        XCTAssertEqual(swapped.stops.map(\.place.name), ["Breakfast", "Other Dinner"])
+        XCTAssertEqual(swapped.stops[1].start, dinner.start, "not moved up to now")
+        assertConsistent(swapped)
+
+        let bar = place("Late Bar", 40.7430, -74.0050, category: .nightlife)
+        let late = try XCTUnwrap(plan.swapping(dinner.id, for: candidate(bar), travel: .walkAndTransit, now: lunchtime))
+        XCTAssertEqual(late.stops[1].start, at(20, on: plan), "or when the new place opens")
+
+        // Right after the stop before, it still waits for the trip there.
+        var tight = plan
+        tight.stops[1].start = breakfast.end
+        let soon = try XCTUnwrap(tight.swapping(dinner.id, for: candidate(other), travel: .walkAndTransit, now: at(8, on: plan)))
+        let arrival = breakfast.end.addingTimeInterval(TimeInterval((soon.leg(after: soon.stops[0])?.minutes ?? 0) * 60))
+        XCTAssertGreaterThanOrEqual(soon.stops[1].start, arrival)
+    }
+
     // MARK: - Sending the plan
 
     func testMessageWithTravelPricesAndANote() {

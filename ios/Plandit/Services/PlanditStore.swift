@@ -25,8 +25,27 @@ final class PlanditStore {
     private(set) var sharedLink: SharedLink?
     /// Publishes links; nil when signed out of the server (the local test account).
     @ObservationIgnored var sharing: (any PlanSharing)?
+    /// A page update waiting to go out (`scheduleShareUpdate`); one being sent isn't kept here.
     @ObservationIgnored private var pendingShareUpdate: Task<Void, Never>?
+    /// A request to the page is out; the next one waits its turn (`inTurn`).
+    @ObservationIgnored private var isSendingToPage = false
+    @ObservationIgnored private var pageTurnWaiters: [CheckedContinuation<Void, Never>] = []
+    /// How many Share plan and Stop sharing calls are talking to the server. Changes made meanwhile
+    /// wait until the last one ends: it decides whether there's still a page to update.
+    @ObservationIgnored private var linkOperations = 0
     @ObservationIgnored private var lastPublished: SharedPlanPayload?
+    /// Friends' answers on the link; nil when signed out of the server (the local test account).
+    @ObservationIgnored var answerClient: (any ShareAnswersFetching)?
+    /// Friends' answers on `answersSlug`'s page, as last fetched. Memory only (GS-7).
+    private(set) var fetchedAnswers: [ShareAnswer] = []
+    private var answersSlug: String?
+    /// The link and time the last refresh that counts went out, set as it starts: Today appearing
+    /// again within 10 s doesn't ask again, and neither does Today while the app's launch refresh is
+    /// still out. A refresh that fails puts back what was there, so the next one tries again.
+    @ObservationIgnored private var answersAsked: (slug: String, at: Date)?
+    /// Goes up with each change to the answers made here (removing one, stopping sharing), so a
+    /// refresh that was out meanwhile can't bring back what it changed (GV-7).
+    @ObservationIgnored private var answersChanges = 0
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
 
@@ -942,44 +961,230 @@ final class PlanditStore {
 
     var canShareLinks: Bool { sharing != nil }
 
-    /// Creates today's link (or updates its page with new options) and remembers it.
+    /// Creates today's link (or updates its page with new options) and remembers it. With
+    /// `suggestsSwaps`, the page offers friends up to two saved places per stop (`swapOptions`).
     @discardableResult
-    func shareToday(showPrices: Bool, note: String) async throws -> SharedLink {
+    func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true) async throws -> SharedLink {
         guard let sharing else { throw APIError.network }
-        let payload = today.sharedPayload(showPrices: showPrices, note: note)
-        let created = try await sharing.publish(payload)
-        let link = SharedLink(slug: created.slug, url: created.url, planID: payload.planId, showPrices: showPrices, note: note)
+        // Nothing older may land after this (`holdPageUpdates`).
+        holdPageUpdates()
+        let sent: (slug: String, url: URL, payload: SharedPlanPayload)
+        do {
+            sent = try await inTurn {
+                let payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
+                let created = try await sharing.publish(payload)
+                return (created.slug, created.url, payload)
+            }
+        } catch {
+            resumePageUpdates()
+            throw error
+        }
+        linkOperations -= 1
+        let payload = sent.payload
+        var link = SharedLink(slug: sent.slug, url: sent.url, planID: payload.planId, showPrices: showPrices,
+                              note: note, suggestsSwaps: suggestsSwaps)
+        if let previous = sharedLink, previous.slug == link.slug { link.keptSwaps = previous.keptSwaps }
         lastPublished = payload
         sharedLink = link
         persist()
         return link
     }
 
-    /// Takes the page down; the link stops working.
+    /// Takes the page down; the link stops working and friends' answers go with it.
     func stopSharing() async throws {
         guard let link = sharedLink else { return }
-        if let sharing { try await sharing.unpublish(slug: link.slug) }
-        pendingShareUpdate?.cancel()
+        // Nothing may land after the page is taken down (`holdPageUpdates`).
+        holdPageUpdates()
+        do {
+            if let sharing { try await inTurn { try await sharing.unpublish(slug: link.slug) } }
+        } catch {
+            resumePageUpdates()
+            throw error
+        }
+        linkOperations -= 1
         sharedLink = nil
         lastPublished = nil
+        forgetAnswers()
         persist()
+        // The page is down: nothing may bring it back.
+        pendingShareUpdate?.cancel()
+        pendingShareUpdate = nil
+    }
+
+    /// The saved places friends could pick instead of each stop still ahead: what the share preview
+    /// lists and the page offers with "Let friends suggest swaps" on.
+    var swapOptions: [UUID: [SavedPost]] {
+        SwapOptions.all(for: today, saves: saved)
+    }
+
+    private func sharedPayload(showPrices: Bool, note: String, suggestsSwaps: Bool) -> SharedPlanPayload {
+        today.sharedPayload(showPrices: showPrices, note: note, alternates: suggestsSwaps ? swapOptions : [:])
     }
 
     /// After a change to a shared plan, the page catches up a moment later. Failures are quiet:
-    /// the next change tries again.
+    /// the next change tries again. An update still waiting is replaced, so a change undone before
+    /// it goes out sends nothing. One already being sent is never stopped (the server may have
+    /// applied it), so while one is out the plan as it is now goes out after it, even if that's
+    /// what was last published: the latest always lands last.
     private func scheduleShareUpdate() {
-        guard let link = todayLink, let sharing else { return }
-        let payload = today.sharedPayload(showPrices: link.showPrices, note: link.note)
-        guard payload != lastPublished else { return }
+        guard linkOperations == 0, let link = todayLink, let sharing else { return }
+        let payload = sharedPayload(showPrices: link.showPrices, note: link.note, suggestsSwaps: link.suggestsSwaps)
         pendingShareUpdate?.cancel()
+        pendingShareUpdate = nil
+        guard payload != lastPublished || isSendingToPage else { return }
         pendingShareUpdate = Task { [weak self] in
             try? await Task.sleep(for: Self.shareUpdateDelay)
-            guard !Task.isCancelled else { return }
-            if (try? await sharing.publish(payload)) != nil { self?.lastPublished = payload }
+            guard !Task.isCancelled, let self else { return }
+            await self.inTurn {
+                // Replaced while it waited for the one before.
+                guard !Task.isCancelled else { return }
+                // Being sent now: a later change no longer cancels it.
+                self.pendingShareUpdate = nil
+                // Only while this plan is still shared and no Share plan or Stop sharing is out:
+                // publishing a page that was taken down would bring it back.
+                guard self.linkOperations == 0, let link = self.todayLink, link.planID == payload.planId else {
+                    return
+                }
+                if (try? await sharing.publish(payload)) != nil { self.lastPublished = payload }
+            }
         }
     }
 
+    /// Before Share plan or Stop sharing talks to the server: the update waiting is dropped (what
+    /// they send replaces it), and changes made meanwhile wait until the last of them is done. Their
+    /// request then waits its turn behind an update being sent (`inTurn`), so it lands last.
+    private func holdPageUpdates() {
+        pendingShareUpdate?.cancel()
+        pendingShareUpdate = nil
+        linkOperations += 1
+    }
+
+    /// When Share plan or Stop sharing failed: the link stays as it was, and changes made meanwhile
+    /// go out with it, unless another of them is still out (the last one to end decides).
+    private func resumePageUpdates() {
+        linkOperations -= 1
+        scheduleShareUpdate()
+    }
+
+    /// Requests to the page go out one at a time, in the order they ask, so the last one sent is
+    /// the last one the server applies.
+    private func inTurn<T>(_ request: () async throws -> T) async rethrows -> T {
+        if isSendingToPage {
+            await withCheckedContinuation { pageTurnWaiters.append($0) }
+        } else {
+            isSendingToPage = true
+        }
+        defer {
+            // Hand the turn to the next in line, if any.
+            if pageTurnWaiters.isEmpty { isSendingToPage = false } else { pageTurnWaiters.removeFirst().resume() }
+        }
+        return try await request()
+    }
+
     static var shareUpdateDelay: Duration = .seconds(2)
+
+    // MARK: - Friends' answers (group plans, mode 1)
+
+    /// Today's link's answers; none without a link.
+    var shareAnswers: [ShareAnswer] {
+        guard let link = todayLink, link.slug == answersSlug else { return [] }
+        return fetchedAnswers
+    }
+
+    /// "3 in · 1 can't make it" under the share button; nil with no answers.
+    var answerSummary: ShareAnswerSummary? { ShareAnswers.summary(shareAnswers) }
+
+    /// Friends' "I'd swap this" per stop still ahead, minus picks the organizer kept the stop over.
+    var swapMarks: [UUID: [SwapPick]] {
+        ShareAnswers.swapMarks(shareAnswers, plan: today, kept: Set(todayLink?.keptSwaps ?? []))
+    }
+
+    /// How often Today appearing or the app opening may ask for answers.
+    static var answersRefreshInterval: TimeInterval = 10
+
+    /// Fetches the answers on today's link, at most every `answersRefreshInterval` unless forced.
+    /// Failures are quiet: what was shown stays, and the next appearance tries again.
+    func refreshShareAnswers(now: Date = Date(), force: Bool = false) async {
+        guard let link = todayLink, let answerClient else { return }
+        if !force, let asked = answersAsked, asked.slug == link.slug,
+           now.timeIntervalSince(asked.at) < Self.answersRefreshInterval { return }
+        let previous = answersAsked
+        answersAsked = (link.slug, now)
+        let changes = answersChanges
+        guard let answers = try? await answerClient.answers(slug: link.slug) else {
+            if answersAsked?.slug == link.slug, answersAsked?.at == now { answersAsked = previous }
+            return
+        }
+        // Shared again, or stopped, or an answer removed while the request was out: what it read
+        // may be from before that.
+        guard todayLink?.slug == link.slug, answersChanges == changes else { return }
+        answersSlug = link.slug
+        if answers != fetchedAnswers { fetchedAnswers = answers }
+    }
+
+    /// Removes a friend's answer from the link: it's gone from the page and Today (GV-7).
+    func removeShareAnswer(_ id: UUID) async throws {
+        guard let link = todayLink, let answerClient else { return }
+        try await answerClient.remove(slug: link.slug, answerID: id)
+        answersChanges += 1
+        fetchedAnswers.removeAll { $0.id == id }
+    }
+
+    private func forgetAnswers() {
+        answersChanges += 1
+        fetchedAnswers = []
+        answersSlug = nil
+        answersAsked = nil
+    }
+
+    enum SwapAvailability: Equatable {
+        case available
+        case alreadyInPlan
+        /// The organizer removed it from Saved, or it has no place any more.
+        case notSaved
+    }
+
+    /// Whether "Swap it" can put a friend's pick (a saved post's id) into today's plan.
+    func swapAvailability(of postID: UUID) -> SwapAvailability {
+        guard let post = post(id: postID), post.isMappable, let place = post.place else { return .notSaved }
+        let inPlan = isInToday(post) || today.stops.contains {
+            $0.place.name.lowercased() == place.name.lowercased() && $0.place.address.lowercased() == place.address.lowercased()
+        }
+        return inPlan ? .alreadyInPlan : .available
+    }
+
+    /// "Swap it": the stop becomes the friend's pick, in the same place in the day, and the times
+    /// from there on are planned again (GV-6). Undo puts the stop back; the page updates as with
+    /// any other change (`scheduleShareUpdate`), and the undo bar says so when it will. False when
+    /// the stop isn't still ahead or the pick can't go in.
+    @discardableResult
+    func swap(stopID: UUID, toPost postID: UUID, now: Date = AppClock.now) -> Bool {
+        guard let old = stop(id: stopID), swapAvailability(of: postID) == .available,
+              let post = post(id: postID), let candidate = PlanCandidate(post: post),
+              let plan = today.swapping(stopID, for: candidate, travel: travelPreference, now: now) else { return false }
+        let updatesLink = todayLink != nil && sharing != nil
+        remember("Swapped \(old.place.name) for \(candidate.place.name)" + (updatesLink ? ". Your link updates too." : ""))
+        today = plan
+        persist()
+        Task { await loadRoutes() }
+        return true
+    }
+
+    /// "Keep it": the stop stays, and these picks stop showing until a friend picks another place.
+    func keepStop(_ stopID: UUID) {
+        guard var link = todayLink, let picks = swapMarks[stopID] else { return }
+        // Picks about stops no longer in the plan can't show again; no need to keep them.
+        var kept = link.keptSwaps.filter { key in today.stops.contains { key.hasPrefix($0.id.uuidString) } }
+        for pick in picks {
+            // One kept pick per friend and stop: the latest.
+            let prefix = ShareAnswers.keepPrefix(stopID: stopID, answerID: pick.answerID)
+            kept.removeAll { $0.hasPrefix(prefix) }
+            kept.append(ShareAnswers.keepKey(stopID: stopID, pick: pick))
+        }
+        link.keptSwaps = kept
+        sharedLink = link
+        persist()
+    }
 
     // MARK: - Undo
 

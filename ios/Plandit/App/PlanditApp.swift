@@ -204,6 +204,8 @@ private struct PlanditRoot: View {
                     if let sync {
                         Task { await sync.appBecameActive() }
                     }
+                    // Friends may have answered the shared plan while the app was away (GV-5).
+                    Task { await store.refreshShareAnswers() }
                 case .inactive, .background:
                     store.flush()
                     sync?.appWillResign()
