@@ -27,7 +27,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. Next: a daylight-saving fix for older planner code, then mode 3 (G3a, G3b). |
+| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. Daylight-saving fix for older planner code in progress. G3 test-planning pass done; G3a (backend) next. |
 | Verify, ship, learn | Not started. |
 
 ## Tasks and evidence
@@ -87,6 +87,18 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
   - Copy: Amara's must_fix (preview a later day's plan) is fixed. No must_fix is open.
 
 ## Decisions and events
+
+- November 22: the G3 test-planning pass ([03-plan_g3-tests.md](03-plan_g3-tests.md)) found 7
+  must_fix design issues in mode 3; all are adopted and 02-architecture.md is revised. In short:
+  - edits are by stop id;
+  - PUTs are idempotent with an edit log, and a 409 names who changed what;
+  - the ETag covers membership;
+  - lock order is fixed for account deletion;
+  - there's no Undo in group plans for now;
+  - removed members can't rejoin.
+
+  It also found that RLS doesn't apply to the API (Django owns the tables), so group isolation rests
+  on the API's queries and their tests.
 
 - November 22: Abraham asked for one review round per slice from now on: one code review and one
   persona pass, then fixes, the full test lane and the PR, with no re-review. This applies to G3a

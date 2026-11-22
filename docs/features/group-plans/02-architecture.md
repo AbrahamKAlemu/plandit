@@ -153,6 +153,9 @@ free_from, free_until and stars (≤ 3 place ids). Unique on (request, responder
 
 ### Mode 3: edit together
 
+Revised November 22 after the G3 test-planning pass ([03-plan_g3-tests.md](03-plan_g3-tests.md)),
+which found that the first design could lose or misattribute edits (MF-A to MF-G there).
+
 **Backend**
 
 `GroupPlan` model:
@@ -161,52 +164,95 @@ free_from, free_until and stars (≤ 3 place ids). Unique on (request, responder
 |---|---|
 | id | UUID |
 | owner | FK to Profile, CASCADE (GE-10) |
+| plan_id | the `DayPlan`'s own id. Unique with owner, so a retried create returns the same group |
 | date | |
-| data | JSON, the app's `DayPlan` encoding; ≤ 64 KB, ≤ 20 stops |
-| version | integer |
-| invite_token | 22 random characters, unique, can be replaced |
+| data | JSON, the app's `DayPlan` encoding; ≤ 64 KB compact UTF-8, ≤ 20 stops |
+| version | integer; goes up by one on each plan edit |
+| members_version | integer; goes up on each join, leave or removal |
+| invite_token | 22 random URL-safe characters, unique, can be replaced |
 | created_at, updated_at | |
 
-`GroupMember` model: group (FK, CASCADE), profile (FK, CASCADE), display_name (first word of the
-profile name at join) and joined_at. Unique on (group, profile). The organizer is a member too.
+- `GroupMember`: id (UUID, the id the API uses for members, never the profile id), group (FK,
+  CASCADE), profile (FK, CASCADE), display_name (the first word of the profile name at join, at
+  most 30 characters; "Friend" when empty) and joined_at. Unique on (group, profile). The organizer
+  is a member too.
+- `GroupPlanEdit`, the edit log: group (FK, CASCADE), version, edit_id (UUID, unique per group),
+  member_id (a plain UUID, not a foreign key), kind, stop_ids (JSON) and created_at. The latest 200
+  per group are kept. Names are looked up from current members when read, so a deleted account's
+  name never comes back.
+- `GroupRemoval`: group (FK, CASCADE) and profile_id. Written when the organizer removes someone;
+  joining checks it. Leaving yourself writes nothing, so you can rejoin.
+- RLS on, with no policies, for every new table, as for every other table. Django connects as the
+  tables' owner, so RLS doesn't apply to the API: isolation rests on the API's queries, and the
+  isolation tests are the control.
 
-- RLS migration for both tables.
-- API (signed in). Every query filters on membership; anyone else gets 404.
-  - `POST /api/group-plans/` with `{date, plan}` returns `{id, version, inviteUrl}`.
-  - `GET /api/group-plans/` lists the caller's groups with versions.
-  - `GET /api/group-plans/<id>/` returns `ETag: "<version>"`, and 304 when `If-None-Match`
-    matches, so polling is cheap.
-  - `PUT /api/group-plans/<id>/` with `{baseVersion, plan}` locks the row (`select_for_update`).
-    It answers 200 `{version}` when `baseVersion` is current, otherwise 409 `{version, plan,
-    updatedBy}`.
-  - `GET /api/group-plans/invites/<token>/` shows the organizer's name, the date and the member
-    count. `POST /api/group-plans/invites/<token>/join` joins. Both answer 404 once the group is
-    full or the token has been replaced.
-  - `POST /api/group-plans/<id>/invite` (organizer) replaces the token (GE-8).
-  - `DELETE /api/group-plans/<id>/members/<profile>/` lets the organizer remove anyone and a member
-    remove themselves. `DELETE /api/group-plans/<id>/` (organizer) ends the group.
+API (signed in). Every request checks membership first; anyone else gets 404, never a 304 or a
+409, which would show the group exists. Anonymous Supabase sessions get 403 on create and join.
+
+- `POST /api/group-plans/` with `{date, plan}` returns `{id, version, inviteUrl}`.
+- `GET /api/group-plans/` lists the caller's groups with their ETags.
+- `GET /api/group-plans/<id>/` returns the plan and members (id, display name), `ETag:
+  "<version>.<members_version>"` and `Cache-Control: private, no-cache`. `If-None-Match` is compared
+  weakly; a match gives 304. Polls never run the retention purge.
+- `PUT /api/group-plans/<id>/` with `{baseVersion, editId, edit: {kind, stopIds}, plan}`:
+  - an `editId` already in the log answers 200 with that edit's version and changes nothing, so a
+    retry after a lost response is safe;
+  - a current `baseVersion` stores the plan, adds one to `version`, logs the edit and answers 200
+    `{version}` with the new ETag;
+  - otherwise 409 `{version, plan, members, edits}`, where `edits` are the logged edits after
+    `baseVersion` (version, author's display name, kind, stop ids), with the ETag.
+  - The plan must be an object whose `id` is the group's `plan_id`, with a `stops` list of unique
+    stop ids; otherwise 400. Over the size limit, 413.
+  - After the end of the plan's date (New York time), PUT answers 400 "This plan's day is over."
+- `GET /api/group-plans/invites/<token>/` shows the organizer's first name, the date and the member
+  count. `POST /api/group-plans/invites/<token>/join` joins (joining twice changes nothing). Both
+  answer 404 when the group is full, the token was replaced, the date has passed, or the caller was
+  removed.
+- `POST /api/group-plans/<id>/invite` (organizer) replaces the token (GE-8).
+- `DELETE /api/group-plans/<id>/members/<member id>/`: the organizer removes anyone else; a member
+  removes themselves. The organizer can't leave (400 "End the plan instead").
+  `DELETE /api/group-plans/<id>/` (organizer) ends the group.
 - `GET /j/<token>`: a static page that says to open Plandit and paste the link, with the App Store
-  link. It shows no group details.
+  link. It's the same page for every token, makes no database query, and has G0's CSP,
+  `X-Robots-Tag: noindex` and `Referrer-Policy: no-referrer`.
+
+Locking (MF-E), so writes never deadlock or fail at commit:
+
+- Every group write locks the `GroupPlan` row first and checks membership again under that lock.
+- Create and join also insert rows that reference the caller's profile, so they take the caller's
+  profile lock before the group lock, the same order as account deletion and sharing.
+- Account deletion locks the profile, then its shared plans and friends' input links (as today),
+  then every group plan it owns or belongs to, by pk, before the cascade.
+- Locking paths set a short `lock_timeout` and answer 503 "Try again" when it runs out.
+- Group data is kept until 30 days after the date (GS-5).
 
 **iOS**
 
-- `GroupPlanStore`: an `@Observable` store for the member's groups, cached in a local file and not
-  in the snapshot.
-- `PlanEdit`, an enum of the edits Today already supports: add, remove, reorder, set travel mode,
-  set stop status and set times. `apply(_:to:) -> DayPlan?`, which is nil when the edit no longer
-  applies.
-- Edits are applied locally, then PUT with the base version. On 409, the app takes the server's
-  plan and applies the same edit again. If it no longer applies, it shows "<name> removed that
-  stop" (GE-5).
+- `GroupPlanStore`: an `@Observable` store for the member's groups, cached in a local file per
+  user and not in the snapshot. The Swift member type is `GroupPlanMember`, because `GroupMember`
+  already exists in `GroupInputs.swift`.
+- `PlanEdit` edits stops by id (MF-A): add (with its stop id fixed in the edit), remove, move after
+  a stop, set the trip between two stops, set one stop's status, and set one stop's times. Budget,
+  extras and title edits are off in group plans for now. `apply(_:to:)` answers applied (with the
+  plan), already applied, or no longer applies (with why). It never reuses Today's whole-list
+  helpers, which drop or reset other people's changes.
+- Each edit gets an `editId` and is applied locally, saved with the cache, then PUT one at a time
+  with the base version. A network error retries with the same `editId`. On 409, the edit is
+  applied to the server's plan and sent again. If it no longer applies, the app shows the plan and
+  names who changed that stop, from the 409's `edits`. After 3 409s in a row it shows the latest
+  plan with a message; an edit is never dropped silently.
+- No Undo bar in group plans for now (MF-F): Today's Undo restores a whole copy of the plan, which
+  would wipe other members' edits.
 - Polling: every 15 s while a group plan is on screen and the app is active, and on foreground,
-  with `If-None-Match`.
+  with `If-None-Match` set to the ETag exactly as received and the URL cache bypassed. A poll older
+  than the plan on screen is ignored.
 - Today: a "Mine / <organizer>'s plan" control when both exist (GE-6), and members' initials.
 - "Add a link" and the share extension recognize `…/j/<token>` and open the join sheet instead of
   place finding.
-- Rollover: when the date passes, add a `PastPlan` and the visited places to the member's own
-  snapshot, once per group id. The rolled-over ids are kept in the snapshot so a second device
-  doesn't add the plan again (GE-9).
-- A 404 on poll means the member was removed or the group ended: drop the cache and say so.
+- Rollover: when the date passes, add a `PastPlan` whose id is the group id, and the visited
+  places, to the member's own snapshot, once per group (GE-9).
+- A 404 on poll or PUT means the member was removed or the group ended: drop the cache and the
+  pending edits, and say so.
 
 ### Shared pieces
 
@@ -250,7 +296,7 @@ profile name at join) and joined_at. Unique on (group, profile). The organizer i
 1. A member edits locally, then `PUT` with `baseVersion`.
    - 200: done.
    - 409: apply the edit to the server's plan and PUT again, at most 3 tries, then show the latest
-     plan.
+     plan with a message. A network error retries with the same `editId`.
 2. Other members get the new version at their next poll (≤ 15 s while on screen).
 
 **Mode 3, join:**
@@ -313,7 +359,8 @@ profile name at join) and joined_at. Unique on (group, profile). The organizer i
   (GS-5). Described in the privacy policy before submission (GS-6).
 - **Members' names.** Only the first word of the profile name, with consent at join.
 - **App Store.** The user-generated content answer is already "Yes". The report link, removing
-  answers and removing members cover Guideline 1.2's report and block expectations. Review Notes
+  answers and removing members cover Guideline 1.2's report and block expectations. A removed
+  member can't rejoin with the same link. Review Notes
   are updated in the rollout.
 - **IP addresses** are used only as rate-limit keys in the cache, which expire within an hour. They
   aren't stored with answers.

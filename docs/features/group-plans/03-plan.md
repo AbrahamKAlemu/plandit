@@ -111,7 +111,7 @@ G2b's `GroupInputs` and the planner priority change are written test-first. Ever
 | GI-6 | Windows 12–2 and 4–6 give `.clash` with both names; leaving one out gives a plan. | `GroupInputsTests.testClash`; UI test | G2b builder | not run |
 | GI-7 | After building, `/g/<slug>` redirects (302) to `/p/<plan slug>`, and the plan is in Today. | `test_requests.py`; UI test | G2a, G2b builders | not run |
 | GI-8 | A friend's page HTML has no other friend's budget or window, only the count. | `test_requests.py` | G2a builder | not run |
-| GE-1 | A group is created from a plan; the 9th join gives 404. | `pytest plandit/groups/tests/` | G3a builder | not run |
+| GE-1 | A group is created from a plan; the 9th join gives 404. | `pytest tests/test_group_plans.py` | G3a builder | not run |
 | GE-2 | The invite preview shows the organizer's first name, the date and the member count; joining adds a member with the first word of their profile name. | same; `JoinFlowTests` | G3a, G3b builders | not run |
 | GE-3 | Each edit type applies locally and PUTs. | `PlanEditTests`; `GroupPlanStoreTests` | G3b builder | not run |
 | GE-4 | With the plan on screen, a server version bump shows within 15 s; a 304 doesn't redraw. | `GroupPlanStoreTests.testPolling` (clock injected) | G3b builder | not run |
@@ -138,7 +138,9 @@ iOS 18 run.
 ## Testing checkpoint
 
 An independent test-planning pass is selected for G3 (concurrency and sync) before G3a starts,
-because a wrong rebase silently loses someone's edit. Modes 1 and 2 are covered by the table above.
+because a wrong rebase silently loses someone's edit. Done November 22:
+[03-plan_g3-tests.md](03-plan_g3-tests.md). Its 7 must_fix items changed the mode 3 design, and
+its section 4 is the minimum test set for G3a. Modes 1 and 2 are covered by the table above.
 
 ## Review owners
 
