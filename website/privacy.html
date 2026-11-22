@@ -32,9 +32,9 @@
   <main id="main" class="legal shell">
     <p class="kicker"><span></span> Legal</p>
     <h1>Privacy Policy</h1>
-    <p class="legal-meta">Effective November 19, 2026</p>
+    <p class="legal-meta">Effective November 22, 2026</p>
 
-    <p class="legal-lede">This policy explains what Plandit, the iPhone app and this website, collects, why, who else sees it, and how to delete it. The short version: we keep what we need to run your account and your plans, we don't sell it, we don't show ads, and the app doesn't track you across other apps or websites. This website counts visits with Google Analytics and Vercel. Our <a href="/terms">Terms of Service</a> cover the rest of the rules for using Plandit.</p>
+    <p class="legal-lede">This policy explains what Plandit, the iPhone app and this website, collects, why, who else sees it, and how to delete it. It also covers friends who answer a Plandit link without an account. The short version: we keep what we need to run your account and your plans, we don't sell it, we don't show ads, and the app doesn't track you across other apps or websites. This website counts visits with Google Analytics and Vercel. Our <a href="/terms">Terms of Service</a> cover the rest of the rules for using Plandit.</p>
 
     <nav class="legal-toc" aria-label="On this page">
       <ol>
@@ -63,11 +63,15 @@
       <h2>2. What we collect</h2>
       <ul>
         <li><strong>Your account.</strong> Your email address, and your name if you give it. If you use Sign in with Apple, Apple gives us your email (which can be a private relay address Apple creates for you) and, the first time, your name. If you sign up with email, your password goes to our account provider, which stores it in a scrambled (hashed) form. Plandit's own server never sees it.</li>
-        <li><strong>Your profile.</strong> What you fill in: your name, school, home base (whatever you type, such as a neighborhood), default budget and how you like to get around.</li>
+        <li><strong>Your profile.</strong> What you fill in: your name, school, home base (whatever you type, such as a neighborhood), default budget and how you like to get around. If you use group plans or friends' input links, the first word of your name is shown to friends, as described in section 6.</li>
         <li><strong>What you save and plan.</strong> The links you share to Plandit and their captions, the creator's handle and preview image link, the places you confirm (name, address, hours and map position of the place), the prices you set, your plans, the stops and times in them, and the places you've marked as visited. This is synced to your account so it's there when you sign in on another phone.</li>
-        <li><strong>Plans you share as a link.</strong> If you share a plan as a link, we store what its page shows: the plan's title and date, its stops (name, address, map position and times), how you get between them, the prices if you choose to include them, and your note. Your name and email aren't on the page.</li>
+        <li><strong>Plans you share as a link.</strong> If you share a plan as a link, we store what its page shows: the plan's title and date, its stops (name, address, map position and times), how you get between them, the prices if you choose to include them, and your note. If you let friends suggest swaps, the page also lists up to two of your saved places for each stop (name, neighborhood, kind and price) that friends can pick instead. Your name and email aren't on a shared plan's page.</li>
+        <li><strong>Answers to a shared plan.</strong> Friends who open your shared plan can answer it without an account. We store their first name, whether they're in or can't make it, any stops they'd swap (with the place they'd pick instead, if you offered one), and when they answered.</li>
+        <li><strong>Friends' input links.</strong> If you use Ask friends what works, we store the link's day, time range, answer deadline and time zone, and the saved places you picked (name, neighborhood, kind and price). Friends who open the link can answer without an account. We store their first name, their budget for the day, when they're free, up to 3 places they starred, and when they answered. The plan you build from the answers becomes your plan for that day, budget included, and is kept like your other plans.</li>
+        <li><strong>Group plans.</strong> If you start or join a group plan, we store the plan (its title, date, budget, stops, places, times, costs and travel), who's in the group, and each member's first name: the first word of their profile name when they joined, or "Friend" if there isn't one. We also keep a record of the group's latest 200 changes: what kind of change, which stops it touched, which member made it and when. If the organizer removes someone, we keep that person's account ID with the group, so the invite link can't add them back. When a group plan's day is over, each member's app adds a summary of it to their past plans (its title, date, number of stops, cost, budget, walking distance and fares) and its places to their visited places. These sync to their account like their own plans.</li>
+        <li><strong>Cookies on answer pages.</strong> When a friend answers a shared plan or a friends' input link, the page sets a cookie in their browser, for that link only, so they can see, change or take back their answer from the same browser. We store only a scrambled (hashed) form of it. It expires around 30 days after the plan's date, or 30 days after they answer if that's later. Pages with an answer form also set a security cookie that stops other websites from sending answers through the browser. Plandit uses these cookies only for answering.</li>
         <li><strong>How you use Plandit.</strong> When you save a link, save a place or build a plan, and which days you open the app. We record these with your account so we can count active users and see what's working.</li>
-        <li><strong>Technical logs.</strong> Like most online services, our servers and hosting providers log requests, including IP addresses and times, to keep Plandit running and secure. We don't store IP addresses in our database.</li>
+        <li><strong>Technical logs.</strong> Like most online services, our servers and hosting providers log requests, including IP addresses and times, to keep Plandit running and secure. We don't store IP addresses in our database. To limit how many answers one internet connection can send to a link, our database keeps a scrambled code made from the IP address and the link, never the address itself.</li>
         <li><strong>Visits to this website.</strong> This website uses Google Analytics and Vercel Web Analytics to count visits and see which pages people read and which buttons they tap. They record things like the pages you view, your browser and device type, and your rough location based on your IP address. Google Analytics sets cookies in your browser to tell visits apart. The app doesn't use either of them.</li>
         <li><strong>The waitlist.</strong> If you join the waitlist on this website, we keep the email you enter.</li>
       </ul>
@@ -91,8 +95,9 @@
       <h2>5. How we use it</h2>
       <ul>
         <li>To run Plandit: sign you in, find places, build and sync your plans.</li>
+        <li>To run plans with friends: show you friends' answers, build one plan from them, and keep everyone in a group plan on the same plan.</li>
         <li>To understand and improve Plandit, using counts like how many people signed up, built a plan, came back this week or visited this website.</li>
-        <li>To keep Plandit secure and stop abuse, such as enforcing daily import limits.</li>
+        <li>To keep Plandit secure and stop abuse, such as enforcing daily import limits and limiting how many answers a link takes.</li>
         <li>To contact you about your account, or, if you joined the waitlist, to send one email when Plandit is ready.</li>
       </ul>
     </section>
@@ -103,15 +108,18 @@
       <ul>
         <li><strong>Supabase</strong> runs our accounts and database.</li>
         <li><strong>Render</strong> runs our server.</li>
-        <li><strong>Vercel</strong> hosts this website and counts visits to it. The website and shared plan pages load their font from <strong>Google Fonts</strong>, so Google sees your IP address when a page loads.</li>
+        <li><strong>Vercel</strong> hosts this website and counts visits to it. The website and the pages friends open from Plandit links load their font from <strong>Google Fonts</strong>, so Google sees your IP address when a page loads. Those pages also load Plandit's logo from this website, so Vercel sees your IP address then too.</li>
         <li><strong>Google Analytics</strong> measures visits to this website, as described above. We don't use it for advertising.</li>
         <li><strong>Formspree</strong> receives the email you enter when you join the waitlist, stores it and passes it to us.</li>
         <li><strong>Sanity</strong> stores our blog posts and their images, so it sees your IP address when a blog image loads.</li>
         <li><strong>Apple</strong> provides Sign in with Apple and Apple Maps. Place searches and routes between your stops go to Apple Maps.</li>
         <li><strong>TikTok and Instagram</strong> receive requests for public post pages, as described above.</li>
       </ul>
-      <p><strong>Anyone with a link you share.</strong> When you share a plan as a link, anyone who has that link can open its page, without an account. The page asks search engines not to list it. You can take it down any time with Stop sharing.</p>
-      <p>Plandit started as a class project, and we report totals such as the number of sign-ups and active users to our course staff. Those reports never include your name, email or what you saved.</p>
+      <p><strong>Anyone with a link you share.</strong> When you share a plan or a friends' input link, anyone who has that link can open its page, without an account. The pages ask search engines not to list them. You can take a shared plan down any time with Stop sharing.</p>
+      <p><strong>Friends' answers on a shared plan.</strong> Anyone with the link sees how many friends are in and the first names of up to 3 of them. Each friend sees their own answer in the browser they answered from. Apart from that, the page doesn't show who can't make it or which stops anyone would swap. You see every answer in the app.</p>
+      <p><strong>Friends' input links.</strong> Anyone with the link sees your first name (the first word of your profile name, if there is one), the day, the time range, the answer deadline, the places you picked with their prices, and how many friends have answered. The page never shows a friend's name, budget, free time or stars to anyone but that friend, in the browser they answered from. You see every answer in the app. Once you build the plan and share it, the link leads to the plan's page.</p>
+      <p><strong>People in a group plan.</strong> Everyone in a group plan sees the whole plan, its budget included, each member's first name, and who the organizer is. When two members' changes clash, the app can show who changed which stop. Members don't see each other's email addresses. Anyone signed in to Plandit who has the invite link can see the organizer's first name, the plan's date and how many people are in it, before joining. The invite link's web page shows nothing about the group.</p>
+      <p>Plandit started as a class project, and we report totals such as the number of sign-ups and active users to our course staff. Those reports never include your name, email or what you saved. They also count friends' answers and group plans, but never include names or what anyone answered.</p>
       <p>We may also share information if the law requires it, to protect people's safety, or if Plandit is ever transferred to someone new, in which case this policy keeps applying to your information.</p>
     </section>
 
@@ -122,6 +130,7 @@
         <li>We don't show ads, in the app or on this website.</li>
         <li>The app has no advertising or analytics trackers. This website uses Google Analytics and Vercel Web Analytics only to measure how people use it, as described in section 2.</li>
         <li>The app doesn't track you across other companies' apps or websites.</li>
+        <li>The pages friends open from Plandit links run no scripts and have no ads or analytics.</li>
       </ul>
     </section>
 
@@ -130,9 +139,14 @@
       <ul>
         <li>Your account, profile, saved places, plans and usage records stay until you delete your account.</li>
         <li>When you delete your account, we delete it and everything in it right away. Copies can stay in our providers' backups for a short time before they're overwritten. We keep a record that the account ID was deleted, with no name or email, so it can't be brought back by mistake.</li>
+        <li>Deleting your account also deletes your shared plans and friends' input links, with every friend's answer on them, and ends the group plans you organized, for everyone in them. It takes you out of group plans you joined. Changes you made stay in those plans, without your name. If an organizer removed you from a group plan, that group keeps your account ID, with no name or email, until the group is deleted.</li>
         <li>Server logs are kept for the time our hosting providers keep them.</li>
         <li>Website visit statistics are kept for the time Google Analytics and Vercel keep them.</li>
         <li>A shared plan's page stays until you tap Stop sharing or delete your account. Then the link stops working right away.</li>
+        <li>Friends' answers on a shared plan are deleted when you stop sharing it, remove the answer or delete your account, and otherwise 30 days after the plan's date. A friend can take back their own answer sooner, from the browser they answered from.</li>
+        <li>A friends' input link and its answers are deleted 30 days after the plan's day, or sooner if you delete the link before building the plan, or delete your account. Stopping sharing a plan built from the link doesn't delete them. You can remove a friend's answer, and a friend can take back their own.</li>
+        <li>A group plan is deleted, with its members, its record of changes and any removed members' account IDs, 30 days after its date, or sooner when the organizer ends it or deletes their account. Someone who leaves or is removed loses access to the plan right away, and their first name comes off it. Changes they made stay in the plan. The summary in each member's past plans isn't deleted with the group: it stays with their account, like their own past plans.</li>
+        <li>These 30-day deletions happen automatically, but not on a fixed schedule: our server runs them the next time someone opens or answers a link that's taking answers, an organizer checks friends' answers, or someone starts a group plan. So they can happen later than the 30th day. Copies can stay in our providers' backups for a short time.</li>
         <li>Waitlist emails stay until you ask us to remove yours.</li>
       </ul>
     </section>
@@ -143,6 +157,10 @@
         <li><strong>Change your profile</strong> any time in the app.</li>
         <li><strong>Delete your account</strong> and everything in it in the app: Profile → Account → Delete account.</li>
         <li><strong>Stop sharing a plan</strong> in the app: Today → the share button → Stop sharing.</li>
+        <li><strong>Remove a friend's answer</strong> in the app, from your shared plan's answers or your friends' input link.</li>
+        <li><strong>Delete a friends' input link</strong> in the app before you build the plan. Friends' answers are deleted with it.</li>
+        <li><strong>Take back your answer</strong> if you answered a Plandit link as a friend: open the link in the same browser and tap Take back my answer.</li>
+        <li><strong>Leave a group plan</strong> any time, unless you're its organizer. Organizers can remove members, turn off the invite link and get a new one, or end the plan for everyone.</li>
         <li><strong>Turn off location</strong> in your iPhone's Settings. Plandit still works without it.</li>
         <li><strong>Block website analytics</strong> with your browser's privacy settings or a content blocker. This website still works without them.</li>
         <li><strong>Ask us</strong> for a copy of your information, to correct it, or to delete it, including a waitlist email, by writing to <a href="mailto:support@plandit.app">support@plandit.app</a>. Depending on where you live, you may have other rights over your information, and we'll honor them.</li>
