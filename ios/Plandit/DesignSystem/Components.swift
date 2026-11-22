@@ -222,8 +222,9 @@ struct Hairline: View {
 }
 
 extension EnvironmentValues {
-    /// True while the sheet sits at its peek detent, where only the header and tab bar should show.
-    @Entry var isSheetCollapsed = false
+    /// How far the sheet has risen above its peek, where only the header and tab bar show: 0 at the
+    /// peek, 1 a little above it (`SheetDetent.reveal`). Follows the sheet as it's dragged.
+    @Entry var sheetReveal: Double = 1
     /// How much of the sheet's foot the floating undo and tab bars cover. Zero while the keyboard
     /// has them hidden.
     @Entry var floatingBarsHeight: CGFloat = 0
@@ -241,16 +242,18 @@ private struct ClearsFloatingBars: ViewModifier {
     }
 }
 
-/// Hides a sheet's scrolling body at the peek detent so nothing half-shows above the tab bar.
+/// Hides a sheet's scrolling body at the peek so nothing half-shows above the tab bar, and fades
+/// it in as the sheet rises. It follows the sheet's height rather than its detent: the detent only
+/// changes once the sheet settles, which left the body blank for the whole drag and settle.
 private struct HiddenWhenSheetCollapsed: ViewModifier {
-    @Environment(\.isSheetCollapsed) private var isCollapsed
+    @Environment(\.sheetReveal) private var reveal
 
     func body(content: Content) -> some View {
         content
-            .opacity(isCollapsed ? 0 : 1)
-            .allowsHitTesting(!isCollapsed)
-            .accessibilityHidden(isCollapsed)
-            .animation(.easeOut(duration: 0.2), value: isCollapsed)
+            // Smooths the jump when the sheet settles at a new height without a drag.
+            .animation(.easeOut(duration: 0.2)) { $0.opacity(reveal) }
+            .allowsHitTesting(reveal > 0.5)
+            .accessibilityHidden(reveal == 0)
     }
 }
 
