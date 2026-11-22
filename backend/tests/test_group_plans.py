@@ -1131,3 +1131,156 @@ def test_ctr_1_post_paths_work_with_a_trailing_slash_too(group, maya, path):
     """POST can't follow APPEND_SLASH's redirect, so both spellings answer (never 301)."""
     url = path.format(base=BASE, token=token_of(group), id=group.id)
     assert maya.client.post(url).status_code == 200
+
+
+# --- Leaving, removing and ending (brief GE-7; ISO-4, ISO-5, CAS-4, CAS-5, VER-8, N-8b, N-12,
+# --- MF-G) ------------------------------------------------------------------------------------
+
+
+def member_path(group, member_or_id) -> str:
+    member_id = member_or_id.id if isinstance(member_or_id, GroupMember) else member_or_id
+    return f"{BASE}{group.id}/members/{member_id}/"
+
+
+def test_the_organizer_removes_a_member_who_then_cannot_rejoin(group, maya, jordan):
+    """GE-7 and MF-G: the removal is kept, so the same link no longer works for them."""
+    before_etag = etag(group)
+    response = maya.client.delete(member_path(group, member_of(group, jordan)))
+
+    assert response.status_code == 204
+    assert not GroupMember.objects.filter(group=group, profile=jordan.profile).exists()
+    assert GroupRemoval.objects.filter(group=group, profile_id=jordan.id).count() == 1
+    group.refresh_from_db()
+    assert (group.version, group.members_version) == (3, 3)
+    assert etag(group) != before_etag
+    assert jordan.client.get(preview_path(token_of(group))).status_code == 404
+    assert join(jordan, group).status_code == 404
+
+
+def test_iso_5_a_removed_member_gets_404_for_their_last_etag_and_their_put(group, maya, jordan):
+    held = jordan.client.get(detail(group.id))["ETag"]
+    base = group.version
+    assert maya.client.delete(member_path(group, member_of(group, jordan))).status_code == 204
+    before = row(group)
+
+    response = jordan.client.get(detail(group.id), HTTP_IF_NONE_MATCH=held)
+    assert response.status_code == 404
+    assert not response.has_header("ETag")
+    assert put(jordan, group, base=base).status_code == 404
+    assert row(group) == before
+    assert jordan.client.get(BASE).json() == {"groups": []}
+
+
+def test_cas_5_a_member_leaves_and_can_come_back_with_the_link(group, maya, jordan):
+    """Leaving yourself writes no removal (MF-G)."""
+    response = jordan.client.delete(member_path(group, member_of(group, jordan)))
+    assert response.status_code == 204
+    assert not GroupRemoval.objects.exists()
+    organizer_view = maya.client.get(detail(group.id)).json()
+    assert [m["name"] for m in organizer_view["members"]] == ["Maya"]
+    assert organizer_view["membersVersion"] == 3
+    assert jordan.client.get(detail(group.id)).status_code == 404
+
+    assert jordan.client.delete(member_path(group, uuid.uuid4())).status_code == 404
+    assert join(jordan, group).status_code == 200
+
+
+def test_cas_5_leaving_twice_is_404_the_second_time(group, jordan):
+    path = member_path(group, member_of(group, jordan))
+    assert jordan.client.delete(path).status_code == 204
+    assert jordan.client.delete(path).status_code == 404
+
+
+def test_n_8b_the_organizer_cannot_leave_their_own_plan(group, maya):
+    before = row(group)
+    response = maya.client.delete(member_path(group, member_of(group, maya)))
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Organizers can't leave their own plan. End the plan instead."}
+    assert row(group) == before
+    assert group.members.count() == 2
+
+
+def test_a_member_cannot_remove_someone_else(group, maya, jordan):
+    casey = person("Casey Kim")
+    GroupMember.objects.create(group=group, profile=casey.profile, display_name="Casey")
+    before = row(group)
+    assert jordan.client.delete(member_path(group, member_of(group, casey))).status_code == 404
+    assert jordan.client.delete(member_path(group, member_of(group, maya))).status_code == 404
+    assert group.members.count() == 3
+    assert row(group) == before
+
+
+def test_iso_4_an_organizer_cannot_remove_a_member_of_another_group(group, maya):
+    """The member id must belong to this group; a profile id never addresses anyone (N-11)."""
+    sam = person("Sam Rivera")
+    avery = person("Avery Diaz")
+    other = make_group(sam, avery)
+    for target in (member_of(other, avery), avery.id, member_of(other, sam)):
+        assert maya.client.delete(member_path(group, target)).status_code == 404
+    assert other.members.count() == 2
+    assert maya.client.delete(member_path(other, member_of(other, avery))).status_code == 404
+    assert other.members.count() == 2
+
+
+@pytest.mark.parametrize("member_id", ["not-a-uuid", "1234", "x" * 200])
+def test_iso_3_a_malformed_member_id_is_404(group, maya, member_id):
+    assert maya.client.delete(f"{BASE}{group.id}/members/{member_id}/").status_code == 404
+
+
+@pytest.mark.parametrize("group_id", ["not-a-uuid", "1234", "%20", "x" * 200])
+def test_iso_3_a_malformed_group_id_is_404_for_every_write(maya, jordan, group_id):
+    group = make_group(maya, jordan)
+    assert jordan.client.put(f"{BASE}{group_id}/", {}, format="json").status_code == 404
+    assert maya.client.delete(f"{BASE}{group_id}/").status_code == 404
+    assert maya.client.delete(f"{BASE}{group_id}/members/{member_of(group, jordan).id}/").status_code == 404
+    assert maya.client.post(f"{BASE}{group_id}/invite").status_code == 404
+
+
+def test_ver_8_the_etag_changes_when_someone_leaves_or_is_removed(group, maya, jordan):
+    casey = person("Casey Kim")
+    assert join(casey, group).status_code == 200
+    for who, by in ((casey, casey), (jordan, maya)):
+        old = maya.client.get(detail(group.id))["ETag"]
+        assert by.client.delete(member_path(group, member_of(group, who))).status_code == 204
+        response = maya.client.get(detail(group.id), HTTP_IF_NONE_MATCH=old)
+        assert response.status_code == 200
+        assert who.profile.name.split()[0] not in [m["name"] for m in response.json()["members"]]
+
+
+def test_n_12_a_member_who_left_is_not_named_in_a_409(group, maya, jordan):
+    assert put(jordan, group).status_code == 200
+    assert jordan.client.delete(member_path(group, member_of(group, jordan))).status_code == 204
+    response = put(maya, group, base=3)
+    assert response.status_code == 409
+    assert response.json()["edits"] == [
+        {
+            "version": 4,
+            "authorId": None,
+            "authorName": None,
+            "kind": "remove",
+            "stopIds": GroupPlanEdit.objects.get().stop_ids,
+        }
+    ]
+    assert "Jordan" not in response.content.decode()
+
+
+def test_cas_4_the_organizer_ends_the_group_and_everything_in_it_goes(group, maya, jordan):
+    token = token_of(group)
+    assert put(jordan, group).status_code == 200
+    GroupRemoval.objects.create(group=group, profile_id=uuid.uuid4())
+
+    assert maya.client.delete(detail(group.id)).status_code == 204
+    for model in (GroupPlan, GroupMember, GroupPlanEdit, GroupRemoval):
+        assert not model.objects.exists(), model
+    assert jordan.client.get(detail(group.id)).status_code == 404
+    assert jordan.client.get(BASE).json() == {"groups": []}
+    assert person("Sam Rivera").client.get(preview_path(token)).status_code == 404
+    assert maya.client.delete(detail(group.id)).status_code == 404
+
+
+def test_only_the_organizer_ends_the_group(group, jordan):
+    before = row(group)
+    assert jordan.client.delete(detail(group.id)).status_code == 404
+    assert person("Sam Rivera").client.delete(detail(group.id)).status_code == 404
+    assert row(group) == before
+    assert group.members.count() == 2

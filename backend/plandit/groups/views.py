@@ -68,6 +68,7 @@ TRY_AGAIN = "Try again in a moment."
 TOO_LARGE = "This plan is too big to save for the group."
 DAY_OVER = "This plan's day is over."
 NOT_THIS_PLAN = "This isn't the group's plan."
+ORGANIZER_CANNOT_LEAVE = "Organizers can't leave their own plan. End the plan instead."
 FALLBACK_NAME = "Friend"
 INVITE_TOKEN = re.compile(rf"\A[A-Za-z0-9_-]{{{INVITE_TOKEN_LENGTH}}}\Z")
 
@@ -297,6 +298,21 @@ def _replace_token(group: GroupPlan) -> None:
     group.save(update_fields=["invite_token", "updated_at"])
 
 
+def _remove_member(group: GroupPlan, member: GroupMember, *, by_organizer: bool) -> None:
+    """Take the member out of the locked group. A removal by the organizer is kept, so the link no
+    longer works for them (MF-G, App Store guideline 1.2); leaving yourself writes nothing."""
+    member.delete()
+    if by_organizer:
+        GroupRemoval.objects.get_or_create(group=group, profile_id=member.profile_id)
+    group.members_version += 1
+    group.save(update_fields=["members_version", "updated_at"])
+
+
+def _end_group(group: GroupPlan) -> None:
+    """Delete the locked group with its members, edit log and removals (CASCADE)."""
+    group.delete()
+
+
 def _invited_group(token: str) -> GroupPlan | None:
     return GroupPlan.objects.filter(invite_token=token).first() if INVITE_TOKEN.match(token) else None
 
@@ -444,6 +460,44 @@ class GroupPlanDetailView(APIView):
                 return _conflict_response(group, base)
             _write_plan(group, caller, plan, edit_id, kind, stop_ids)
             return _saved_response(group, group.version)
+
+    @try_again_on_lock_timeout
+    def delete(self, request, group_id):
+        """The organizer ends the group for everyone (brief GE-7). 204; anyone else gets 404."""
+        pk = parse_uuid(group_id)
+        if pk is None:
+            return _not_found()
+        with locking():
+            group = lock_group(pk)
+            if group is None or group.owner_id != request.user.pk:
+                return _not_found()
+            _end_group(group)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class GroupMemberDetailView(APIView):
+    """DELETE /api/group-plans/<id>/members/<member id>/: a member leaves (their own id), or the
+    organizer removes someone else (brief GE-7). 204. The organizer can't leave: 400, end the group
+    instead (N-8b). Anything else, a member removing someone else included, is 404."""
+
+    @try_again_on_lock_timeout
+    def delete(self, request, group_id, member_id):
+        pk, target_id = parse_uuid(group_id), parse_uuid(member_id)
+        if pk is None or target_id is None:
+            return _not_found()
+        with locking():
+            group = lock_group(pk)
+            caller = GroupMember.objects.filter(group=group, profile=request.user).first() if group else None
+            if caller is None:
+                return _not_found()
+            target = caller if caller.id == target_id else GroupMember.objects.filter(group=group, id=target_id).first()
+            is_organizer = caller.profile_id == group.owner_id
+            if target is None or (target != caller and not is_organizer):
+                return _not_found()
+            if target == caller and is_organizer:
+                return Response({"detail": ORGANIZER_CANNOT_LEAVE}, status=status.HTTP_400_BAD_REQUEST)
+            _remove_member(group, target, by_organizer=target != caller)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class GroupInviteView(APIView):
