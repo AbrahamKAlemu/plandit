@@ -196,7 +196,16 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "plandit-development-social-evidence",
-    }
+    },
+    # Rate limits on the public forms (plandit.core.public_forms.rate_limited). In the database so
+    # every gunicorn worker counts together and the counts survive a restart or a sleep; the table
+    # is made by shares/0002 with row level security on. MAX_ENTRIES is raised from 300 because
+    # culling a full table deletes live counts, not only expired ones.
+    "throttle": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "plandit_throttle_cache",
+        "OPTIONS": {"MAX_ENTRIES": 10000},
+    },
 }
 
 # --- I18N / static ------------------------------------------------------------
