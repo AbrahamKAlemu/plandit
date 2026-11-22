@@ -1476,3 +1476,228 @@ def test_cas_3_a_deleted_accounts_token_is_401_on_every_group_endpoint(group, jo
         assert response.status_code == 401, response.request
         assert response.json() == {"detail": "Account deleted."}
     assert row(group)[1:3] == (3, 2)
+
+
+# --- ISO-1: every endpoint against every kind of caller (brief GS-1, GE-7; ISO-1, ISO-7) -------
+
+ACTORS = ["anon", "deleted", "outsider", "removed", "other_member", "member", "organizer"]
+
+# Expected status per actor, in ACTORS order (03-plan_g3-tests.md, section 1.1). "leave" is
+# DELETE members/<the caller's own member id>/: anon and deleted have none, so any id is 401.
+ISO_1 = {
+    "create": [401, 401, 201, 201, 201, 201, 201],
+    "list": [401, 401, 200, 200, 200, 200, 200],
+    "get": [401, 401, 404, 404, 404, 200, 200],
+    "conditional get": [401, 401, 404, 404, 404, 304, 304],
+    "put from an old version": [401, 401, 404, 404, 404, 409, 409],
+    "put from the current version": [401, 401, 404, 404, 404, 200, 200],
+    "preview": [401, 401, 200, 404, 200, 200, 200],
+    "join": [401, 401, 200, 404, 200, 200, 200],
+    "new link": [401, 401, 404, 404, 404, 404, 200],
+    "remove someone else": [401, 401, 404, 404, 404, 404, 204],
+    "leave": [401, 401, 404, 404, 404, 204, 400],
+    "end": [401, 401, 404, 404, 404, 404, 204],
+    "page": [200, 200, 200, 200, 200, 200, 200],
+}
+
+
+@dataclass
+class World:
+    """G: Maya organizes, Jordan and Casey are in it, Riley was removed. B: Sam organizes, Avery
+    is in it. Plus someone in no group, a signed-out client and a deleted account's token."""
+
+    group: GroupPlan
+    other: GroupPlan
+    actors: dict
+    own_member_ids: dict
+    people: list
+
+
+@pytest.fixture
+def world() -> World:
+    maya, jordan, casey, riley = (person(n) for n in ("Maya Lopez", "Jordan Lee", "Casey Kim", "Riley Park"))
+    sam, avery, outsider = (person(n) for n in ("Sam Rivera", "Avery Diaz", "Noor Haddad"))
+    group = make_group(maya, jordan, casey, riley, version=3, members_version=2)
+    riley_member = member_of(group, riley).id
+    assert maya.client.delete(member_path(group, riley_member)).status_code == 204
+    other = make_group(sam, avery)
+    actors = {
+        "anon": Person(None, anonymous_client()),
+        "deleted": Person(None, deleted_client()),
+        "outsider": outsider,
+        "removed": riley,
+        "other_member": avery,
+        "member": jordan,
+        "organizer": maya,
+    }
+    own_member_ids = {
+        "anon": uuid.uuid4(),
+        "deleted": uuid.uuid4(),
+        "outsider": uuid.uuid4(),
+        "removed": riley_member,
+        "other_member": member_of(other, avery).id,
+        "member": member_of(group, jordan).id,
+        "organizer": member_of(group, maya).id,
+    }
+    people = [maya, jordan, casey, riley, sam, avery, outsider]
+    return World(group, other, actors, own_member_ids, people)
+
+
+def iso_request(world: World, endpoint: str, actor: str):
+    group = world.group
+    client = world.actors[actor].client
+    group.refresh_from_db()
+    current = {
+        "baseVersion": group.version,
+        "editId": new_id(),
+        "edit": {"kind": "remove", "stopIds": []},
+        "plan": edited(group),
+    }
+    casey = GroupMember.objects.get(group=group, display_name="Casey").id
+    return {
+        "create": lambda: client.post(
+            BASE, {"date": (today() + timedelta(days=1)).isoformat(), "plan": plan_json()}, format="json"
+        ),
+        "list": lambda: client.get(BASE),
+        "get": lambda: client.get(detail(group.id)),
+        "conditional get": lambda: client.get(detail(group.id), HTTP_IF_NONE_MATCH=etag(group)),
+        "put from an old version": lambda: client.put(detail(group.id), {**current, "baseVersion": 2}, format="json"),
+        "put from the current version": lambda: client.put(detail(group.id), current, format="json"),
+        "preview": lambda: client.get(preview_path(group.invite_token)),
+        "join": lambda: client.post(join_path(group.invite_token)),
+        "new link": lambda: client.post(invite_path(group)),
+        "remove someone else": lambda: client.delete(member_path(group, casey)),
+        "leave": lambda: client.delete(member_path(group, world.own_member_ids[actor])),
+        "end": lambda: client.delete(detail(group.id)),
+        "page": lambda: client.get(f"/j/{group.invite_token}"),
+    }[endpoint]()
+
+
+def private_values(world: World) -> list[str]:
+    """What no group response may carry: emails and profile ids, in every spelling (N-11)."""
+    values = []
+    for who in world.people:
+        values += [who.profile.email, str(who.id), str(who.id).upper(), who.id.hex]
+    return values
+
+
+@pytest.mark.parametrize("actor", ACTORS)
+@pytest.mark.parametrize("endpoint", list(ISO_1))
+def test_iso_1_every_endpoint_against_every_caller(world, endpoint, actor):
+    group = world.group
+    before = row(group)
+    members_before = sorted(group.members.values_list("id", flat=True))
+    expected = ISO_1[endpoint][ACTORS.index(actor)]
+
+    response = iso_request(world, endpoint, actor)
+
+    assert response.status_code == expected, (endpoint, actor, response.content[:200])
+    is_member = actor in ("member", "organizer")
+    if response.status_code == 404 and endpoint != "page":
+        assert response.content == b""  # the same 404 as a group that doesn't exist (ISO-2)
+        assert not response.has_header("ETag")
+    if response.status_code in (200, 201, 304, 409):
+        text = response.content.decode()
+        for value in private_values(world):
+            assert value not in text, (endpoint, actor, value)  # ISO-7
+
+    still_there = GroupPlan.objects.filter(pk=group.pk).exists()
+    if endpoint == "list" and response.status_code == 200:
+        shown = [g["id"] for g in response.json()["groups"]]
+        assert (
+            shown
+            == {
+                "outsider": [],
+                "removed": [],
+                "other_member": [str(world.other.id)],
+                "member": [str(group.id)],
+                "organizer": [str(group.id)],
+            }[actor]
+        )
+    elif endpoint == "end":
+        assert still_there is not (actor == "organizer")
+    elif endpoint == "join" and response.status_code == 200:
+        members_now = sorted(group.members.values_list("id", flat=True))
+        assert len(members_now) == len(members_before) + (0 if is_member else 1)
+    elif endpoint == "new link":
+        assert (row(group)[4] != before[4]) is (actor == "organizer")
+        assert row(group)[:3] == before[:3]
+    elif endpoint == "put from the current version" and response.status_code == 200:
+        assert row(group)[1] == before[1] + 1
+    elif endpoint in ("remove someone else", "leave") and response.status_code == 204:
+        assert len(group.members.all()) == len(members_before) - 1
+    elif endpoint != "create":
+        # Every refused or read-only request leaves the group exactly as it was.
+        assert row(group) == before
+        assert sorted(group.members.values_list("id", flat=True)) == members_before
+    if endpoint != "end" or actor != "organizer":
+        assert world.other.members.count() == 2
+
+
+# --- CTR-1: the exact paths the app calls ------------------------------------------------------
+
+
+def test_ctr_1_every_path_the_app_calls_answers_as_the_contract_says(maya, jordan):
+    """Spelled out as the app spells them (scratchpad g3a-contract.md); none of them redirects."""
+    from django.urls import resolve
+
+    plan = plan_json()
+    created = maya.client.post("/api/group-plans/", {"date": today().isoformat(), "plan": plan}, format="json")
+    group = GroupPlan.objects.get()
+    gid, token = str(group.id).upper(), group.invite_token
+    calls = [
+        ("GET", "/api/group-plans/", {}, 200),
+        ("GET", f"/api/group-plans/{gid}/", {}, 200),
+        ("GET", f"/api/group-plans/invites/{token}/", {}, 200),
+        ("POST", f"/api/group-plans/invites/{token}/join", {}, 200),
+        (
+            "PUT",
+            f"/api/group-plans/{gid}/",
+            {"baseVersion": 1, "editId": new_id(), "edit": {"kind": "remove", "stopIds": []}, "plan": plan},
+            200,
+        ),
+        ("POST", f"/api/group-plans/{gid}/invite", {}, 200),
+    ]
+    assert created.status_code == 201
+    for method, path, body, expected in calls:
+        resolve(path)  # a real route, not a redirect to one
+        who = jordan if "join" in path else maya
+        response = who.client.generic(method, path, data=json_body(body), content_type="application/json")
+        assert response.status_code == expected, (method, path, response.content[:200])
+    jordan_member = member_of(group, jordan).id
+    assert maya.client.delete(f"/api/group-plans/{gid}/members/{str(jordan_member).upper()}/").status_code == 204
+    assert maya.client.delete(f"/api/group-plans/{gid}/").status_code == 204
+
+
+def json_body(body: dict) -> str:
+    import json
+
+    return json.dumps(body) if body else ""
+
+
+# --- CON-10 and purging (N-7, GS-5) -------------------------------------------------------------
+
+
+def test_con_10_an_expired_group_is_refused_by_its_date_before_any_purge(maya, jordan):
+    expired = make_group(maya, jordan, day=today() - timedelta(days=GROUP_RETENTION_DAYS))
+    sam = person("Sam Rivera")
+    assert join(sam, expired).status_code == 404
+    assert put(jordan, expired).status_code == 400
+    assert jordan.client.get(detail(expired.id)).status_code == 200  # polls never purge
+
+    assert create(maya).status_code == 201  # an organizer's create runs the purge
+    assert not GroupPlan.objects.filter(pk=expired.pk).exists()
+    assert jordan.client.get(detail(expired.id)).status_code == 404
+
+
+def test_con_10_a_failing_purge_never_fails_the_create(maya, monkeypatch):
+    from django.db import DatabaseError
+
+    from plandit.groups import views
+
+    def failing_purge():
+        raise DatabaseError("deadlock detected")
+
+    monkeypatch.setattr(views, "purge_expired", failing_purge)
+    assert create(maya).status_code == 201
+    assert GroupPlan.objects.count() == 1
