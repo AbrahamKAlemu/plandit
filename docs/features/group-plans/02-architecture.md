@@ -203,7 +203,8 @@ API (signed in). Every request checks membership first; anyone else gets 404, ne
     `baseVersion` (version, author's display name, kind, stop ids), with the ETag.
   - The plan must be an object whose `id` is the group's `plan_id`, with a `stops` list of unique
     stop ids; otherwise 400. Over the size limit, 413.
-  - After the end of the plan's date (New York time), PUT answers 400 "This plan's day is over."
+  - The plan's day ends at 4 AM New York time on the day after its date, so a night out stays
+    editable. After that, PUT answers 400 "This plan's day has passed, so it can't be changed."
 - `GET /api/group-plans/invites/<token>/` shows the organizer's first name, the date and the member
   count. `POST /api/group-plans/invites/<token>/join` joins (joining twice changes nothing). Both
   answer 404 when the group is full, the token was replaced, the date has passed, or the caller was
@@ -248,7 +249,9 @@ Locking (MF-E), so writes never deadlock or fail at commit:
   than the plan on screen is ignored.
 - Today: a "Mine / <organizer>'s plan" control when both exist (GE-6), and members' initials.
 - "Add a link" and the share extension recognize `…/j/<token>` and open the join sheet instead of
-  place finding.
+  place finding. The `/j/` page tells friends to open Saved and tap Paste a link (or +), so those
+  visible labels must stay as they are, or the page changes with them.
+- Rollover for a group plan happens after the same 4 AM cutoff the server uses.
 - Rollover: when the date passes, add a `PastPlan` whose id is the group id, and the visited
   places, to the member's own snapshot, once per group (GE-9).
 - A 404 on poll or PUT means the member was removed or the group ended: drop the cache and the

@@ -19,7 +19,8 @@ Notes adopted:
 
 - N-2: tests go in `backend/tests/test_group_plans*.py`.
 - N-6, N-7: polls never purge, and joins and PUTs are refused after the date.
-- N-8: edits end with the plan's day in New York time.
+- N-8: edits end with the plan's day in New York time, which ends at 4 AM the next morning
+  (changed after Andre's persona review, so a night out stays editable).
 - N-8b: the organizer can't leave.
 - N-9: a unique owner and plan id.
 - N-10: anonymous sessions get 403; an empty name shows as "Friend".
