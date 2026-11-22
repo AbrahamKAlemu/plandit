@@ -1079,13 +1079,15 @@ final class PlanditStore {
 
     /// "Swap it": the stop becomes the friend's pick, in the same place in the day, and the times
     /// from there on are planned again (GV-6). Undo puts the stop back; the page updates as with
-    /// any other change. False when the stop isn't still ahead or the pick can't go in.
+    /// any other change (`scheduleShareUpdate`), and the undo bar says so when it will. False when
+    /// the stop isn't still ahead or the pick can't go in.
     @discardableResult
     func swap(stopID: UUID, toPost postID: UUID, now: Date = AppClock.now) -> Bool {
         guard let old = stop(id: stopID), swapAvailability(of: postID) == .available,
               let post = post(id: postID), let candidate = PlanCandidate(post: post),
               let plan = today.swapping(stopID, for: candidate, travel: travelPreference, now: now) else { return false }
-        remember("Swapped \(old.place.name) for \(candidate.place.name)")
+        let updatesLink = todayLink != nil && sharing != nil
+        remember("Swapped \(old.place.name) for \(candidate.place.name)" + (updatesLink ? ". Your link updates too." : ""))
         today = plan
         persist()
         Task { await loadRoutes() }

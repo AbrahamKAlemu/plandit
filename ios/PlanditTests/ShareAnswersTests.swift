@@ -218,7 +218,7 @@ import XCTest
             XCTAssertGreaterThanOrEqual(plan.stops[position].start, arrival, "times replanned from the swapped stop on")
         }
         XCTAssertEqual(plan.legs.count, plan.stops.count - 1)
-        XCTAssertEqual(store.undo?.message, "Swapped The High Line for Little Island")
+        XCTAssertEqual(store.undo?.message, "Swapped The High Line for Little Island. Your link updates too.")
         XCTAssertTrue(store.swapMarks.isEmpty, "the stop friends would swap is gone")
 
         try await Task.sleep(for: .milliseconds(400))
@@ -230,6 +230,17 @@ import XCTest
         store.undoLastChange()
         XCTAssertEqual(store.today.stops.map(\.id), before.stops.map(\.id))
         XCTAssertEqual(store.today.stops[index].start, before.stops[index].start)
+    }
+
+    func testTheSwapUndoBarOnlyMentionsTheLinkWhenItUpdates() async throws {
+        let unshared = makeStore()
+        XCTAssertTrue(unshared.swap(stopID: stop(named: "The High Line", in: unshared).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        XCTAssertEqual(unshared.undo?.message, "Swapped The High Line for Little Island", "no link")
+
+        let (signedOut, _) = try await sharedStore()
+        signedOut.sharing = nil
+        XCTAssertTrue(signedOut.swap(stopID: stop(named: "The High Line", in: signedOut).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        XCTAssertEqual(signedOut.undo?.message, "Swapped The High Line for Little Island", "can't update the link")
     }
 
     func testSwapIsOnlyOfferedForAPlaceStillSavedAndNotAlreadyInThePlan() async throws {

@@ -71,7 +71,7 @@ final class ShareAnswersFlowTests: XCTestCase {
         // GV-6: the stop is replaced in place, and Undo puts it back.
         let undo = app.staticTexts["undo-message"]
         XCTAssertTrue(undo.waitForExistence(timeout: 3))
-        XCTAssertEqual(undo.label, "Swapped The High Line for Little Island")
+        XCTAssertEqual(undo.label, "Swapped The High Line for Little Island. Your link updates too.")
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Stop 3' AND label CONTAINS 'Little Island'")).firstMatch.waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons.containing(NSPredicate(format: "label CONTAINS 'The High Line'")).firstMatch.exists)
         XCTAssertFalse(app.buttons["swap-mark-The High Line"].exists)
