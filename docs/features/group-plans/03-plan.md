@@ -16,7 +16,8 @@ level security on every table, plus the test) must be merged first.
 | G2a. Friends' input links (backend) | `GroupRequest`, `GroupAnswer`, `/g/` pages, owner API, `request` on shares | G1a | Nothing creates requests until G2b. |
 | G2b. Ask friends what works (iOS) | Create a request, answers screen, `GroupInputs`, planner priorities, build and share | G2a deployed, G1b | New entry point only. The planner change is a no-op at equal priority. |
 | G3a. Group plans (backend) | `GroupPlan`, `GroupMember`, versioned API, invites, `/j/` page | G0 | Unused until G3b. |
-| G3b. Edit together (iOS) | `GroupPlanStore`, `PlanEdit`, polling, join by link, Today switcher, rollover | G3a deployed | New screens and a new store. Personal plans and sync are untouched. |
+| G3b-1. Edit together: store (iOS) | `PlanEdit` by stop id, the group plan client, `GroupPlanStore` (edit queue, rebase, polling, cache, rollover) | G3a | Nothing in the app calls it yet. |
+| G3b-2. Edit together: screens (iOS) | Start a group plan from Today, the invite link, join by link, the Today switcher, editing a group plan, members | G3b-1, G3a deployed | New screens only. Personal plans and sync are untouched. |
 | G-web. Privacy and terms (Jaden's repo) | GS-6 text for each mode | Before each app submission | Text only. |
 
 Integration owner: the main thread (orchestrator). Each backend slice deploys before its iOS
