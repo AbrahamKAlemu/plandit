@@ -91,8 +91,9 @@ nonisolated enum ShareInbox {
     /// The app and the share extension both change the queue, each in its own process, so every
     /// read-change-write holds a file lock in the App Group container. Without the lock file
     /// (it couldn't be opened) the change goes ahead unlocked, as before.
-    /// Not reentrant: `body` must not call `enqueue`, `acknowledge` or `remove`.
-    private static func withLock<T>(_ body: () -> T) -> T {
+    /// Not reentrant: `body` must not call `enqueue`, `acknowledge` or `remove`. `InviteInbox`
+    /// takes the same lock.
+    fileprivate static func withLock<T>(_ body: () -> T) -> T {
         let folder = AppGroup.containerURL ?? FileManager.default.temporaryDirectory
         let descriptor = open(folder.appending(path: "ShareInbox.lock").path, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
         guard descriptor >= 0 else { return body() }
@@ -127,6 +128,39 @@ nonisolated enum ShareInbox {
         for (url, text) in samples.prefix(max(0, min(count, samples.count))) {
             enqueue(IncomingShare(url: URL(string: url)!, sharedText: "\(text) \(url)"))
         }
+    }
+#endif
+}
+
+/// Hand-off for a group plan invite shared into Plandit (`…/j/<token>`): the share extension holds
+/// it in the App Group, and the app takes it the next time it becomes active, to open the join
+/// sheet once (JN-1). One at a time: a newer invite replaces one that's still waiting.
+nonisolated enum InviteInbox {
+    private static let key = "plandit.pendingInvite"
+
+    static func hold(_ token: String) {
+        ShareInbox.withLock { AppGroup.defaults.set(token, forKey: key) }
+    }
+
+    /// The waiting invite's token, which is gone once taken.
+    static func take() -> String? {
+        ShareInbox.withLock {
+            let token = AppGroup.defaults.string(forKey: key)
+            if token != nil { AppGroup.defaults.removeObject(forKey: key) }
+            return token
+        }
+    }
+
+#if DEBUG
+    /// UI tests: `-seedInvite <token>` holds that invite once per launch, as if it had come through
+    /// the share sheet while Plandit was closed. `force` seeds again (unit tests).
+    nonisolated(unsafe) private static var didSeed = false
+
+    static func seedFromLaunchArguments(_ arguments: [String] = CommandLine.arguments, force: Bool = false) {
+        guard force || !didSeed else { return }
+        didSeed = true
+        guard let index = arguments.firstIndex(of: "-seedInvite"), index + 1 < arguments.count else { return }
+        hold(arguments[index + 1])
     }
 #endif
 }
