@@ -1215,6 +1215,8 @@ final class PlanditStore {
             done: done
         )
         guard key != suggestionKey else { return }
+        // "It's later now…" explains the cards it came with; once the time slot moves on, it goes.
+        if let previous = suggestionKey, previous.slot != key.slot, suggestionNotice != nil { suggestionNotice = nil }
         suggestionKey = key
         let next = PlanSuggester(planner: DayPlanner(travel: travelPreference)).suggestions(
             posts: saved,

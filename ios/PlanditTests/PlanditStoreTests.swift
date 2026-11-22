@@ -499,6 +499,24 @@ final class PlanditStoreTests: XCTestCase {
         XCTAssertTrue(store.suggestions.isEmpty, "no suggestions once Today has a plan")
     }
 
+    @MainActor func testChangedMessageGoesWhenTheTimeSlotMovesOn() throws {
+        let posts = suggestionPosts()
+        let (store, _) = suggestionStore(posts, start: SampleData.at(14))
+        let shown = try XCTUnwrap(store.suggestions.first { $0.postIDs.contains(posts[0].id) })
+
+        store.suggestionStart = { SampleData.at(15) }
+        XCTAssertEqual(store.useSuggestion(shown), .stale)
+        XCTAssertNotNil(store.suggestionNotice)
+
+        store.suggestionStart = { SampleData.at(15, 10) }
+        store.refreshSuggestions()
+        XCTAssertNotNil(store.suggestionNotice, "the same 15-minute slot: the message stays with the cards it explains")
+
+        store.suggestionStart = { SampleData.at(15, 15) }
+        store.refreshSuggestions()
+        XCTAssertNil(store.suggestionNotice, "the next slot: the message doesn't linger")
+    }
+
     // MARK: - Places done today (SP-9)
 
     @MainActor func testPlaceDoneTodayIsNotSuggestedAfterItLeavesThePlan() throws {
