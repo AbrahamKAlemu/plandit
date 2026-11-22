@@ -24,14 +24,11 @@
     <div class="facts">
       <div class="fact">{{ range_text }}<small>Answers by {{ deadline_text }}</small></div>
     </div>
-    <div class="chips">
-      <span class="chip">{{ places|length }} places</span>
-      {# Brief GI-8: how many answered, never what anyone else said. #}
-      {% if answer_count %}<span class="chip">{{ answer_count }} answered</span>{% endif %}
-    </div>
+    {# Brief GI-8: how many answered, never what anyone else said. #}
+    {% if answer_count %}<div class="chips"><span class="chip">{{ answer_count }} friend{{ answer_count|pluralize }} answered</span></div>{% endif %}
   </section>
 
-  <h2 id="places-title">The places</h2>
+  <h2 id="places-title">The places ({{ places|length }})</h2>
   <p class="lead" id="places-hint">Star up to 3 places you want most.</p>
   {# Part of the form below (form="answer"), so the places and their costs come first. #}
   <ul class="places" aria-labelledby="places-title">

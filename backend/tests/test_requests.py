@@ -557,6 +557,8 @@ def test_a_friend_answers_and_goes_back_to_the_page(browser, group):
 
 def test_the_page_shows_the_places_their_costs_and_the_deadline(browser, group):
     body = html(request_page(browser, group.slug))
+    assert '<h2 id="places-title">The places (4)</h2>' in body
+    assert "4 places" not in body
     for place in PLACES:
         assert escape(place["name"]) in body
         assert f"{place['neighborhood']} · {place['kind']}" in body
@@ -654,7 +656,7 @@ def test_answers_at_the_edges_are_accepted(browser, group, fields):
 
 
 BUDGET_MESSAGE = "Choose a budget from $0 to $150."
-TIMES_MESSAGE = 'Choose times from 12 PM to 8 PM, with "until" after "from".'
+TIMES_MESSAGE = "Choose times between 12 PM and 8 PM, with the end after the start."
 BAD_ANSWERS = {
     "no budget": ({"budget": None}, BUDGET_MESSAGE),
     "an empty budget": ({"budget": ""}, BUDGET_MESSAGE),
@@ -853,12 +855,18 @@ def test_the_page_shows_only_how_many_answered(browser, group):
     add_answer(group, name="Quinn", budget=123, free_from=time(12, 23), free_until=time(17, 47), stars=[PIZZA])
     body = html(request_page(browser, group.slug))
 
-    assert "2 answered" in body
+    assert "2 friends answered" in body
     for text in ("Zelda", "Quinn", "$137", "$123", '"137"', '"123"', ">137<", ">123<"):
         assert text not in body, text
     for text in ("13:37", "1:37 PM", "19:41", "7:41 PM", "12:23", "17:47", "5:47 PM"):
         assert text not in body, text
     assert not re.search(rf'name="star" value="{PIZZA}"[^>]* checked', body)
+
+
+def test_one_answer_is_counted_as_one_friend(browser, group):
+    add_answer(group, name="Zelda")
+    body = html(request_page(browser, group.slug))
+    assert "1 friend answered" in body and "friends answered" not in body
 
 
 def test_no_answers_yet_shows_no_count(browser, group):
@@ -869,7 +877,7 @@ def test_the_count_includes_the_friends_own_answer(browser, group):
     add_answer(group, name="Zelda")
     friend_answer(browser, group.slug)
     body = html(request_page(browser, group.slug))
-    assert "2 answered" in body and "Zelda" not in body
+    assert "2 friends answered" in body and "Zelda" not in body
 
 
 # --- GI-3: after the deadline, or once closed or built, the link stops taking answers -------
@@ -899,6 +907,7 @@ def test_a_closed_request_says_so_and_refuses_answers(browser, group, close):
     assert page.status_code == 200
     body = html(page)
     assert CLOSED in body
+    assert "Ask whoever sent you this link for the plan." in body
     assert 'id="answer"' not in body and 'name="budget"' not in body
     assert page["Cache-Control"] == "private, no-store"
     assert page["Content-Security-Policy"] == PUBLIC_PAGE_CSP

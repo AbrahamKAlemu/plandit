@@ -431,7 +431,8 @@ def _typed(request, group) -> dict:
 
 
 def _choose_times(group) -> str:
-    return f'Choose times from {_range_text(group.window_start, group.window_end)}, with "until" after "from".'
+    start, end = clock_text(group.window_start), clock_text(group.window_end)
+    return f"Choose times between {start} and {end}, with the end after the start."
 
 
 # Dates and times as the page writes them, in US English like the app: "Saturday, November 28",

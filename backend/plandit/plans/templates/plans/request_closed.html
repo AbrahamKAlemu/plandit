@@ -8,7 +8,7 @@
 {% block content %}
   <a class="brand" href="https://plandit.app" rel="noreferrer"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
   <h1>This plan isn't taking answers any more</h1>
-  <p>Ask the person who sent the link for the plan.</p>
+  <p>Ask whoever sent you this link for the plan.</p>
   {% if own %}
   <form method="post" action="{% url 'plan-request-answer-delete' slug %}" class="take-back">
     {% csrf_token %}
