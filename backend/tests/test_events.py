@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from django.utils import timezone
 
-from plandit.core.models import ActivityEvent, Profile
+from plandit.core.models import ActivityEvent, ActivityEventName, Profile
 from plandit.core.views import EventsView
 
 pytestmark = pytest.mark.django_db
@@ -39,6 +39,18 @@ def test_missing_occurred_at_means_now(auth_client):
     assert response.status_code == 201
     occurred_at = parse(response.json()["occurred_at"])
     assert before - timedelta(seconds=1) <= occurred_at <= timezone.now()
+
+
+def test_event_names_are_exactly_the_apps_list():
+    assert sorted(ActivityEventName.values) == ["link_saved", "place_saved", "plan_built", "suggestion_used"]
+
+
+def test_suggestion_used_is_stored_and_does_not_activate(auth_client, user_id):
+    response = post(auth_client, {"name": "suggestion_used"})
+    assert response.status_code == 201
+    assert response.json()["name"] == "suggestion_used"
+    assert ActivityEvent.objects.get().name == "suggestion_used"
+    assert Profile.objects.get(id=user_id).activated_at is None
 
 
 def test_unknown_name_is_400(auth_client):
