@@ -170,7 +170,7 @@ struct SendPlanSheet: View {
 
     /// Friends can answer on the page; the organizer sees it in Today.
     private var answersNote: some View {
-        Text("On the page, friends can tap I'm in or Can't make it. Their answers show in Today.")
+        Text("On the page, friends can tap I'm in or Can't make it. You'll see their answers in Today.")
             .font(.metadata)
             .foregroundStyle(.inkMuted)
             .fixedSize(horizontal: false, vertical: true)

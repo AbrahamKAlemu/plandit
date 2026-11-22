@@ -36,6 +36,7 @@ final class ShareAnswersFlowTests: XCTestCase {
 
         let swaps = app.switches["share-swaps"]
         XCTAssertTrue(swaps.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["On the page, friends can tap I'm in or Can't make it. You'll see their answers in Today."].exists)
         XCTAssertEqual(swaps.value as? String, "1", "on by default")
         let preview = app.otherElements["share-swap-preview"].exists ? app.otherElements["share-swap-preview"] : app.staticTexts["share-swap-preview"]
         XCTAssertTrue(preview.exists)
