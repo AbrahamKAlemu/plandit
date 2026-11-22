@@ -15,6 +15,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
   from a phone on cellular and from a laptop, so the `proxy chain:` log lines can set the hop count.
 - #47 (G2a): decide whether `/g/` pages show the organizer's first name.
 - #50 (G1b, iOS) is stacked on #49. Don't upload a build with it to TestFlight until #46 is deployed.
+- #53 (G3a) is stacked on #47 and needs the proxy-chain measurement like the other backend slices.
 - #51 (G2b, iOS) is stacked on #50. Don't upload a build with it to TestFlight until #47 is deployed.
 - Decide whether "plans for a later day" becomes its own slice: today a group plan can only be built
   on its own day (D1), because the app keeps only today's plan.
@@ -27,7 +28,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. The daylight-saving fix for older planner code is #52 (on #51). G3 test-planning pass done; G3a (backend) in progress. |
+| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. G3a #53 open. The daylight-saving fix for older planner code is #52 (on #51). G3b (iOS) next. |
 | Verify, ship, learn | Not started. |
 
 ## Tasks and evidence
@@ -85,8 +86,22 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
     the share, overlapping shares and Today replaced before the share. All are fixed, each with a
     test that failed first. The last fix round wasn't independently reviewed.
   - Copy: Amara's must_fix (preview a later day's plan) is fixed. No must_fix is open.
+- G3a, `feat/group-plans-backend`, #53 (base `feat/group-requests-backend`, #47):
+  - Tests: 1164 passed on a local Postgres, plus the known date failure fixed in #44. Migrations
+    forward, back and forward; `makemigrations --check` clean.
+  - The whole minimum set from 03-plan_g3-tests.md is covered. Mutation checks on the locks, and on
+    the checks repeated under them, make the race tests fail.
+  - Review (xhigh, one round): 1 must-fix (an outsider could get 503 instead of 404 on three
+    organizer routes while the group was busy) and 6 nice-to-haves, all fixed. The fixes weren't
+    re-reviewed.
+  - Copy: 3 personas approve (7), 2 approve with conditions (6). Both must-fixes were about the
+    `/j/` page's steps and are fixed.
 
 ## Decisions and events
+
+- November 22: G3a's purge rules now commit one at a time, and the group rule locks expired groups
+  first, so a purge can't deadlock with account deletion. Another member's `editId` gets 400, not a
+  replay.
 
 - November 22: the G3 test-planning pass ([03-plan_g3-tests.md](03-plan_g3-tests.md)) found 7
   must_fix design issues in mode 3; all are adopted and 02-architecture.md is revised. In short:
