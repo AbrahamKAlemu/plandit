@@ -80,6 +80,10 @@ struct SharedPlanPayload: Encodable, Equatable {
     var date: String
     var stops: [Stop]
     var legs: [Leg]
+    /// Group plans, mode 2: the slug of the "Ask friends what works" link this plan was built
+    /// from. The server marks that link built and points it at this plan (GI-7). Only "Build our
+    /// plan" sends it; nil is left out of the JSON.
+    var request: String? = nil
 }
 
 extension DayPlan {
