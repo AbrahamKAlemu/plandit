@@ -36,6 +36,7 @@ APPLE_TEAM_ID = ""  # same: tests that exercise Apple token revocation set these
 APPLE_CLIENT_ID = "com.plandit.app"
 APPLE_SIGNIN_KEY_ID = ""
 APPLE_SIGNIN_PRIVATE_KEY = ""
+METRICS_PUBLIC = False  # same: tests of the key run as before; the public tests turn this on
 METRICS_API_KEY = ""  # same: /api/metrics/ is off unless a test turns it on
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},

@@ -118,7 +118,8 @@ Required environment in production:
 | `SOCIAL_EVIDENCE_THROTTLE_RATE` | authenticated per-user limit, default `100/day` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (Project Settings → API keys, secret); used only to delete auth users on `DELETE /api/me/`. Without it, account deletion removes Plandit data only |
 | `APPLE_TEAM_ID`, `APPLE_SIGNIN_KEY_ID`, `APPLE_SIGNIN_PRIVATE_KEY` | Sign in with Apple token revocation on `DELETE /api/me/` (App Store guideline 5.1.1(v)): the team ID (`9A6H44778K`), the Key ID of a Sign in with Apple key, and that key's `.p8` contents (literal `\n` escapes accepted). `APPLE_CLIENT_ID` defaults to `com.plandit.app`. Without them, deletion still completes and the revocation is skipped with a warning |
-| `METRICS_API_KEY` | shared secret for `GET /api/metrics/` (course staff). Empty turns the endpoint off. The Render blueprint generates one |
+| `METRICS_PUBLIC` | default `1`: `GET /api/metrics/` (counts only) needs no key. `0` requires `METRICS_API_KEY` |
+| `METRICS_API_KEY` | shared secret for `GET /api/metrics/` when `METRICS_PUBLIC=0`; then an empty key turns the endpoint off. The Render blueprint generates one |
 | `SHARE_BASE_URL` | `https://plandit.app` once the site forwards `/p/` and `/static/shares/` here; blank, `/p/` links use this API's own host |
 | `REQUEST_BASE_URL` | `https://plandit.app` once the site forwards `/g/`, `/static/shares/` and `/static/plans/` here; blank, `/g/` links use this API's own host. Separate from `SHARE_BASE_URL`, so moving `/p/` links to the site can't break `/g/` links |
 | `INVITE_BASE_URL` | `https://plandit.app` once the site forwards `/j/` and `/static/shares/` here; blank, group plan invite links (`/j/<token>`) use this API's own host. Separate from the other two, so each kind of link moves on its own |
@@ -131,7 +132,7 @@ in `website/config.js` so the landing page's form starts saving signups.
 
 JSON in and out, snake_case keys, money as numbers, UUID ids, ISO 8601 timestamps. Every route
 needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/api/waitlist/`,
-`/api/metrics/` (secret key), the public shared-plan page `/p/<slug>` and friends' input page `/g/<slug>`, with their answer form posts, and the group plan invite page `/j/<token>`. Unauthenticated calls get `401`; another user's objects return `404`.
+`/api/metrics/` (public, counts only), the public shared-plan page `/p/<slug>` and friends' input page `/g/<slug>`, with their answer form posts, and the group plan invite page `/j/<token>`. Unauthenticated calls get `401`; another user's objects return `404`.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -144,7 +145,7 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | GET | `/api/me/snapshot/` | the app's whole local store for this account: `{"version", "updated_at", "data"}`; `data` is the iOS `StoreSnapshot` exactly as sent (camelCase). `404` until the first PUT |
 | PUT | `/api/me/snapshot/` | `{"data": {...}}` → `{"version", "updated_at"}`; last writer wins, `version` starts at 1. `data` must be an object under 1,000,000 bytes (`413`). Mirrors `data.profile` into `/api/me/` and marks the account activated when a plan has stops |
 | POST | `/api/me/events/` | `{"name": "link_saved"\|"place_saved"\|"plan_built"\|"suggestion_used", "occurred_at"?}` → `201`. `occurred_at` is clamped to the last 7 days; `plan_built` activates the account. 120/min per user |
-| GET | `/api/metrics/?days=30` | aggregate usage for the course staff; no JWT, key in the `X-Metrics-Key` header (preferred; `?key=` also works but lands in access logs, so rotate the key after the course). `totals` (signups, real users, actives, events, waitlist, anonymous sessions, shared plans with friends' answers and answers per such plan: `links_with_answers`, `answers_per_link`) plus friends' input links, how many were built, and how many have friends' answers with answers per such link (`plan_requests`, `plan_requests_built`, `request_links_with_answers`, `answers_per_request_link`), group plans members edit together (`group_plans`, `group_plans_with_friends` with 2+ members, `group_plan_edits`, `edits_per_group_plan`), and a zero-filled `daily` series of `days` (1–365) entries in America/New_York. Counts only, never emails. `404` when `METRICS_API_KEY` is unset, `403` on a bad key, 30/min per IP |
+| GET | `/api/metrics/?days=30` | aggregate usage for the course staff; no JWT and, by default, no key (`METRICS_PUBLIC`). With `METRICS_PUBLIC=0`, the key goes in the `X-Metrics-Key` header (`?key=` also works but lands in access logs). `totals` (signups, real users, actives, events, waitlist, anonymous sessions, shared plans with friends' answers and answers per such plan: `links_with_answers`, `answers_per_link`) plus friends' input links, how many were built, and how many have friends' answers with answers per such link (`plan_requests`, `plan_requests_built`, `request_links_with_answers`, `answers_per_request_link`), group plans members edit together (`group_plans`, `group_plans_with_friends` with 2+ members, `group_plan_edits`, `edits_per_group_plan`), and a zero-filled `daily` series of `days` (1–365) entries in America/New_York. Counts only, never emails. `404` when `METRICS_API_KEY` is unset, `403` on a bad key, 30/min per IP |
 | GET | `/api/places/?q=&category=` | search the shared place catalog (max 100) |
 | GET | `/api/places/<id>/` | one place |
 | GET | `/api/saved/` | my saved posts, newest first |
