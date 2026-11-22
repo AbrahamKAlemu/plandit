@@ -57,12 +57,8 @@ final class AskFriendsFlowTests: XCTestCase {
         for name in ["The High Line", "Los Tacos No. 1", "Levain Bakery", "Little Island"] {
             let row = app.buttons["ask-pick-\(name)"]
             XCTAssertTrue(row.waitForExistence(timeout: 3), "no row for \(name)")
-            scrollTo(row, in: app)
-            row.tap()
-            // Now and then the simulator drops a tap on this list; a dropped tap changed nothing,
-            // so one more is safe. The check before Get the link catches anything else.
-            if !row.wait(for: \.isSelected, toEqual: true, timeout: 2) { row.tap() }
-            XCTAssertTrue(row.wait(for: \.isSelected, toEqual: true, timeout: 2), "\(name) should be picked")
+            pick(row, in: app)
+            XCTAssertTrue(row.isSelected, "\(name) should be picked")
         }
         for name in ["The High Line", "Los Tacos No. 1", "Levain Bakery", "Little Island"] {
             XCTAssertTrue(app.buttons["ask-pick-\(name)"].isSelected, "\(name) is still picked")
@@ -73,6 +69,19 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertEqual(app.staticTexts["request-link-url"].label, "Link: https://plandit.app/g/req123abcd")
         XCTAssertTrue(app.buttons["request-send-link"].exists)
         XCTAssertEqual(text(app.staticTexts["request-status"]), "Friends can answer until 12:00 PM.")
+    }
+
+    /// Picks a place on the form, or leaves it picked: a row that's already picked is never tapped,
+    /// since a tap would unpick it. Now and then the simulator drops or delays a tap on this list,
+    /// so after each tap it waits for the row to change, and reads it again before tapping again.
+    @MainActor private func pick(_ row: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<3 {
+            if row.isSelected { return }
+            scrollTo(row, in: app)
+            if row.isSelected { return }
+            row.tap()
+            if row.wait(for: \.isSelected, toEqual: true, timeout: 4) { return }
+        }
     }
 
     /// The label with the narrow space iOS puts before AM and PM made a plain one.
