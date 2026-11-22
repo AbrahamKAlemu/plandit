@@ -90,6 +90,12 @@ final class SheetRouter {
         isPlanning = true
     }
 
+    /// "Change it" on a suggested plan: its places in its order, from the time its first stop starts
+    /// on the card (not the time of the tap), on `budget` (SP-12).
+    func startPlanning(changing suggestion: PlanSuggestion, budget: Double) {
+        startPlanning(picks: suggestion.postIDs, start: suggestion.outcome.stops.first?.start, budget: budget)
+    }
+
     /// The draft the planner was opened with, if any. Gone after the first call.
     func takePendingDraft() -> PlanDraft? {
         defer { pendingDraft = nil }

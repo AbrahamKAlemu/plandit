@@ -574,6 +574,7 @@ final class PlanditStoreTests: XCTestCase {
         store.leave(first.id)
         XCTAssertTrue(store.postsDoneToday.isEmpty, "back to planned: not done after all")
     }
+
     @MainActor func testAStoredDayInTheFutureDoesNotStopRecordingToday() throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
         let storage = SnapshotStore(url: url)
@@ -662,5 +663,29 @@ final class PlanditStoreTests: XCTestCase {
         store.refreshSuggestions()
         XCTAssertTrue(store.postsDoneToday.isEmpty)
         XCTAssertFalse(store.suggestions.isEmpty)
+    }
+
+    // MARK: - Change it (SP-12)
+
+    @MainActor func testChangeItOpensThePlannerOnTheCardsOwnStart() throws {
+        let (store, _) = suggestionStore(suggestionPosts(), start: SampleData.at(14))
+        let card = try XCTUnwrap(store.suggestions.first)
+        // Later in the same 15-minute slot: the card stays as it was shown.
+        store.suggestionStart = { SampleData.at(14, 10) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.suggestions.first, card)
+
+        let router = SheetRouter()
+        router.startPlanning(changing: card, budget: 60)
+        XCTAssertTrue(router.isPlanning)
+        let draft = try XCTUnwrap(router.takePendingDraft())
+        XCTAssertEqual(draft.picks, card.postIDs, "the card's places, in its order")
+        XCTAssertEqual(draft.start, card.outcome.stops.first?.start, "the card's start, not the time of the tap")
+        XCTAssertEqual(draft.start, SampleData.at(14))
+        XCTAssertEqual(draft.budget, 60)
+        XCTAssertNil(router.takePendingDraft(), "read once")
+
+        router.startPlanning()
+        XCTAssertNil(router.takePendingDraft(), "the + opens an empty planner")
     }
 }
