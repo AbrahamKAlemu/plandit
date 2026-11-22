@@ -22,6 +22,8 @@
       <a class="brand" href="https://plandit.app"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
       <div>Turn the places you save into a plan you actually go do.</div>
       <a class="cta" href="https://plandit.app">Make your own plan</a>
+      {# Brief GS-4: on every public page. The page's address goes in the email so support can find the link. #}
+      <p class="report"><a href="mailto:support@plandit.app?subject=Report%20this%20page{% if page_url %}&amp;body={{ page_url|urlencode:'' }}{% endif %}">Report this page</a></p>
     </footer>
   </main>
 </body>

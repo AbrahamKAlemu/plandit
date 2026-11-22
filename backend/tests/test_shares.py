@@ -186,3 +186,12 @@ def test_the_page_fits_its_policy(auth_client, api_client, found):
     for src in re.findall(r'<img[^>]* src="([^"]+)"', html):
         assert src.startswith("https://plandit.app/"), src
 
+
+@pytest.mark.parametrize("found", [True, False])
+def test_every_page_has_a_report_link(auth_client, api_client, found):
+    slug = share(auth_client, plan_payload()).json()["slug"] if found else "doesnotexist"
+    html = api_client.get(f"/p/{slug}").content.decode()
+    link = re.search(r'<a href="(mailto:support@plandit\.app[^"]*)">Report this page</a>', html)
+    assert link, "no report link"
+    if found:
+        assert f"%2Fp%2F{slug}" in link.group(1)

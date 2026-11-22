@@ -23,3 +23,4 @@ a { color: inherit; }
 .cta:focus-visible, a:focus-visible { outline: 3px solid var(--lime); outline-offset: 3px; }
 footer { margin-top: 36px; text-align: center; color: var(--on-dark-muted); font-size: 14px; }
 footer .brand { justify-content: center; color: var(--on-dark); margin-bottom: 6px; }
+footer .report { margin: 16px 0 0; }
