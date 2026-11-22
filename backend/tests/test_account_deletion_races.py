@@ -23,6 +23,7 @@ from plandit.core import retention
 from plandit.core import views as core_views
 from plandit.core.models import ActivityEvent, AppSnapshot, Profile
 from plandit.plans.models import REQUEST_RETENTION_DAYS, GroupAnswer, GroupRequest
+from plandit.saved.models import SavedPost
 from plandit.shares.models import SharedPlan
 from resolution.models import SocialEvidenceThrottleState
 from tests.test_group_plan_races import delete_account_later, first_holds_until_second_waits, second_device, warm
@@ -151,6 +152,7 @@ ADDS_A_ROW = {
         lambda who: who.client.post("/v1/social-evidence", {"sourceUrl": TIKTOK_URL}, format="json"),
         SocialEvidenceThrottleState,
     ),
+    "saved-post": (lambda who: who.client.post("/api/saved/", {"url": TIKTOK_URL}, format="json"), SavedPost),
 }
 SETTINGS_FOR = {"social-evidence": {"SOCIAL_PAGE_EXTRACTION_ENABLED": True}}
 
