@@ -9,11 +9,11 @@ struct PlanBuilderSheet: View {
     /// Picked post ids, in the order they were picked.
     @State private var picked: [UUID] = []
     @State private var mode: PlanditStore.PlanMode = .replace
-    @State private var start = PlanBuilderSheet.defaultStart()
+    @State private var start = PlanDefaults.start()
     @State private var budget: Double = 60
     /// "Free until": off means the day can run late.
     @State private var hasEnd = false
-    @State private var end = PlanBuilderSheet.defaultStart().addingTimeInterval(4 * 3600)
+    @State private var end = PlanDefaults.start().addingTimeInterval(4 * 3600)
     @State private var didSetUp = false
     @State private var built = 0
 
@@ -70,6 +70,7 @@ struct PlanBuilderSheet: View {
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
 
+                    if store.canAskFriends { askFriendsRow }
                     if hasPlan { modePicker }
                     placesSection
                     timeAndBudget
@@ -92,6 +93,21 @@ struct PlanBuilderSheet: View {
             }
             .background(Color.surface)
         }
+    }
+
+    /// Group plans, mode 2: a link friends answer, then a plan from their answers.
+    private var askFriendsRow: some View {
+        NavigationLink {
+            AskFriendsView()
+        } label: {
+            ListRow(icon: .users, title: "Ask friends what works",
+                    detail: store.activeRequest() == nil
+                        ? "Send a link. Friends say when they're free, what they'll spend and their picks."
+                        : "See their answers and build your plan.")
+        }
+        .buttonStyle(.plain)
+        .planditCard(padding: 0)
+        .accessibilityIdentifier("ask-friends")
     }
 
     private var modePicker: some View {
@@ -202,6 +218,14 @@ struct PlanBuilderSheet: View {
         didSetUp = true
         budget = store.today.budget
         mode = hasPlan ? .add : .replace
+        // "Change it" on a suggested plan: its places in its order, at its start time and budget.
+        if let draft = router.takePendingDraft() {
+            let plannable = Set(store.plannablePosts.map(\.id))
+            picked = draft.picks.filter(plannable.contains)
+            if let draftStart = draft.start { start = draftStart }
+            if let draftBudget = draft.budget { budget = draftBudget }
+            mode = .replace
+        }
     }
 
     private func toggle(_ id: UUID) {
@@ -219,35 +243,17 @@ struct PlanBuilderSheet: View {
         built += 1
         router.finishPlanning()
     }
-
-    /// The next quarter hour. Debug builds launched with `-planStart 11:00` start there instead,
-    /// so UI tests don't depend on the time of day.
-    static func defaultStart(now: Date = .now, calendar: Calendar = .current) -> Date {
-        #if DEBUG
-        if let value = UserDefaults.standard.string(forKey: "planStart") {
-            let parts = value.split(separator: ":").compactMap { Int($0) }
-            if parts.count == 2, let date = calendar.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: now) {
-                return date
-            }
-        }
-        #endif
-        return nextQuarterHour(after: now, calendar: calendar)
-    }
-
-    /// 10:07 → 10:15, 10:15 → 10:30: always a little ahead of now.
-    static func nextQuarterHour(after date: Date = .now, calendar: Calendar = .current) -> Date {
-        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        let wholeMinute = calendar.date(from: parts) ?? date
-        return calendar.date(byAdding: .minute, value: 15 - (parts.minute ?? 0) % 15, to: wholeMinute) ?? date
-    }
 }
 
 // MARK: - Rows
 
-private struct PickRow: View {
+/// A saved place to pick, here and in "Ask friends what works".
+struct PickRow: View {
     let post: SavedPost
     let isPicked: Bool
     let isLocked: Bool
+    /// The rows' accessibility identifiers start with this, then the post's title.
+    var idPrefix = "pick"
     let toggle: () -> Void
 
     var body: some View {
@@ -284,7 +290,7 @@ private struct PickRow: View {
         .disabled(isLocked)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isPicked ? .isSelected : [])
-        .accessibilityIdentifier("pick-\(post.title)")
+        .accessibilityIdentifier("\(idPrefix)-\(post.title)")
     }
 }
 
@@ -297,7 +303,7 @@ extension PickRow {
 }
 
 /// Selected is an ink fill, the same as a selected chip.
-private struct Checkbox: View {
+struct Checkbox: View {
     let isOn: Bool
 
     var body: some View {
@@ -318,6 +324,7 @@ private struct Checkbox: View {
 
 /// The day the planner would build, so nothing about it is a surprise.
 struct PlanPreview: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let outcome: DayPlanner.Outcome
     let lockedCount: Int
     let spent: Double
@@ -352,7 +359,10 @@ struct PlanPreview: View {
                     ForEach(Array(outcome.stops.enumerated()), id: \.element.id) { index, stop in
                         HStack(spacing: Space.sm) {
                             StopBadge(number: lockedCount + index + 1, status: .upcoming, size: 24)
-                            Text(stop.place.name).font(.bodyText).foregroundStyle(.ink).lineLimit(1)
+                            // One line at standard sizes; at accessibility sizes the whole name shows.
+                            Text(stop.place.name).font(.bodyText).foregroundStyle(.ink)
+                                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
                             Spacer(minLength: Space.xs)
                             Text(stop.start.shortTime).font(.metadata).foregroundStyle(.inkMuted)
                         }

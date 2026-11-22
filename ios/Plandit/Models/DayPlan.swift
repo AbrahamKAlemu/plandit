@@ -351,7 +351,7 @@ extension DayPlan {
             let travel = TimeInterval((leg(after: previous)?.minutes ?? 0) * 60)
             var start = max(stops[index].start.addingTimeInterval(delta), previous.end.addingTimeInterval(travel))
             if let opens = stops[index].place.category.earliestStartMinutes,
-               let evening = calendar.date(byAdding: .minute, value: opens, to: calendar.startOfDay(for: stops[index].start)) {
+               let evening = calendar.date(atClockMinutes: opens, on: stops[index].start) {
                 start = max(start, evening)
             }
             stops[index].start = start

@@ -14,6 +14,9 @@ struct RootView: View {
     /// The sheet's horizontal extent on screen. On iPad it's a panel narrower than the screen.
     @State private var sheetColumns: ClosedRange<CGFloat>?
     @State private var location = LocationPermission()
+    /// The sheet rises once the map has mostly faded in from the splash, not over the logo. After
+    /// that it never closes: the binding ignores dismissal, as `.constant(true)` did.
+    @State private var isSheetShown = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -21,7 +24,7 @@ struct RootView: View {
                 .onAppear { updateViewport(proxy) }
                 .onChange(of: proxy.size) { updateViewport(proxy) }
         }
-        .sheet(isPresented: .constant(true)) {
+        .sheet(isPresented: Binding(get: { isSheetShown }, set: { _ in })) {
             SheetContainer()
                 .onGeometryChange(for: ClosedRange<CGFloat>.self) { proxy in
                     let frame = proxy.frame(in: .global)
@@ -31,7 +34,6 @@ struct RootView: View {
                 }
                 .environment(store)
                 .environment(router)
-                .environment(\.isSheetCollapsed, detent == SheetDetent.peek)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .presentationDetents(SheetDetent.all, selection: $detent)
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -39,6 +41,10 @@ struct RootView: View {
                 .presentationCornerRadius(Radius.sheet)
                 .presentationDragIndicator(.visible)
                 .interactiveDismissDisabled()
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(300))
+            isSheetShown = true
         }
         .onChange(of: router.tab) {
             mapSelection = router.selection(in: tab)
@@ -160,17 +166,28 @@ private struct SheetContainer: View {
     @State private var isKeyboardUp = false
     /// The undo and tab bars' height, kept clear at the foot of every screen.
     @State private var barsHeight: CGFloat = 0
+    /// The sheet's height, measured as it moves. Nil until the first layout.
+    @State private var sheetHeight: CGFloat?
+
+    /// How much of each screen's body shows (`hiddenWhenSheetCollapsed`). Always all of it while
+    /// typing: the keyboard shortens the measured height, not the sheet.
+    private var reveal: Double {
+        guard let sheetHeight, !isKeyboardUp else { return 1 }
+        return SheetDetent.reveal(sheetHeight: sheetHeight)
+    }
 
     var body: some View {
         @Bindable var router = router
         stacks
             .environment(\.floatingBarsHeight, isKeyboardUp ? 0 : barsHeight)
+            .environment(\.sheetReveal, reveal)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = $0 }
             .overlay(alignment: .bottom) {
                 // The undo bar floats just above the tab bar.
                 if !isKeyboardUp {
                     VStack(spacing: Space.xs) {
                         UndoBar()
-                        PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+                        PlanditTabBar(selection: $router.tab, onPlan: { router.startPlanning() })
                     }
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barsHeight = $0 }
                 }

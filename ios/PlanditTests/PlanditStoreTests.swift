@@ -393,4 +393,299 @@ final class PlanditStoreTests: XCTestCase {
             "Automatic imports are paused for today. Add the place name or address below, or use the video instead."
         )
     }
+
+    // MARK: - Suggested plans (SP-10, SP-11)
+
+    @MainActor private final class EventLog {
+        var events: [UsageEvent] = []
+    }
+
+    /// Three places a block apart in Chelsea: one closes at 3 PM, so starting later changes the plan.
+    @MainActor private func suggestionPosts() -> [SavedPost] {
+        func post(_ name: String, north: Double, category: PlaceCategory, hours: String?, cost: Double) -> SavedPost {
+            SavedPost(
+                url: URL(string: "https://www.tiktok.com/@test/video/\(name.count)")!, platform: .tiktok,
+                savedAt: SampleData.daysAgo(2), status: .ready,
+                place: Place(name: name, category: category, neighborhood: "Chelsea", address: "\(name) St",
+                             latitude: 40.7424 + north, longitude: -74.0060, hours: hours),
+                estimatedCost: cost
+            )
+        }
+        return [
+            post("Lunch counter", north: 0, category: .food, hours: "Open until 3 PM", cost: 12),
+            post("Gallery", north: 0.002, category: .culture, hours: nil, cost: 0),
+            post("Bookshop", north: 0.004, category: .shopping, hours: "Open until 9 PM", cost: 8),
+        ]
+    }
+
+    @MainActor private func suggestionStore(_ posts: [SavedPost], start: Date) -> (PlanditStore, EventLog) {
+        let log = EventLog()
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: posts, profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: nil,
+            events: { log.events.append($0) }
+        )
+        store.suggestionStart = { start }
+        store.refreshSuggestions()
+        return (store, log)
+    }
+
+    @MainActor func testUseSuggestionMatchesPreview() throws {
+        let start = SampleData.at(14)
+        let (store, log) = suggestionStore(suggestionPosts(), start: start)
+        let suggestion = try XCTUnwrap(store.suggestions.first)
+
+        let preview = store.previewPlan(postIDs: suggestion.postIDs, start: start, budget: store.profile.defaultBudget,
+                                        mode: .replace, end: start.addingTimeInterval(4 * 3600))
+        XCTAssertTrue(preview.isSamePlan(as: suggestion.outcome), "the card shows what the planner would build")
+
+        XCTAssertEqual(store.useSuggestion(suggestion), .applied)
+        XCTAssertEqual(store.today.stops.map(\.sourcePostID), suggestion.postIDs, "same stops in the same order")
+        XCTAssertEqual(store.today.stops.map(\.start), suggestion.outcome.stops.map(\.start), "same times")
+        XCTAssertEqual(store.today.totalCost, suggestion.outcome.cost, accuracy: 0.005, "same cost")
+        XCTAssertEqual(store.today.budget, store.profile.defaultBudget)
+        XCTAssertEqual(store.undo?.message, "Made a new plan", "the same undo step as building a plan by hand")
+        XCTAssertEqual(log.events, [.planBuilt, .suggestionUsed])
+        XCTAssertTrue(store.suggestions.isEmpty, "Today has a plan now")
+        XCTAssertNil(store.suggestionNotice)
+
+        store.undoLastChange()
+        XCTAssertTrue(store.today.stops.isEmpty, "Undo empties Today again")
+        XCTAssertEqual(store.suggestions.first, suggestion, "and the same cards come back")
+    }
+
+    @MainActor func testUseSuggestionStale() throws {
+        let posts = suggestionPosts()
+        let lunch = posts[0].id
+        let (store, log) = suggestionStore(posts, start: SampleData.at(14))
+        let shown = try XCTUnwrap(store.suggestions.first { $0.postIDs.contains(lunch) })
+
+        // Later, the lunch counter (open until 3 PM) has closed for a new plan.
+        store.suggestionStart = { SampleData.at(15) }
+        XCTAssertEqual(store.useSuggestion(shown), .stale)
+        XCTAssertTrue(store.today.stops.isEmpty, "a stale card doesn't change Today")
+        XCTAssertNil(store.undo)
+        XCTAssertTrue(log.events.isEmpty)
+        XCTAssertEqual(store.suggestionNotice, "It's later now, so these plans changed.")
+        XCTAssertFalse(store.suggestions.isEmpty, "the cards refresh")
+        XCTAssertFalse(store.suggestions.contains { $0.postIDs.contains(lunch) }, "without the place that closed")
+
+        // The time slot moved, same places: still not applied silently.
+        let current = try XCTUnwrap(store.suggestions.first)
+        store.suggestionStart = { SampleData.at(15, 15) }
+        XCTAssertEqual(store.useSuggestion(current), .stale)
+        XCTAssertTrue(store.today.stops.isEmpty)
+
+        // A fresh card applies, and the message goes.
+        let fresh = try XCTUnwrap(store.suggestions.first)
+        XCTAssertEqual(store.useSuggestion(fresh), .applied)
+        XCTAssertNil(store.suggestionNotice)
+    }
+
+    @MainActor func testSuggestionsStayPutWithinATimeSlotAndOnlyForAnEmptyToday() throws {
+        let start = SampleData.at(14)
+        let (store, _) = suggestionStore(suggestionPosts(), start: start)
+        let first = store.suggestions
+        XCTAssertFalse(first.isEmpty)
+        store.refreshSuggestions()
+        XCTAssertEqual(store.suggestions, first, "same saves, settings and slot: the same cards")
+
+        store.updateProfile { $0.defaultBudget = 0 }
+        XCTAssertTrue(store.suggestions.isEmpty, "a budget change recomputes them")
+        store.updateProfile { $0.defaultBudget = 60 }
+        XCTAssertEqual(store.suggestions, first)
+
+        _ = store.addToToday(store.plannablePosts[1].id)
+        XCTAssertTrue(store.suggestions.isEmpty, "no suggestions once Today has a plan")
+    }
+
+    @MainActor func testChangedMessageGoesWhenTheTimeSlotMovesOn() throws {
+        let posts = suggestionPosts()
+        let (store, _) = suggestionStore(posts, start: SampleData.at(14))
+        let shown = try XCTUnwrap(store.suggestions.first { $0.postIDs.contains(posts[0].id) })
+
+        store.suggestionStart = { SampleData.at(15) }
+        XCTAssertEqual(store.useSuggestion(shown), .stale)
+        XCTAssertNotNil(store.suggestionNotice)
+
+        store.suggestionStart = { SampleData.at(15, 10) }
+        store.refreshSuggestions()
+        XCTAssertNotNil(store.suggestionNotice, "the same 15-minute slot: the message stays with the cards it explains")
+
+        store.suggestionStart = { SampleData.at(15, 15) }
+        store.refreshSuggestions()
+        XCTAssertNil(store.suggestionNotice, "the next slot: the message doesn't linger")
+    }
+
+    // MARK: - Places done today (SP-9)
+
+    @MainActor func testPlaceDoneTodayIsNotSuggestedAfterItLeavesThePlan() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        let posts = suggestionPosts()
+
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: posts, profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+
+        // Done at the first stop, then every stop taken out of the plan.
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+        for stop in store.today.stops { store.removeStop(stop.id) }
+        XCTAssertTrue(store.today.stops.isEmpty)
+
+        XCTAssertFalse(store.suggestions.isEmpty, "the places not done yet are still suggested")
+        XCTAssertFalse(store.suggestions.contains { $0.postIDs.contains(done) }, "the place done today isn't")
+        XCTAssertEqual(store.postsDoneToday, [done])
+
+        // After a restart, from the files on the phone.
+        store.flush()
+        let reloaded = PlanditStore(snapshot: try XCTUnwrap(storage.load()), extractor: NoExtractor(), storage: storage)
+        reloaded.suggestionStart = { SampleData.at(14) }
+        reloaded.refreshSuggestions()
+        XCTAssertEqual(reloaded.postsDoneToday, [done])
+        XCTAssertFalse(reloaded.suggestions.isEmpty)
+        XCTAssertFalse(reloaded.suggestions.contains { $0.postIDs.contains(done) }, "still skipped after a restart")
+        // Kept beside the snapshot, not in it: the synced copy's shape doesn't change.
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        XCTAssertTrue(Set(object.keys).isSubset(of: ["saved", "today", "profile", "pastPlans", "visited", "sharedLink"]),
+                      "\(object.keys.sorted())")
+
+        // A new day starts with nothing done.
+        reloaded.rollOverIfNeeded(now: try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 1, to: .now)))
+        XCTAssertTrue(reloaded.postsDoneToday.isEmpty)
+        reloaded.flush()
+        let nextDay = PlanditStore(snapshot: try XCTUnwrap(storage.load()), extractor: NoExtractor(), storage: storage)
+        XCTAssertTrue(nextDay.postsDoneToday.isEmpty)
+    }
+
+    @MainActor func testUndoingDoneHereMeansNotDone() throws {
+        let (store, _) = suggestionStore(suggestionPosts(), start: SampleData.at(14))
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        store.complete(first.id)
+        XCTAssertEqual(store.postsDoneToday, [try XCTUnwrap(first.sourcePostID)])
+        store.leave(first.id)
+        XCTAssertTrue(store.postsDoneToday.isEmpty, "back to planned: not done after all")
+    }
+
+    @MainActor func testAStoredDayInTheFutureDoesNotStopRecordingToday() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        // Left by a phone clock that was wrong, or a different calendar setting.
+        try storage.saveDoneToday(DoneToday(day: "9999-12-31", postIDs: [UUID()]))
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertTrue(store.postsDoneToday.isEmpty)
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+        for stop in store.today.stops { store.removeStop(stop.id) }
+        XCTAssertEqual(store.postsDoneToday, [done])
+        XCTAssertEqual(storage.loadDoneToday(), DoneToday(day: DoneToday.key(for: .now), postIDs: [done]))
+    }
+
+    @MainActor func testALaterDayFromSyncLeavesTodaysPlacesDoneOnThePhone() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+
+        // Another phone, its clock a day ahead, sends its copy.
+        var tomorrows = store.snapshot
+        tomorrows.today = .empty(for: try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 1, to: .now)), budget: 60)
+        store.replace(with: tomorrows)
+
+        XCTAssertEqual(storage.loadDoneToday(), DoneToday(day: DoneToday.key(for: .now), postIDs: [done]))
+    }
+
+    @MainActor func testAnEarlierDayFromSyncKeepsTodaysPlacesDone() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+        for stop in store.today.stops { store.removeStop(stop.id) }
+        XCTAssertEqual(store.postsDoneToday, [done])
+
+        // Another phone's copy, still dated yesterday, arrives through sync.
+        var yesterdays = store.snapshot
+        yesterdays.today = .empty(for: try XCTUnwrap(Calendar.current.date(byAdding: .day, value: -1, to: .now)), budget: 60)
+        store.replace(with: yesterdays)
+
+        XCTAssertTrue(Calendar.current.isDateInToday(store.today.date))
+        XCTAssertEqual(store.postsDoneToday, [done])
+        XCTAssertEqual(storage.loadDoneToday()?.postIDs, [done])
+        store.refreshSuggestions()
+        XCTAssertFalse(store.suggestions.isEmpty)
+        XCTAssertFalse(store.suggestions.contains { $0.postIDs.contains(done) })
+    }
+
+    @MainActor func testAnUnreadablePlacesDoneFileStillLeavesSuggestions() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        try Data("not json".utf8).write(to: storage.doneTodayURL)
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: suggestionPosts(), profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertTrue(store.postsDoneToday.isEmpty)
+        XCTAssertFalse(store.suggestions.isEmpty)
+    }
+
+    // MARK: - Change it (SP-12)
+
+    @MainActor func testChangeItOpensThePlannerOnTheCardsOwnStart() throws {
+        let (store, _) = suggestionStore(suggestionPosts(), start: SampleData.at(14))
+        let card = try XCTUnwrap(store.suggestions.first)
+        // Later in the same 15-minute slot: the card stays as it was shown.
+        store.suggestionStart = { SampleData.at(14, 10) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.suggestions.first, card)
+
+        let router = SheetRouter()
+        router.startPlanning(changing: card, budget: 60)
+        XCTAssertTrue(router.isPlanning)
+        let draft = try XCTUnwrap(router.takePendingDraft())
+        XCTAssertEqual(draft.picks, card.postIDs, "the card's places, in its order")
+        XCTAssertEqual(draft.start, card.outcome.stops.first?.start, "the card's start, not the time of the tap")
+        XCTAssertEqual(draft.start, SampleData.at(14))
+        XCTAssertEqual(draft.budget, 60)
+        XCTAssertNil(router.takePendingDraft(), "read once")
+
+        router.startPlanning()
+        XCTAssertNil(router.takePendingDraft(), "the + opens an empty planner")
+    }
 }
