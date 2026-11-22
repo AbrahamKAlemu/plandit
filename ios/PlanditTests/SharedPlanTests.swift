@@ -123,10 +123,15 @@ import XCTest
         XCTAssertEqual(store.todayLink?.slug, "abc")
     }
 
-    func testALinkSavedBeforeFriendsCouldAnswerLoadsWithSwapsOn() throws {
+    func testALinkSavedBeforeFriendsCouldAnswerLoadsWithSwapsOff() throws {
+        // Its page never offered swaps: the next edit mustn't send places the organizer never saw (GV-9).
         let json = #"{"slug": "abc", "url": "https://plandit.app/p/abc", "planID": "6F1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6", "showPrices": true, "note": ""}"#
         let link = try JSONDecoder().decode(SharedLink.self, from: Data(json.utf8))
-        XCTAssertTrue(link.suggestsSwaps)
+        XCTAssertFalse(link.suggestsSwaps)
         XCTAssertEqual(link.keptSwaps, [])
+
+        let new = SharedLink(slug: "abc", url: URL(string: "https://plandit.app/p/abc")!, planID: UUID(), showPrices: true, note: "")
+        XCTAssertTrue(new.suggestsSwaps, "a new link starts with swaps on")
+        XCTAssertTrue(try JSONDecoder().decode(SharedLink.self, from: JSONEncoder().encode(new)).suggestsSwaps)
     }
 }

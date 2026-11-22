@@ -9,7 +9,8 @@ struct SharedLink: Codable, Equatable {
     var planID: UUID
     var showPrices: Bool
     var note: String
-    /// "Let friends suggest swaps": the page offers up to two of your saved places per stop.
+    /// "Let friends suggest swaps": the page offers up to two of your saved places per stop. On for
+    /// a new link; off for one saved before friends could answer.
     var suggestsSwaps = true
     /// Friends' swap picks the organizer answered with "Keep it" (`ShareAnswers.keepKey`), so their
     /// marks stay hidden until that friend picks another place (`ShareAnswers.isKept`).
@@ -19,7 +20,8 @@ struct SharedLink: Codable, Equatable {
 }
 
 extension SharedLink {
-    /// Links saved before friends could answer still load, with swaps on.
+    /// Links saved before friends could answer still load, with swaps off: their page never
+    /// offered any, so an edit mustn't send places the organizer never saw in a preview (GV-9).
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         slug = try c.decode(String.self, forKey: .slug)
@@ -27,7 +29,7 @@ extension SharedLink {
         planID = try c.decode(UUID.self, forKey: .planID)
         showPrices = try c.decode(Bool.self, forKey: .showPrices)
         note = try c.decode(String.self, forKey: .note)
-        suggestsSwaps = try c.decodeIfPresent(Bool.self, forKey: .suggestsSwaps) ?? true
+        suggestsSwaps = try c.decodeIfPresent(Bool.self, forKey: .suggestsSwaps) ?? false
         keptSwaps = try c.decodeIfPresent([String].self, forKey: .keptSwaps) ?? []
     }
 }
