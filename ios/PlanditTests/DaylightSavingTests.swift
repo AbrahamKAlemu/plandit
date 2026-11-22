@@ -141,3 +141,54 @@ import XCTest
     func testSwapOptionsWhenTheClocksGoBack() { checkSwapOptions(.clocksGoBack) }
     func testSwapOptionsOnAnOrdinaryDay() { checkSwapOptions(.ordinary) }
 }
+
+/// The shared helper behind those clock times.
+@MainActor final class WallClockTests: XCTestCase {
+    private var newYork: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        return calendar
+    }
+
+    private func local(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        newYork.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    private func parts(_ date: Date?) -> [Int]? {
+        date.map { date in
+            let parts = newYork.dateComponents([.month, .day, .hour, .minute], from: date)
+            return [parts.month!, parts.day!, parts.hour!, parts.minute!]
+        }
+    }
+
+    func testMinutesPastADayFallOnTheNextDay() {
+        let day = local(3, 8, 15)
+        XCTAssertEqual(parts(newYork.date(atClockMinutes: 20 * 60, on: day)), [3, 8, 20, 0])
+        XCTAssertEqual(parts(newYork.date(atClockMinutes: 24 * 60, on: day)), [3, 9, 0, 0])
+        XCTAssertEqual(parts(newYork.date(atClockMinutes: 26 * 60 + 15, on: day)), [3, 9, 2, 15])
+        XCTAssertEqual(parts(newYork.date(atClockMinutes: 50 * 60, on: day)), [3, 10, 2, 0])
+    }
+
+    func testATimeTheClocksSkipBecomesTheNextTimeThatExists() {
+        // 2:30 AM doesn't happen on 2026-03-08: the clocks go from 2:00 to 3:00.
+        XCTAssertEqual(parts(newYork.date(atClockMinutes: 2 * 60 + 30, on: local(3, 8, 12))), [3, 8, 3, 0])
+        // "Until 2 AM" on the night before.
+        XCTAssertEqual(parts(newYork.date(atClockMinutes: 26 * 60, on: local(3, 7, 12))), [3, 8, 3, 0])
+    }
+
+    func testATimeThatHappensTwiceIsTheFirst() throws {
+        // 1:30 AM happens twice on 2026-11-01: first in daylight time (UTC-4), then in standard time.
+        let date = try XCTUnwrap(newYork.date(atClockMinutes: 90, on: local(11, 1, 12)))
+        XCTAssertEqual(parts(date), [11, 1, 1, 30])
+        XCTAssertTrue(newYork.timeZone.isDaylightSavingTime(for: date))
+        XCTAssertEqual(newYork.timeZone.secondsFromGMT(for: date), -4 * 3600)
+    }
+
+    func testAnOrdinaryDayMatchesCountingFromMidnight() {
+        let day = local(11, 22, 9)
+        let midnight = newYork.startOfDay(for: day)
+        for minutes in stride(from: 0, through: 30 * 60, by: 35) {
+            XCTAssertEqual(newYork.date(atClockMinutes: minutes, on: day), midnight.addingTimeInterval(TimeInterval(minutes * 60)), "\(minutes)")
+        }
+    }
+}
