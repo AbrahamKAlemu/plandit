@@ -133,15 +133,22 @@ extension DayPlan {
 
 extension SharedPlanPayload.Alternate {
     /// Nil for a save without a place or a name (the server refuses a blank one). Texts are cut to
-    /// the server's limits.
+    /// the server's limits, which count code points, not characters: an emoji can be several.
     init?(post: SavedPost, showPrice: Bool) {
         guard let place = post.place, !place.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         self.init(
             id: post.id,
-            name: String(place.name.prefix(120)),
-            neighborhood: String(place.neighborhood.prefix(80)),
+            name: place.name.prefix(codePoints: 120),
+            neighborhood: place.neighborhood.prefix(codePoints: 80),
             kind: place.category.label,
             costText: showPrice ? (post.plannedCost?.dollarsText ?? "") : ""
         )
+    }
+}
+
+private extension String {
+    /// The first `count` Unicode code points, as the server counts length. Never splits one.
+    func prefix(codePoints count: Int) -> String {
+        String(String.UnicodeScalarView(unicodeScalars.prefix(count)))
     }
 }

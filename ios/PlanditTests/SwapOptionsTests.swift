@@ -185,6 +185,25 @@ import XCTest
         XCTAssertEqual(DayPlan.isoDay(lateEvening, calendar: buddhist), "2026-11-22")
     }
 
+    func testLongNamesAreCutTheWayTheServerCountsThem() throws {
+        // The server counts code points. "👩‍👩‍👧" is one character and five code points; a flag is two.
+        let name = String(repeating: "👩‍👩‍👧", count: 30) // 150 code points
+        let neighborhood = "Café " + String(repeating: "🇺🇸", count: 50) // 105 code points
+        let place = Place(name: name, category: .outdoors, neighborhood: neighborhood, address: "Pier 55",
+                          latitude: 40.7420, longitude: -74.0103, hours: nil)
+        let alternate = try XCTUnwrap(SharedPlanPayload.Alternate(post: post(place, cost: 0), showPrice: true))
+        XCTAssertEqual(alternate.name.unicodeScalars.count, 120)
+        XCTAssertEqual(alternate.neighborhood.unicodeScalars.count, 80)
+        XCTAssertTrue(name.unicodeScalars.starts(with: alternate.name.unicodeScalars), "cut between code points")
+        XCTAssertTrue(neighborhood.unicodeScalars.starts(with: alternate.neighborhood.unicodeScalars))
+
+        let short = Place(name: "Little Island", category: .outdoors, neighborhood: "Hudson River Park", address: "Pier 55",
+                          latitude: 40.7420, longitude: -74.0103, hours: nil)
+        let untouched = try XCTUnwrap(SharedPlanPayload.Alternate(post: post(short, cost: 0), showPrice: true))
+        XCTAssertEqual(untouched.name, "Little Island")
+        XCTAssertEqual(untouched.neighborhood, "Hudson River Park")
+    }
+
     // MARK: - Helpers
 
     private func makeStore(sharing: FakePlanSharing) -> PlanditStore {
