@@ -224,7 +224,7 @@ def test_an_ipv4_mapped_ipv6_address_counts_as_the_ipv4_address(settings):
 def test_the_default_matches_the_reported_render_chain(settings):
     """Client-sent entry, the client, a Cloudflare edge, a Render internal address."""
     settings.BEHIND_TRUSTED_PROXY = True
-    settings.TRUSTED_PROXY_HOPS = 3
+    assert settings.TRUSTED_PROXY_HOPS == 3
     request = RequestFactory().get(
         "/", HTTP_X_FORWARDED_FOR="198.51.100.1, 203.0.113.7, 172.71.0.5, 10.0.0.1", REMOTE_ADDR="10.0.0.2"
     )
