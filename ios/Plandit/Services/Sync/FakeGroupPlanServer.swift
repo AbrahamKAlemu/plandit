@@ -147,7 +147,8 @@ actor FakeGroupPlanServer: GroupPlanServing {
 
     /// A group someone else (or you, when `organizer` is nil) organizes. Returns its id.
     @discardableResult
-    func seedGroup(id: UUID = UUID(), plan: DayPlan, date: String, organizer: String?, others: [String] = [], youAreMember: Bool = true) -> UUID {
+    func seedGroup(id: UUID = UUID(), plan: DayPlan, date: String, organizer: String?, others: [String] = [], youAreMember: Bool = true,
+                   token: String? = nil) -> UUID {
         var members: [Member] = []
         if let organizer {
             members.append(Member(id: UUID(), name: organizer, isYou: false))
@@ -156,7 +157,7 @@ actor FakeGroupPlanServer: GroupPlanServing {
             members.append(Member(id: UUID(), name: yourName, isYou: true))
         }
         members += others.map { Member(id: UUID(), name: $0, isYou: false) }
-        groups.append(Group(id: id, date: date, plan: plan, members: members, token: newToken()))
+        groups.append(Group(id: id, date: date, plan: plan, members: members, token: token ?? newToken()))
         return id
     }
 
@@ -485,6 +486,8 @@ extension FakeGroupPlanServer {
     nonisolated static let seededGroupID = UUID(uuidString: "9C1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
     /// A group Jordan organizes that you're not in yet, to join by link.
     nonisolated static let joinableGroupID = UUID(uuidString: "AD1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
+    /// Its link is `https://plandit.app/j/` and this.
+    nonisolated static let joinableToken = "fake-invite-jordans-day"
 
     /// `-fakeGroupPlans [scenario]`, for UI tests: a server where you're in Maya's group plan for
     /// today (with Jordan; every stop planned), and Jordan's group is open to join by link.
@@ -509,7 +512,7 @@ extension FakeGroupPlanServer {
         var other = plan
         other.id = UUID(uuidString: "CF1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
         other.title = "Jordan's day"
-        await server.seedGroup(id: joinableGroupID, plan: other, date: date, organizer: "Jordan", youAreMember: false)
+        await server.seedGroup(id: joinableGroupID, plan: other, date: date, organizer: "Jordan", youAreMember: false, token: joinableToken)
         if scenario == "mayaRemovesStop2" {
             await server.beforeNext(.put) { [weak server] in
                 guard let server, let info = await server.info(seededGroupID), info.plan.stops.count > 1 else { return }
