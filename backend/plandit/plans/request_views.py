@@ -60,8 +60,9 @@ STAR_UP_TO = f"Star up to {MAX_STARS} places."
 
 
 def request_url(request, slug: str) -> str:
-    """plandit.app/g/<slug> once the site forwards /g/ here (SHARE_BASE_URL); until then this API's own host."""
-    base = getattr(settings, "SHARE_BASE_URL", "") or request.build_absolute_uri("/").rstrip("/")
+    """plandit.app/g/<slug> once the site forwards /g/ here (REQUEST_BASE_URL); until then this API's
+    own host. Not SHARE_BASE_URL: /p/ links may move to the site before it forwards /g/."""
+    base = getattr(settings, "REQUEST_BASE_URL", "") or request.build_absolute_uri("/").rstrip("/")
     return f"{base.rstrip('/')}/g/{slug}"
 
 

@@ -214,10 +214,23 @@ def test_creating_a_request_returns_its_link_and_what_was_asked(auth_client, use
     assert stored.status == "open"
 
 
-def test_request_links_use_the_site_address_once_configured(auth_client, settings):
-    settings.SHARE_BASE_URL = "https://plandit.app"
+def test_request_links_use_the_site_address_once_configured(auth_client, browser, settings):
+    settings.REQUEST_BASE_URL = "https://plandit.app"
     body = create(auth_client, request_payload()).json()
     assert body["url"] == f"https://plandit.app/g/{body['slug']}"
+    page = html(request_page(browser, body["slug"]))
+    assert f'<meta property="og:url" content="https://plandit.app/g/{body["slug"]}">' in page
+
+
+def test_request_links_stay_on_this_host_when_only_share_links_move(auth_client, browser, settings):
+    """/p/ links can move to the site before it forwards /g/, so /g/ links have their own setting."""
+    settings.SHARE_BASE_URL = "https://plandit.app"
+    settings.REQUEST_BASE_URL = ""
+    body = create(auth_client, request_payload()).json()
+    assert body["url"] == f"http://testserver/g/{body['slug']}"
+    assert owner_get(auth_client, body["slug"]).json()["url"] == body["url"]
+    page = html(request_page(browser, body["slug"]))
+    assert f'<meta property="og:url" content="http://testserver/g/{body["slug"]}">' in page
 
 
 def test_creating_a_request_needs_an_account(api_client):
