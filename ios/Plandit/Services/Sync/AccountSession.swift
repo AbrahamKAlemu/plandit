@@ -24,9 +24,14 @@ final class AccountSession {
         let store = PlanditStore.load()
         #if DEBUG
         // `-fakeSharing` (or `-fakeSharing fail`): links without the server, for UI tests.
+        // `-fakeAnswers` adds friends' fixed answers on the link (`FakeShareAnswers`).
         if let index = CommandLine.arguments.firstIndex(of: "-fakeSharing") {
             let next = CommandLine.arguments.indices.contains(index + 1) ? CommandLine.arguments[index + 1] : ""
-            store.sharing = FakePlanSharing(fails: next == "fail")
+            let sharing = FakePlanSharing(fails: next == "fail")
+            store.sharing = sharing
+            if CommandLine.arguments.contains("-fakeAnswers") {
+                store.answerClient = FakeShareAnswers(sharing: sharing)
+            }
         }
         #endif
         return AccountSession(userID: userID, store: store, sync: nil, storage: .default)
@@ -115,6 +120,7 @@ final class AccountSession {
             Task { try? await eventClient.send(event) }
         }
         store.sharing = SharedPlanClient(api: api)
+        store.answerClient = ShareAnswersClient(api: api)
         store.persistNow()
         let sync = SyncCoordinator(userID: user.id, client: client, stateStore: stateStore, store: store)
         sync.start(version: version, dirty: dirty, readOnly: readOnly)

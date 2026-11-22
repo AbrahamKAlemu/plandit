@@ -27,6 +27,13 @@ final class PlanditStore {
     @ObservationIgnored var sharing: (any PlanSharing)?
     @ObservationIgnored private var pendingShareUpdate: Task<Void, Never>?
     @ObservationIgnored private var lastPublished: SharedPlanPayload?
+    /// Friends' answers on the link; nil when signed out of the server (the local test account).
+    @ObservationIgnored var answerClient: (any ShareAnswersFetching)?
+    /// Friends' answers on `answersSlug`'s page, as last fetched. Memory only (GS-7).
+    private(set) var fetchedAnswers: [ShareAnswer] = []
+    private var answersSlug: String?
+    /// When answers were last fetched, so Today appearing again doesn't ask again within 10 s.
+    @ObservationIgnored private var answersFetchedAt: Date?
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
 
@@ -958,13 +965,14 @@ final class PlanditStore {
         return link
     }
 
-    /// Takes the page down; the link stops working.
+    /// Takes the page down; the link stops working and friends' answers go with it.
     func stopSharing() async throws {
         guard let link = sharedLink else { return }
         if let sharing { try await sharing.unpublish(slug: link.slug) }
         pendingShareUpdate?.cancel()
         sharedLink = nil
         lastPublished = nil
+        forgetAnswers()
         persist()
     }
 
@@ -993,6 +1001,97 @@ final class PlanditStore {
     }
 
     static var shareUpdateDelay: Duration = .seconds(2)
+
+    // MARK: - Friends' answers (group plans, mode 1)
+
+    /// Today's link's answers; none without a link.
+    var shareAnswers: [ShareAnswer] {
+        guard let link = todayLink, link.slug == answersSlug else { return [] }
+        return fetchedAnswers
+    }
+
+    /// "3 in · 1 can't make it" under the share button; nil with no answers.
+    var answerSummary: ShareAnswerSummary? { ShareAnswers.summary(shareAnswers) }
+
+    /// Friends' "I'd swap this" per stop still ahead, minus picks the organizer kept the stop over.
+    var swapMarks: [UUID: [SwapPick]] {
+        ShareAnswers.swapMarks(shareAnswers, plan: today, kept: Set(todayLink?.keptSwaps ?? []))
+    }
+
+    /// How often Today appearing or the app opening may ask for answers.
+    static var answersRefreshInterval: TimeInterval = 10
+
+    /// Fetches the answers on today's link, at most every `answersRefreshInterval` unless forced.
+    /// Failures are quiet: what was shown stays, and the next appearance tries again.
+    func refreshShareAnswers(now: Date = Date(), force: Bool = false) async {
+        guard let link = todayLink, let answerClient else { return }
+        if !force, link.slug == answersSlug, let answersFetchedAt,
+           now.timeIntervalSince(answersFetchedAt) < Self.answersRefreshInterval { return }
+        guard let answers = try? await answerClient.answers(slug: link.slug) else { return }
+        // Shared again, or stopped, while the request was out.
+        guard todayLink?.slug == link.slug else { return }
+        answersSlug = link.slug
+        answersFetchedAt = now
+        if answers != fetchedAnswers { fetchedAnswers = answers }
+    }
+
+    /// Removes a friend's answer from the link: it's gone from the page and Today (GV-7).
+    func removeShareAnswer(_ id: UUID) async throws {
+        guard let link = todayLink, let answerClient else { return }
+        try await answerClient.remove(slug: link.slug, answerID: id)
+        fetchedAnswers.removeAll { $0.id == id }
+    }
+
+    private func forgetAnswers() {
+        fetchedAnswers = []
+        answersSlug = nil
+        answersFetchedAt = nil
+    }
+
+    enum SwapAvailability: Equatable {
+        case available
+        case alreadyInPlan
+        /// The organizer removed it from Saved, or it has no place any more.
+        case notSaved
+    }
+
+    /// Whether "Swap it" can put a friend's pick (a saved post's id) into today's plan.
+    func swapAvailability(of postID: UUID) -> SwapAvailability {
+        guard let post = post(id: postID), post.isMappable, let place = post.place else { return .notSaved }
+        let inPlan = isInToday(post) || today.stops.contains {
+            $0.place.name.lowercased() == place.name.lowercased() && $0.place.address.lowercased() == place.address.lowercased()
+        }
+        return inPlan ? .alreadyInPlan : .available
+    }
+
+    /// "Swap it": the stop becomes the friend's pick, in the same place in the day, and the times
+    /// from there on are planned again (GV-6). Undo puts the stop back; the page updates as with
+    /// any other change. False when the stop isn't still ahead or the pick can't go in.
+    @discardableResult
+    func swap(stopID: UUID, toPost postID: UUID, now: Date = AppClock.now) -> Bool {
+        guard let old = stop(id: stopID), swapAvailability(of: postID) == .available,
+              let post = post(id: postID), let candidate = PlanCandidate(post: post),
+              let plan = today.swapping(stopID, for: candidate, travel: travelPreference, now: now) else { return false }
+        remember("Swapped \(old.place.name) for \(candidate.place.name)")
+        today = plan
+        persist()
+        Task { await loadRoutes() }
+        return true
+    }
+
+    /// "Keep it": the stop stays, and these picks stop showing until a friend picks something else.
+    func keepStop(_ stopID: UUID) {
+        guard var link = todayLink, let picks = swapMarks[stopID] else { return }
+        // Picks about stops no longer in the plan can't show again; no need to keep them.
+        var kept = link.keptSwaps.filter { key in today.stops.contains { key.hasPrefix($0.id.uuidString) } }
+        for pick in picks {
+            let key = ShareAnswers.keepKey(stopID: stopID, pick: pick)
+            if !kept.contains(key) { kept.append(key) }
+        }
+        link.keptSwaps = kept
+        sharedLink = link
+        persist()
+    }
 
     // MARK: - Undo
 

@@ -46,6 +46,20 @@ extension DayPlan {
         return best!
     }
 
+    // MARK: - Swapping one stop
+
+    /// "Swap it" on a friend's pick: `candidate` takes the stop's place in the day, and the stops
+    /// from there on are timed again, as when a stop is removed and a place added. Nil when the stop
+    /// isn't still ahead (done or underway stops never change).
+    func swapping(_ stopID: UUID, for candidate: PlanCandidate, travel: TravelPreference, now: Date = .now,
+                  calendar: Calendar = .current) -> DayPlan? {
+        let first = firstMovableIndex
+        guard let index = stops.firstIndex(where: { $0.id == stopID }), index >= first else { return nil }
+        let without = edited(keeping: stops[first...].map(\.id).filter { $0 != stopID }, travel: travel, calendar: calendar)
+        let alreadyLate = Set(without.stopsArrivingAfterClose(calendar: calendar).map(\.id))
+        return without.trialInsert(candidate, at: index, travel: travel, now: now, calendar: calendar, alreadyLate: alreadyLate).plan
+    }
+
     private func trialInsert(
         _ candidate: PlanCandidate, at position: Int, travel: TravelPreference,
         now: Date, calendar: Calendar, alreadyLate: Set<UUID>
