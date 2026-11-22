@@ -24,6 +24,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, connection, transaction
 from django.db.models import Count, F
+from django.utils import timezone
 from django.utils.cache import get_conditional_response
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ParseError, PermissionDenied, ValidationError
@@ -34,8 +35,16 @@ from plandit.core.models import Profile
 from plandit.core.public_forms import FIRST_NAME_MAX_LENGTH, clean_first_name
 from plandit.core.retention import purge_expired
 
-from .models import GroupMember, GroupPlan
-from .validation import MAX_REQUEST_BYTES, PLAN_MAX_BYTES, PlanTooLarge, parse_day, parse_plan, parse_uuid
+from .models import EDIT_LOG_KEPT, GroupMember, GroupPlan, GroupPlanEdit
+from .validation import (
+    MAX_REQUEST_BYTES,
+    PLAN_MAX_BYTES,
+    PlanTooLarge,
+    parse_day,
+    parse_edit,
+    parse_plan,
+    parse_uuid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +56,8 @@ LOCK_NOT_AVAILABLE = "55P03"
 SIGN_IN_TO_PLAN_TOGETHER = "Sign in with email or Apple to plan with friends."
 TRY_AGAIN = "Try again in a moment."
 TOO_LARGE = "This plan is too big to save for the group."
+DAY_OVER = "This plan's day is over."
+NOT_THIS_PLAN = "This isn't the group's plan."
 FALLBACK_NAME = "Friend"
 
 
@@ -210,6 +221,56 @@ def _create_group(owner: Profile, day, plan: dict) -> GroupPlan:
     return group
 
 
+def _write_plan(group: GroupPlan, caller: GroupMember, plan: dict, edit_id, kind: str, stop_ids: list[str]) -> None:
+    """Store an edit made from the current version, with the group locked and the caller's
+    membership checked under that lock. The log keeps the latest EDIT_LOG_KEPT edits."""
+    group.data = plan
+    group.version += 1
+    group.save(update_fields=["data", "version", "updated_at"])
+    GroupPlanEdit.objects.create(
+        group=group, version=group.version, edit_id=edit_id, member_id=caller.id, kind=kind, stop_ids=stop_ids
+    )
+    if group.version > EDIT_LOG_KEPT:
+        GroupPlanEdit.objects.filter(group=group, version__lte=group.version - EDIT_LOG_KEPT).delete()
+
+
+def _saved_response(group: GroupPlan, version: int):
+    """200 for a stored edit: its version, and the members as of now, so the ETag the app keeps
+    always matches what it holds."""
+    members = _members(group)
+    body = {
+        "version": version,
+        "membersVersion": group.members_version,
+        "members": [_member_json(group, member) for member in members],
+    }
+    return _with_cache_headers(Response(body), group, tag=f'"{version}.{group.members_version}"')
+
+
+def _conflict_response(group: GroupPlan, base: int):
+    """409: the plan as stored, the members, and each logged edit after `base` with its author's
+    name as of now (MF-C, N-12): a member who left or deleted their account shows as null."""
+    members = _members(group)
+    names = {member.id: member.display_name for member in members}
+    edits = [
+        {
+            "version": edit.version,
+            "authorId": str(edit.member_id) if edit.member_id in names else None,
+            "authorName": names.get(edit.member_id),
+            "kind": edit.kind,
+            "stopIds": edit.stop_ids,
+        }
+        for edit in GroupPlanEdit.objects.filter(group=group, version__gt=base).order_by("version")
+    ]
+    body = {
+        "version": group.version,
+        "membersVersion": group.members_version,
+        "plan": group.data,
+        "members": [_member_json(group, member) for member in members],
+        "edits": edits,
+    }
+    return _with_cache_headers(Response(body, status=status.HTTP_409_CONFLICT), group)
+
+
 class GroupPlanListView(APIView):
     """POST /api/group-plans/: create a group plan from one of the caller's plans (brief GE-1).
     GET: the caller's groups, soonest first, with their ETags."""
@@ -302,3 +363,40 @@ class GroupPlanDetailView(APIView):
         if not_modified is not None:
             return _with_cache_headers(not_modified, group)
         return _detail_response(request, group, caller)
+
+    @try_again_on_lock_timeout
+    def put(self, request, group_id):
+        """PUT {baseVersion, editId, edit: {kind, stopIds}, plan} (brief GE-5, MF-B, MF-C). A known
+        `editId` is 200 with that edit's version and changes nothing; the current `baseVersion`
+        stores the plan as the next version; any other is 409 with what changed since."""
+        pk = parse_uuid(group_id)
+        # Before anything about the body, so an outsider gets the same 404 for any request.
+        if pk is None or not GroupMember.objects.filter(group_id=pk, profile=request.user).exists():
+            return _not_found()
+        too_large = _declared_too_large(request)
+        if too_large is not None:
+            return too_large
+        body = _body(request)
+        base, edit_id, kind, stop_ids = parse_edit(body)
+        try:
+            plan = parse_plan(body.get("plan"))
+        except PlanTooLarge:
+            return _too_large()
+
+        with locking():
+            group = lock_group(pk)
+            # Again, under the lock: a removal that committed while this waited counts (CON-3b).
+            caller = GroupMember.objects.filter(group=group, profile=request.user).first() if group else None
+            if caller is None:
+                return _not_found()
+            logged = GroupPlanEdit.objects.filter(group=group, edit_id=edit_id).first()
+            if logged is not None:
+                return _saved_response(group, logged.version)
+            if parse_uuid(plan["id"]) != group.plan_id:
+                raise ValidationError({"plan": [NOT_THIS_PLAN]})
+            if group.date < timezone.localdate():
+                return Response({"detail": DAY_OVER}, status=status.HTTP_400_BAD_REQUEST)
+            if base != group.version:
+                return _conflict_response(group, base)
+            _write_plan(group, caller, plan, edit_id, kind, stop_ids)
+            return _saved_response(group, group.version)

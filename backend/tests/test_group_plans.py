@@ -647,3 +647,292 @@ def test_the_list_has_the_callers_groups_with_their_etags(maya, jordan):
 
 def test_the_list_is_empty_for_someone_in_no_group(group):
     assert person("Sam Rivera").client.get(BASE).json() == {"groups": []}
+
+
+# --- Editing: PUT with compare-and-swap and the edit log (brief GE-5; VER-2 to VER-5, VER-9 to
+# --- VER-12, LIM-2 to LIM-7, N-8) -------------------------------------------------------------
+
+
+def edited(group: GroupPlan) -> dict:
+    """The group's plan with its last stop removed, as the app would PUT it."""
+    group.refresh_from_db()
+    plan = copy.deepcopy(group.data)
+    plan["stops"] = plan["stops"][:-1]
+    plan["legs"] = []
+    return plan
+
+
+CURRENT = object()
+
+
+def put(who: Person, group: GroupPlan, plan=None, *, base=CURRENT, edit_id=None, kind="remove", stop_ids=None, **extra):
+    """PUT `plan` (by default the group's plan less its last stop) from the group's current version,
+    or from `base`. The edit names the stops the plan no longer has, unless `stop_ids` is given."""
+    group.refresh_from_db()
+    plan = plan if plan is not None else edited(group)
+    if stop_ids is None:
+        kept = {stop["id"] for stop in plan["stops"]}
+        stop_ids = [stop["id"] for stop in group.data["stops"] if stop["id"] not in kept]
+    body = {
+        "baseVersion": group.version if base is CURRENT else base,
+        "editId": edit_id or new_id(),
+        "edit": {"kind": kind, "stopIds": stop_ids},
+        "plan": plan,
+        **extra,
+    }
+    return who.client.put(detail(group.id), body, format="json")
+
+
+def row(group: GroupPlan) -> tuple:
+    """Everything a refused write must leave as it was."""
+    fresh = GroupPlan.objects.get(pk=group.pk)
+    return (fresh.data, fresh.version, fresh.members_version, fresh.updated_at, fresh.invite_token)
+
+
+def test_ver_2_a_put_from_the_current_version_stores_the_plan_and_logs_the_edit(group, maya, jordan):
+    plan = edited(group)
+    stop_id = group.data["stops"][-1]["id"]
+    edit_id = new_id()
+    response = put(jordan, group, plan, edit_id=edit_id)
+
+    assert response.status_code == 200
+    assert response["ETag"] == '"4.2"'
+    assert response["Cache-Control"] == "private, no-cache"
+    assert response.json() == {
+        "version": 4,
+        "membersVersion": 2,
+        "members": [
+            {"id": str(member_of(group, maya).id), "name": "Maya", "isOrganizer": True},
+            {"id": str(member_of(group, jordan).id), "name": "Jordan", "isOrganizer": False},
+        ],
+    }
+    group.refresh_from_db()
+    assert (group.data, group.version, group.members_version) == (plan, 4, 2)
+    logged = GroupPlanEdit.objects.get()
+    assert (logged.version, logged.edit_id, logged.member_id, logged.kind, logged.stop_ids) == (
+        4,
+        uuid.UUID(edit_id),
+        member_of(group, jordan).id,
+        "remove",
+        [stop_id],
+    )
+
+
+def test_ver_3_a_put_from_an_old_version_is_409_with_the_plan_the_members_and_the_edits_since(group, maya, jordan):
+    first = put(maya, group, kind="move")
+    assert first.status_code == 200
+    before = row(group)
+
+    response = put(jordan, group, base=3)
+    assert response.status_code == 409
+    assert response["ETag"] == '"4.2"'
+    assert response["Cache-Control"] == "private, no-cache"
+    body = response.json()
+    assert set(body) == {"version", "membersVersion", "plan", "members", "edits"}
+    assert (body["version"], body["membersVersion"], body["plan"]) == (4, 2, before[0])
+    assert [m["name"] for m in body["members"]] == ["Maya", "Jordan"]
+    stop_ids = GroupPlanEdit.objects.get().stop_ids
+    maya_member = str(member_of(group, maya).id)
+    assert body["edits"] == [
+        {"version": 4, "authorId": maya_member, "authorName": "Maya", "kind": "move", "stopIds": stop_ids}
+    ]
+    assert row(group) == before
+    assert GroupPlanEdit.objects.count() == 1
+
+
+def test_ver_4_a_put_from_a_version_ahead_of_the_server_is_409_never_200(group, jordan):
+    before = row(group)
+    response = put(jordan, group, base=4)
+    assert response.status_code == 409
+    assert response.json()["edits"] == []
+    assert row(group) == before
+
+
+@pytest.mark.parametrize("base", ["missing", None, "3", True, 3.0, -1, 0, [3], {"v": 3}])
+def test_ver_5_a_base_version_that_isnt_a_whole_number_is_400(group, jordan, base):
+    """A bool must not count as an int (as core/views.py's `_is_positive_int`)."""
+    before = row(group)
+    response = put(jordan, group, base=base)
+    if base == "missing":
+        body = {"editId": new_id(), "edit": {"kind": "remove", "stopIds": []}, "plan": edited(group)}
+        response = jordan.client.put(detail(group.id), body, format="json")
+    assert response.status_code == 400
+    assert "baseVersion" in response.json()
+    assert row(group) == before
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("editId", None),
+        ("editId", "edit-1"),
+        ("editId", 7),
+        ("edit", None),
+        ("edit", "remove"),
+        ("edit", {"stopIds": []}),
+        ("edit", {"kind": "", "stopIds": []}),
+        ("edit", {"kind": "remove the stop", "stopIds": []}),
+        ("edit", {"kind": "x" * 17, "stopIds": []}),
+        ("edit", {"kind": "remove"}),
+        ("edit", {"kind": "remove", "stopIds": "abc"}),
+        ("edit", {"kind": "remove", "stopIds": ["not-a-uuid"]}),
+        ("edit", {"kind": "remove", "stopIds": [str(uuid.uuid4()) for _ in range(21)]}),
+    ],
+)
+def test_a_put_without_a_valid_edit_id_or_edit_is_400(group, jordan, field, value):
+    before = row(group)
+    response = put(jordan, group, **{field: value})
+    assert response.status_code == 400
+    assert field in response.json()
+    assert row(group) == before
+
+
+def test_a_put_body_that_is_not_an_object_is_400(group, jordan):
+    assert jordan.client.put(detail(group.id), [edited(group)], format="json").status_code == 400
+
+
+def test_ver_9_five_puts_in_a_row_make_versions_4_to_8_without_gaps(group, maya, jordan):
+    versions = []
+    for who in (maya, jordan, maya, jordan, maya):
+        response = put(who, group)
+        assert response.status_code == 200
+        versions.append(response.json()["version"])
+    assert versions == [4, 5, 6, 7, 8]
+    assert list(GroupPlanEdit.objects.order_by("version").values_list("version", flat=True)) == versions
+
+
+def test_ver_10_a_retried_edit_answers_with_its_version_and_changes_nothing(group, maya, jordan):
+    """MF-B: the response to the first PUT was lost; the app sends it again, same editId and base."""
+    edit_id = new_id()
+    plan = edited(group)
+    first = put(jordan, group, plan, edit_id=edit_id)
+    assert first.status_code == 200
+    put(maya, group)  # someone else edits meanwhile: version 5
+    before = row(group)
+
+    again = put(jordan, group, plan, edit_id=edit_id.lower(), base=3)
+    assert again.status_code == 200
+    assert again.json()["version"] == 4
+    assert again["ETag"] == '"4.2"'
+    assert row(group) == before
+    assert GroupPlanEdit.objects.count() == 2
+
+    other = put(jordan, group, plan, base=3)
+    assert other.status_code == 409
+    assert row(group) == before
+
+
+def test_ver_11_the_409_names_who_made_each_edit_since_the_base(maya, jordan):
+    """MF-C: A removes s2 at v2, B changes s1's time at v3, C sends a PUT from v1."""
+    casey = person("Casey Kim")
+    group = make_group(maya, jordan, casey)
+    s1, s2 = (stop["id"] for stop in group.data["stops"])
+    plan = edited(group)
+    assert put(maya, group, plan, kind="remove", stop_ids=[s2]).status_code == 200
+    plan = copy.deepcopy(plan)
+    plan["stops"][0]["start"] += 1800
+    assert put(jordan, group, plan, kind="setTime", stop_ids=[s1]).status_code == 200
+
+    response = put(casey, group, base=1)
+    assert response.status_code == 409
+    assert [(e["version"], e["authorName"], e["kind"], e["stopIds"]) for e in response.json()["edits"]] == [
+        (2, "Maya", "remove", [s2]),
+        (3, "Jordan", "setTime", [s1]),
+    ]
+
+
+def test_the_log_keeps_the_latest_edits_only(group, maya, monkeypatch):
+    from plandit.groups import views
+
+    monkeypatch.setattr(views, "EDIT_LOG_KEPT", 3)
+    for _ in range(5):
+        assert put(maya, group).status_code == 200
+    assert list(GroupPlanEdit.objects.order_by("version").values_list("version", flat=True)) == [6, 7, 8]
+
+
+def test_lim_6_a_put_of_another_plan_is_400(group, jordan):
+    """GE-6: catches the app writing the member's personal plan into the group."""
+    before = row(group)
+    response = put(jordan, group, plan_json())
+    assert response.status_code == 400
+    assert "plan" in response.json()
+    assert row(group) == before
+
+
+def test_lim_2_a_put_accepts_a_plan_of_exactly_64_kb_and_refuses_one_byte_more(group, jordan):
+    plan_id = group.data["id"]
+    assert put(jordan, group, sized_plan(65_536, plan_id)).status_code == 200
+    before = row(group)
+    response = put(jordan, group, sized_plan(65_537, plan_id))
+    assert response.status_code == 413
+    assert row(group) == before
+
+
+def test_lim_3_a_put_refuses_a_declared_oversize_body_before_reading_it(group, jordan):
+    response = jordan.client.put(
+        detail(group.id), data=b'{"baseVersion": 3}', content_type="application/json", CONTENT_LENGTH="400000"
+    )
+    assert response.status_code == 413
+
+
+def test_lim_4_a_put_accepts_20_stops_and_refuses_21(group, jordan):
+    plan_id = group.data["id"]
+    assert put(jordan, group, plan_json(plan_id, stops=[stop_json() for _ in range(20)])).status_code == 200
+    before = row(group)
+    response = put(jordan, group, plan_json(plan_id, stops=[stop_json() for _ in range(21)]))
+    assert response.status_code == 400
+    assert row(group) == before
+
+
+@pytest.mark.parametrize("case", list(bad_plans()))
+def test_lim_5_a_put_of_a_plan_of_the_wrong_shape_is_400(group, jordan, case):
+    plan = bad_plans()[case]
+    if isinstance(plan, dict) and "id" in plan and case != "id not a UUID":
+        plan["id"] = group.data["id"]
+    before = row(group)
+    response = put(jordan, group, plan, stop_ids=[])
+    assert response.status_code == 400
+    assert row(group) == before
+
+
+def test_lim_7_a_put_with_nan_is_400(group, jordan):
+    raw = (
+        f'{{"baseVersion": 3, "editId": "{new_id()}", "edit": {{"kind": "remove", "stopIds": []}}, '
+        f'"plan": {{"id": "{group.data["id"]}", "budget": NaN}}}}'
+    )
+    response = jordan.client.put(detail(group.id), data=raw, content_type="application/json")
+    assert response.status_code == 400
+
+
+def test_n_8_edits_end_with_the_plans_day_in_new_york_time(maya, jordan):
+    over = make_group(maya, jordan, day=today() - timedelta(days=1))
+    before = row(over)
+    response = put(jordan, over)
+    assert response.status_code == 400
+    assert response.json() == {"detail": "This plan's day is over."}
+    assert row(over) == before
+
+    on_the_day = make_group(person("Sam Rivera"), jordan, day=today())
+    assert put(jordan, on_the_day).status_code == 200
+
+
+def test_ver_12_a_put_never_touches_the_callers_snapshot(group, jordan):
+    snapshot = {"data": {"today": plan_json(), "saved": [], "pastPlans": []}}
+    assert jordan.client.put("/api/me/snapshot/", snapshot, format="json").json()["version"] == 1
+    assert put(jordan, group).status_code == 200
+    body = jordan.client.get("/api/me/snapshot/").json()
+    assert (body["version"], body["data"]) == (1, snapshot["data"])
+
+
+def test_iso_2_an_outsider_cannot_tell_a_group_from_a_random_id(group):
+    """Same status and body, and no ETag, for a group that exists and one that doesn't."""
+    sam = person("Sam Rivera")
+    random_id = uuid.uuid4()
+    gets = [sam.client.get(detail(gid), HTTP_IF_NONE_MATCH='"3.2"') for gid in (group.id, random_id)]
+    body = {"baseVersion": 1, "editId": new_id(), "edit": {"kind": "remove", "stopIds": []}, "plan": edited(group)}
+    puts = [sam.client.put(detail(gid), body, format="json") for gid in (group.id, random_id)]
+    bad_puts = [sam.client.put(detail(gid), {"plan": 3}, format="json") for gid in (group.id, random_id)]
+    for pair in (gets, puts, bad_puts):
+        assert [r.status_code for r in pair] == [404, 404]
+        assert pair[0].content == pair[1].content == b""
+        assert not pair[0].has_header("ETag") and not pair[1].has_header("ETag")
