@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from plandit.core.public_forms import (
+    RESPONDER_COOKIE_MAX_AGE,
     clean_first_name,
     client_ip,
     describe_forwarding,
@@ -161,7 +162,7 @@ def answer_plan(request, slug):
         return _plan_page(request, shared, form=form, error=CHOOSE_A_BUTTON, status=400)
 
     response = _with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
-    responder = responder_token(request, response, _page_path(slug))
+    responder = responder_token(request, response, _page_path(slug), max_age=_cookie_max_age(shared), renew=True)
     with transaction.atomic():
         shared = SharedPlan.objects.select_for_update().filter(pk=shared.pk).first()
         if shared is None:
@@ -292,6 +293,13 @@ def _plan_date(shared) -> date | None:
         return date.fromisoformat(shared.data.get("date") or "")
     except (TypeError, ValueError):
         return None
+
+
+def _cookie_max_age(shared) -> int:
+    """Seconds until the day the answer is deleted (brief GS-5), at least the usual 30 days. At
+    most 396 days, for a plan 366 days ahead: under browsers' 400-day cap."""
+    days_left = (_plan_date(shared) - timezone.localdate()).days + ANSWER_RETENTION_DAYS
+    return max(RESPONDER_COOKIE_MAX_AGE, days_left * 24 * 60 * 60)
 
 
 def _page_path(slug) -> str:

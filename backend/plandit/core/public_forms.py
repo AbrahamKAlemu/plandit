@@ -69,21 +69,27 @@ _TOKEN_BYTES = 32
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_-]{43}")  # secrets.token_urlsafe(32)
 
 
-def responder_token(request, response, scope: str) -> str:
+def responder_token(
+    request, response, scope: str, *, max_age: int = RESPONDER_COOKIE_MAX_AGE, renew: bool = False
+) -> str:
     """Who is answering, as far as this browser goes: the SHA-256 hex of a random token kept in the
     `pa` cookie. Only the hash is ever stored; the token itself never leaves the cookie.
 
     `scope` is the cookie's path, such as "/p/<slug>", so each link gets its own token and the
     cookie isn't sent anywhere else. A browser without a valid cookie gets a new token, set on
-    `response` (HttpOnly, Secure, SameSite=Lax, 30 days).
+    `response` (HttpOnly, Secure, SameSite=Lax) for `max_age` seconds, 30 days unless the caller
+    says otherwise. With `renew`, a browser that has one gets the same token set again for
+    `max_age`, so it lasts as long as what it answered (browsers cap a cookie at 400 days).
     """
     token = request.COOKIES.get(RESPONDER_COOKIE, "")
     if not _TOKEN_PATTERN.fullmatch(token):
         token = secrets.token_urlsafe(_TOKEN_BYTES)
+        renew = True
+    if renew:
         response.set_cookie(
             RESPONDER_COOKIE,
             token,
-            max_age=RESPONDER_COOKIE_MAX_AGE,
+            max_age=max_age,
             path=scope,
             secure=True,
             httponly=True,

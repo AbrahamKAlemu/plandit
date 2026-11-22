@@ -132,6 +132,44 @@ def test_the_browser_gets_a_cookie_for_this_link_only_and_only_its_hash_is_store
     assert cookie.value not in str(ShareAnswer.objects.values().get())
 
 
+DAY = 24 * 60 * 60
+
+
+@pytest.mark.parametrize(
+    ("days_ahead", "cookie_days"),
+    [
+        (200, 230),  # until the answers are deleted, 30 days after the plan's date
+        (366, 396),  # the furthest date a plan can have: still under browsers' 400-day cap
+        (1, 31),
+        (-20, 30),  # never less than 30 days
+    ],
+)
+def test_the_cookie_lasts_as_long_as_the_answer(auth_client, browser, days_ahead, cookie_days):
+    day = timezone.localdate() + timedelta(days=days_ahead)
+    slug = share(auth_client, answers_payload(date=day.isoformat())).json()["slug"]
+    cookie = answer(browser, slug).cookies["pa"]
+    assert int(cookie["max-age"]) == cookie_days * DAY
+    assert cookie["path"] == f"/p/{slug}"
+
+
+def test_every_answer_renews_the_same_cookie(auth_client, browser):
+    """A browser that answered early keeps its cookie through a plan months ahead, so changing its
+    answer later doesn't count it twice."""
+    day = timezone.localdate() + timedelta(days=200)
+    slug = share(auth_client, answers_payload(date=day.isoformat())).json()["slug"]
+    token = answer(browser, slug).cookies["pa"].value
+
+    again = answer(browser, slug, status="out").cookies["pa"]
+    assert again.value == token
+    assert int(again["max-age"]) == 230 * DAY
+    assert again["httponly"] is True and again["secure"] is True and again["samesite"] == "Lax"
+    assert ShareAnswer.objects.get().status == "out"
+
+
+def test_the_page_itself_sets_no_answer_cookie(browser, slug):
+    assert "pa" not in page(browser, slug).cookies
+
+
 @pytest.mark.parametrize(
     ("name", "message"),
     [
@@ -279,12 +317,12 @@ def test_names_on_the_page_are_escaped(slug):
 
 
 def test_the_same_browser_changes_its_answer(browser, slug):
-    answer(browser, slug, name="Maya", status="in", swaps={MET: MOMA})
+    token = answer(browser, slug, name="Maya", status="in", swaps={MET: MOMA}).cookies["pa"].value
     first = ShareAnswer.objects.get()
     response = answer(browser, slug, name="Maya J", status="out")
 
     assert response.status_code == 303
-    assert "pa" not in response.cookies  # same cookie, not a new one
+    assert response.cookies["pa"].value == token  # the same cookie, renewed, not a new one
     changed = ShareAnswer.objects.get()
     assert changed.id == first.id
     assert (changed.name, changed.status, changed.swaps) == ("Maya J", "out", {})
