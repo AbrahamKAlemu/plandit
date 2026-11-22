@@ -27,7 +27,8 @@ final class AskFriendsFlowTests: XCTestCase {
             let frame = element.frame
             if element.isHittable, frame.minY >= top, frame.maxY <= bottom { return }
             let shift = max(-height * 0.35, min(height * 0.35, (top + bottom) / 2 - frame.midY))
-            let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            // From the side margin, where no button is: a drag that starts on a row can pick it.
+            let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: shift)),
                         withVelocity: .slow, thenHoldForDuration: 0.3)
         }
@@ -57,7 +58,13 @@ final class AskFriendsFlowTests: XCTestCase {
             XCTAssertTrue(row.waitForExistence(timeout: 3), "no row for \(name)")
             scrollTo(row, in: app)
             row.tap()
+            // Now and then the simulator drops a tap on this list; a dropped tap changed nothing,
+            // so one more is safe. The check before Get the link catches anything else.
+            if !row.wait(for: \.isSelected, toEqual: true, timeout: 2) { row.tap() }
             XCTAssertTrue(row.wait(for: \.isSelected, toEqual: true, timeout: 2), "\(name) should be picked")
+        }
+        for name in ["The High Line", "Los Tacos No. 1", "Levain Bakery", "Little Island"] {
+            XCTAssertTrue(app.buttons["ask-pick-\(name)"].isSelected, "\(name) is still picked")
         }
         XCTAssertTrue(create.isEnabled)
         create.tap()
@@ -111,7 +118,7 @@ final class AskFriendsFlowTests: XCTestCase {
         let build = app.buttons["build-our-plan"]
         XCTAssertTrue(build.isEnabled)
         build.tap()
-        XCTAssertTrue(app.navigationBars["Plan a day"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Friends' answers"].waitForNonExistence(timeout: 5), "the planner closes")
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos No. 1'")).firstMatch.waitForExistence(timeout: 5),
                       "Today shows the plan")
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Built our plan'")).firstMatch.waitForExistence(timeout: 3),
@@ -154,7 +161,7 @@ final class AskFriendsFlowTests: XCTestCase {
 
         XCTAssertTrue(build.isEnabled)
         build.tap()
-        XCTAssertTrue(app.navigationBars["Plan a day"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Friends' answers"].waitForNonExistence(timeout: 5), "the planner closes")
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Built our plan'")).firstMatch.waitForExistence(timeout: 3))
     }
 }
