@@ -214,6 +214,26 @@ import XCTest
         XCTAssertEqual(day.sharedPayload(showPrices: true, note: " See you there! ").note, "See you there!")
     }
 
+    func testEveryTextFromAPlaceOrThePlanIsCutToTheServersLimits() throws {
+        let long = String(repeating: "👩‍👩‍👧", count: 50) // 250 code points
+        let longPlace = Place(name: long, category: .outdoors, neighborhood: long, address: long,
+                              latitude: 40.7420, longitude: -74.0103, hours: nil)
+        var day = plan([stop(longPlace, at: at(13, 20)), stop(SampleData.losTacos, at: at(15))])
+        day.title = long
+        day.legs[0].mode = .subway
+        day.legs[0].detail = long
+        let payload = day.sharedPayload(showPrices: true, note: "")
+
+        XCTAssertEqual(payload.title.unicodeScalars.count, 120)
+        XCTAssertEqual(payload.stops[0].name.unicodeScalars.count, 120)
+        XCTAssertEqual(payload.stops[0].place.unicodeScalars.count, 120)
+        XCTAssertEqual(payload.stops[0].address.unicodeScalars.count, 200)
+        XCTAssertEqual(payload.legs[0].text.unicodeScalars.count, 120)
+        XCTAssertTrue(long.unicodeScalars.starts(with: payload.stops[0].name.unicodeScalars), "cut between code points")
+        XCTAssertEqual(payload.stops[1].name, "Los Tacos No. 1", "short texts stay whole")
+        XCTAssertEqual(payload.stops[1].address, SampleData.losTacos.address)
+    }
+
     // MARK: - Helpers
 
     private func makeStore(sharing: FakePlanSharing) -> PlanditStore {

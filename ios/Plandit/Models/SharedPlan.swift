@@ -84,13 +84,15 @@ struct SharedPlanPayload: Encodable, Equatable {
 
 extension DayPlan {
     /// The page for this plan: every stop, the trip after each, and prices only if asked.
-    /// `alternates` are the saves friends may pick instead of each stop (`SwapOptions.all`).
+    /// `alternates` are the saves friends may pick instead of each stop (`SwapOptions.all`). Texts
+    /// that come from places or the plan are cut to the server's limits, in code points, so one
+    /// long name can't make every page update fail.
     func sharedPayload(showPrices: Bool, note: String, alternates: [UUID: [SavedPost]] = [:]) -> SharedPlanPayload {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let timeText = [stops.first?.start.shortTime, stops.last?.end.shortTime].compactMap { $0 }.joined(separator: " – ")
         return SharedPlanPayload(
             planId: id,
-            title: title.isEmpty ? "A Plandit day" : title,
+            title: (title.isEmpty ? "A Plandit day" : title).prefix(codePoints: 120),
             dateText: date.formatted(.dateTime.weekday(.wide).month(.wide).day()),
             timeText: stops.count > 0 ? timeText : "",
             note: trimmedNote.prefix(codePoints: 280),
@@ -103,9 +105,10 @@ extension DayPlan {
                 }
                 return SharedPlanPayload.Stop(
                     id: stop.id,
-                    name: stop.place.name,
-                    place: [stop.place.category.label, stop.place.neighborhood].filter { !$0.isEmpty }.joined(separator: " · "),
-                    address: stop.place.address,
+                    name: stop.place.name.prefix(codePoints: 120),
+                    place: [stop.place.category.label, stop.place.neighborhood].filter { !$0.isEmpty }.joined(separator: " · ")
+                        .prefix(codePoints: 120),
+                    address: stop.place.address.prefix(codePoints: 200),
                     timeText: stop.start.shortTime,
                     durationText: stop.durationMinutes.durationText,
                     costText: showPrices ? stop.estimatedCost.dollarsText : "",
@@ -115,7 +118,7 @@ extension DayPlan {
                 )
             },
             legs: zip(stops, stops.dropFirst()).compactMap { from, _ in
-                leg(after: from).map { SharedPlanPayload.Leg(text: $0.messageText(showPrice: showPrices)) }
+                leg(after: from).map { SharedPlanPayload.Leg(text: $0.messageText(showPrice: showPrices).prefix(codePoints: 120)) }
             }
         )
     }
