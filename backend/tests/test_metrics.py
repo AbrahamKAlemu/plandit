@@ -8,6 +8,7 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from plandit.core.models import ActivityDay, ActivityEvent, Profile
 from plandit.core.views import MetricsView
+from plandit.shares.models import ShareAnswer, SharedPlan
 from plandit.waitlist.models import WaitlistSignup
 
 pytestmark = pytest.mark.django_db
@@ -118,6 +119,8 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
         "links_saved": 0,
         "waitlist_signups": 0,
         "anonymous_sessions": 0,
+        "links_with_answers": 0,
+        "answers_per_link": 0.0,
     }
 
 
@@ -167,6 +170,8 @@ def test_totals_and_daily_counts(api_client, metrics_key):
         "links_saved": 2,
         "waitlist_signups": 2,
         "anonymous_sessions": 2,
+        "links_with_answers": 0,
+        "answers_per_link": 0.0,
     }
 
     by_date = {row["date"]: row for row in body["daily"]}
@@ -255,3 +260,27 @@ def test_late_evening_local_time_lands_in_yesterdays_bucket(api_client, metrics_
     assert by_date[today.isoformat()]["links_saved"] == 0
     assert body["totals"]["signups"] == 1
     assert body["totals"]["plans_built"] == 1
+
+
+def add_answers(link, names):
+    for name in names:
+        ShareAnswer.objects.create(
+            shared_plan=link, responder=uuid.uuid4().hex * 2, name=name, status="in", plan_date=timezone.localdate()
+        )
+
+
+def test_answer_counts_without_names(api_client, metrics_key):
+    """Group plans: links with at least one friend's answer, and answers per such link."""
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    links = [SharedPlan.objects.create(owner=owner, plan_id=uuid.uuid4(), data={}) for _ in range(3)]
+    add_answers(links[0], ["Quentinia", "Zebulon", "Marisol"])
+    add_answers(links[1], ["Leopoldine"])
+    anonymous_link = SharedPlan.objects.create(owner=make_profile(is_anonymous=True), plan_id=uuid.uuid4(), data={})
+    add_answers(anonymous_link, ["Bartholomew"])
+
+    body = get(api_client).json()
+    assert body["totals"]["links_with_answers"] == 2
+    assert body["totals"]["answers_per_link"] == 2.0
+    text = json.dumps(body)
+    for name in ("Quentinia", "Zebulon", "Marisol", "Leopoldine", "Bartholomew"):
+        assert name not in text

@@ -4,6 +4,10 @@ Aggregate usage metrics for GET /api/metrics/ (the professor's endpoint).
 Everything is counted in the database, grouped by local day in the project time zone. The
 payload holds counts only: no ids, emails or names. Anonymous profiles (old TestFlight builds)
 are excluded from every number except `anonymous_sessions`.
+
+Friends' answers on shared plans (group plans) are counted, never read: how many links have any,
+and how many each such link has on average (brief "Analytics", GS-7). Answers are deleted 30 days
+after the plan's date, so these describe the answers kept now, not all time.
 """
 
 from datetime import UTC, date, datetime, time, timedelta
@@ -13,6 +17,7 @@ from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
+from plandit.shares.models import ShareAnswer
 from plandit.waitlist.models import WaitlistSignup
 
 from .models import ActivityDay, ActivityEvent, ActivityEventName, Profile
@@ -47,6 +52,17 @@ def _active_users_between(first: date, last: date) -> int:
     return rows.aggregate(n=Count("profile", distinct=True))["n"]
 
 
+def _answer_totals() -> dict:
+    counts = ShareAnswer.objects.filter(shared_plan__owner__is_anonymous=False).aggregate(
+        answers=Count("id"), links=Count("shared_plan", distinct=True)
+    )
+    links = counts["links"]
+    return {
+        "links_with_answers": links,
+        "answers_per_link": round(counts["answers"] / links, 1) if links else 0.0,
+    }
+
+
 def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
     now = timezone.now()
     today = timezone.localdate(now)
@@ -75,6 +91,7 @@ def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
         **event_totals,
         "waitlist_signups": WaitlistSignup.objects.count(),
         "anonymous_sessions": Profile.objects.filter(is_anonymous=True).count(),
+        **_answer_totals(),
     }
 
     daily = {
