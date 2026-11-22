@@ -109,6 +109,30 @@ nearby and on budget, shown on a map.
   - TikTok's oEmbed endpoint answers 200 for made-up video IDs, so it can't prove a post exists.
     The backend's public page reader can: real posts return the video's id and author, fake ones
     status 10204.
+- Group plans (Nov 2026, docs/features/group-plans/):
+  - Django owns the tables, so Supabase's row-level security doesn't protect the API. Keeping each
+    account's and group's data apart rests on the API's queries and their tests.
+  - Account deletion locks the profile first. A route that adds a row pointing at the profile must
+    call `_hold_owner` (`plandit/shares/views.py`) before the insert and answer 401 if the profile is
+    gone. Without it, the request gets a 500 or a deadlock during deletion. The lock order is: profile,
+    shared plans, requests, group plans, then their rows. The sign-in activity write still lacks it.
+  - The public pages `/p/`, `/g/` and `/j/` run no scripts. `/g/` shows the organizer's first name.
+    Any change to what they show also changes `website/privacy.html` and the live copy in Jaden's
+    repo.
+  - Answers and group plans are deleted 30 days after their day, but only when a link or group route
+    runs. Nothing runs on a schedule.
+  - `client_ip` takes the X-Forwarded-For entry `TRUSTED_PROXY_HOPS` from the right (default 3). If
+    Render's proxy count differs, the per-address answer limit is weaker until it's set.
+  - On iOS, `URLSession.shared` writes responses to its disk cache even with
+    `.reloadIgnoringLocalCacheData`. Group calls use their own session with no cache, so nothing
+    about a group outlives sign-out.
+  - UI tests for group plans launch with `-skipAuth -fakeGroupPlans <scenario>` (`empty`,
+    `mayaRemovesStop2`, `youOrganize`); `-seedInvite` hands the app an invite as if shared.
+  - The repo lives in iCloud Drive, which creates untracked " 2" copies of files (`Foo 2.swift`)
+    that Xcode then compiles. Check `git status` before building, never commit them, and run final
+    test builds from a `git archive` export outside iCloud.
+  - UI tests fail at random when the Mac is overloaded. Rerun only the failing suite before calling
+    it a real failure.
 
 ## Team
 | Person | Owns |
