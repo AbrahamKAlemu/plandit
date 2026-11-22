@@ -24,7 +24,7 @@ from django.utils.crypto import salted_hmac
 from django.utils.csp import CSP
 from django.views.decorators.csp import csp_override
 
-# --- Rate limits ----------------------------------------------------------------
+# --- Rate limits ------------------------------------------------------------------------------
 
 
 def rate_limited(key: str, limit: int, window_seconds: int) -> bool:
@@ -36,9 +36,9 @@ def rate_limited(key: str, limit: int, window_seconds: int) -> bool:
     Each allowed request claims its own numbered slot in the cache with `add`, which only one
     caller can win: DatabaseCache inserts on the table's primary key and LocMemCache holds a lock.
     So simultaneous requests can't share a count the way a read-then-write counter would, and at
-    most `limit` get through per window. (Django's `incr` is read-then-write on DatabaseCache, and
-    its `set` would also push the expiry back, so neither is used.) A slot costs one table row
-    until the window ends, so this suits limits in the tens, not thousands.
+    most `limit` get through per window. (Django's `incr` isn't used: on DatabaseCache it reads,
+    then writes, and resets the expiry to the cache's 5-minute default.) A slot costs one table
+    row until the window ends, so this suits limits in the tens, not thousands.
 
     If the cache's database can't be written, every slot looks taken and the request is refused.
 
