@@ -494,6 +494,29 @@ final class PlanditStore {
         persist()
     }
 
+    /// A group plan's day is over: file it under recent plans with the group's id, once. A phone that
+    /// filed it, or pulled another phone's copy that did, never adds a second (RO-2 to RO-4). Its
+    /// places count as visited. Today's own plan is untouched.
+    func recordGroupDay(_ plan: DayPlan, groupID: UUID) {
+        guard !isClosed, !pastPlans.contains(where: { $0.id == groupID }) else { return }
+        let past = PastPlan(
+            id: groupID,
+            title: plan.title,
+            date: plan.date,
+            stopCount: plan.stops.count,
+            cost: plan.totalCost,
+            budget: plan.budget,
+            walkingMiles: plan.walkingMiles,
+            fares: plan.faresCost
+        )
+        // Newest first, as rollover files them.
+        pastPlans.insert(past, at: pastPlans.firstIndex { $0.date < plan.date } ?? pastPlans.endIndex)
+        for place in plan.stops.map(\.place) where !visited.contains(where: { $0.name == place.name }) {
+            visited.append(place)
+        }
+        persist()
+    }
+
     // MARK: - Saved posts
 
     /// Pulls in anything the share extension queued while the app was in the background.

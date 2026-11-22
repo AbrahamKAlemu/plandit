@@ -39,19 +39,25 @@ nonisolated struct PlanditAPIClient: Sendable {
     /// token provider), `AuthError.sessionExpired` when a refreshed token is still refused,
     /// `APIError.network` when the request never got an HTTP answer. Any other status is
     /// returned as-is for the caller to interpret.
+    ///
+    /// `headers` are added to the request (`If-None-Match`); `cachePolicy` replaces the default
+    /// one (group plans don't read the URL cache). Whether answers are stored in a cache is the
+    /// transport's: `GroupPlanClient` uses a session without one.
     func send(
         _ method: String,
         path: String,
         body: Data? = nil,
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 30,
+        headers: [String: String] = [:],
+        cachePolicy: URLRequest.CachePolicy? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let token = try await tokenProvider.accessToken(for: userID, rejected: nil)
-        let first = try await perform(method, path: path, body: body, timeout: timeout, token: token)
+        let first = try await perform(method, path: path, body: body, timeout: timeout, headers: headers, cachePolicy: cachePolicy, token: token)
         guard first.1.statusCode == 401 else { return first }
         try await failIfAccountDeleted(first.0)
         // One forced refresh, one retry.
         let fresh = try await tokenProvider.accessToken(for: userID, rejected: token)
-        let second = try await perform(method, path: path, body: body, timeout: timeout, token: fresh)
+        let second = try await perform(method, path: path, body: body, timeout: timeout, headers: headers, cachePolicy: cachePolicy, token: fresh)
         guard second.1.statusCode == 401 else { return second }
         try await failIfAccountDeleted(second.0)
         await tokenProvider.sessionRejected(for: userID)
@@ -87,10 +93,14 @@ nonisolated struct PlanditAPIClient: Sendable {
         path: String,
         body: Data?,
         timeout: TimeInterval,
+        headers: [String: String],
+        cachePolicy: URLRequest.CachePolicy?,
         token: String
     ) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: url(for: path), timeoutInterval: timeout)
         request.httpMethod = method
+        if let cachePolicy { request.cachePolicy = cachePolicy }
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {

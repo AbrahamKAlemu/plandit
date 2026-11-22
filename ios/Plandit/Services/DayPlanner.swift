@@ -47,7 +47,7 @@ struct PlanCandidate: Identifiable, Hashable {
 }
 
 /// How the planner may move you between stops (Profile → Getting around).
-enum TravelPreference: Equatable {
+enum TravelPreference: Equatable, Codable {
     case walkOnly, walkAndTransit
 
     init(setting: String) {

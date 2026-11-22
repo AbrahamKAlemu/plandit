@@ -9,14 +9,18 @@ final class AccountSession {
     /// Bootstrap seeded a brand-new account: the server had no copy and this phone had no file
     /// (`SyncDecision.seedAndPush` or `.seedOffline`). Drives the first-run tutorial (D-1).
     let isNewAccount: Bool
+    /// This account's group plans (mode 3); nil without the server (a local-only account).
+    private(set) var groups: GroupPlanStore?
     private let storage: SnapshotStore
 
-    init(userID: String, store: PlanditStore, sync: SyncCoordinator?, storage: SnapshotStore, isNewAccount: Bool = false) {
+    init(userID: String, store: PlanditStore, sync: SyncCoordinator?, storage: SnapshotStore, isNewAccount: Bool = false,
+         groups: GroupPlanStore? = nil) {
         self.userID = userID
         self.store = store
         self.sync = sync
         self.storage = storage
         self.isNewAccount = isNewAccount
+        self.groups = groups
     }
 
     /// `-skipAuth`: the pre-account file with its sample data, no network at all.
@@ -42,6 +46,19 @@ final class AccountSession {
         #endif
         return AccountSession(userID: userID, store: store, sync: nil, storage: .default)
     }
+
+    #if DEBUG
+    /// `-fakeGroupPlans [scenario]` with `-skipAuth`: group plans from `FakeGroupPlanServer`, for UI
+    /// tests. Every launch starts from the fake's seed, so the cache an earlier launch left goes first.
+    func attachFakeGroupPlans(_ arguments: [String] = CommandLine.arguments, directory: URL = SnapshotStore.directory) async {
+        guard groups == nil, let server = await FakeGroupPlanServer.launch(arguments) else { return }
+        try? FileManager.default.removeItem(at: GroupPlanStore.cacheURL(for: userID, in: directory))
+        let groups = GroupPlanStore(userID: userID, server: server, directory: directory)
+        groups.history = store
+        self.groups = groups
+        await groups.refreshList()
+    }
+    #endif
 
     /// Sign-in: ask the server for the account's copy and decide between it, the local file and a
     /// fresh seed (see `SyncDecision`). Without an API client the account is local-only.
@@ -132,13 +149,17 @@ final class AccountSession {
         let sync = SyncCoordinator(userID: user.id, client: client, stateStore: stateStore, store: store)
         sync.start(version: version, dirty: dirty, readOnly: readOnly)
         store.rollOverIfNeeded()
+        // Group plans are the server's, not the snapshot's: their own cache file, kept as they are
+        // when this account's copy is read-only. A group day that's over is filed into this store.
+        let groups = GroupPlanStore(userID: user.id, server: GroupPlanClient(api: api), directory: directory)
+        groups.history = store
         if !readOnly {
             // Kept while read-only: a later bootstrap that can sync again will take it.
             AccountSeed.retireLegacyFile(in: legacyStore)
         }
         // Saves made before signing in mean this person has used Plandit already.
         let isNewAccount = decision.seedsNewAccount && legacyPosts.isEmpty
-        return AccountSession(userID: user.id, store: store, sync: sync, storage: storage, isNewAccount: isNewAccount)
+        return AccountSession(userID: user.id, store: store, sync: sync, storage: storage, isNewAccount: isNewAccount, groups: groups)
     }
 
     /// Detaches the store from the file, the sync and the events API. Idempotent; the session is
@@ -146,6 +167,14 @@ final class AccountSession {
     func tearDown() {
         store.close()
         sync?.close()
+        groups?.close()
+    }
+
+    /// Sign-out: this account's group plans leave the phone, and nothing more is sent (REM-4). An
+    /// edit still waiting to be sent is lost; the server's plan stays as it is.
+    func forgetGroupPlans() {
+        groups?.close()
+        groups?.deleteCache()
     }
 
     /// After the server deleted the account: nothing of it stays on this phone.
@@ -153,6 +182,7 @@ final class AccountSession {
         tearDown()
         sync?.forget()
         storage.reset()
+        groups?.deleteCache()
     }
 }
 
