@@ -314,8 +314,13 @@ final class PlanditStore {
     /// Walk, subway and drive for a leg, using Apple Maps times already loaded and estimates otherwise.
     /// A trip planned another way (a bus) keeps that way among them.
     func travelOptions(forLeg id: UUID) -> [TravelOption] {
-        guard let leg = today.legs.first(where: { $0.id == id }),
-              let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return [] }
+        travelOptions(forLeg: id, in: today)
+    }
+
+    /// The same for a trip in another plan (a group plan on Today).
+    func travelOptions(forLeg id: UUID, in plan: DayPlan) -> [TravelOption] {
+        guard let leg = plan.legs.first(where: { $0.id == id }),
+              let from = plan.stop(id: leg.fromStopID), let to = plan.stop(id: leg.toStopID) else { return [] }
         return Self.travelModes(for: leg).map { mode in
             let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
             return TravelOption(leg: Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place), isLive: live != nil)
@@ -324,8 +329,12 @@ final class PlanditStore {
 
     /// Asks Apple Maps for all three ways of making this trip.
     func loadTravelOptions(forLeg id: UUID) async {
-        guard let leg = today.legs.first(where: { $0.id == id }),
-              let from = stop(id: leg.fromStopID), let to = stop(id: leg.toStopID) else { return }
+        await loadTravelOptions(forLeg: id, in: today)
+    }
+
+    func loadTravelOptions(forLeg id: UUID, in plan: DayPlan) async {
+        guard let leg = plan.legs.first(where: { $0.id == id }),
+              let from = plan.stop(id: leg.fromStopID), let to = plan.stop(id: leg.toStopID) else { return }
         for mode in Self.travelModes(for: leg) {
             _ = await liveRoute(mode, from: from.place, to: to.place)
         }
@@ -382,6 +391,22 @@ final class PlanditStore {
         }
         persist()
         Task { await loadRoutes() }
+    }
+
+    /// "Drive everywhere" in another plan (a group plan on Today): each trip still ahead as `mode`
+    /// would make it, as `chooseTravelForRestOfDay` does. A trip already made that way is only
+    /// marked as picked.
+    func restOfDayLegs(_ mode: TravelMode, in plan: DayPlan) -> [TravelLeg] {
+        plan.legs.filter { plan.state(of: $0) != .completed }.compactMap { leg in
+            if leg.mode == mode {
+                var chosen = leg
+                chosen.isChosen = true
+                return chosen
+            }
+            guard let from = plan.stop(id: leg.fromStopID), let to = plan.stop(id: leg.toStopID) else { return nil }
+            let live = liveRoutes[Self.routeKey(mode, from: from.place, to: to.place)]
+            return Self.leg(mode, live: live, replacing: leg, from: from.place, to: to.place)
+        }
     }
 
     /// A leg by `mode` with the same id, so the map and timeline keep their place.

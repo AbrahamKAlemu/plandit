@@ -44,6 +44,18 @@ final class SheetRouter {
     var savedPath: [UUID] = []
     /// The "Plan a day" sheet behind the + in the tab bar. Launch with `-openPlanner YES` to start there.
     var isPlanning = UserDefaults.standard.bool(forKey: "openPlanner")
+    /// The plan Today shows when there are group plans; nil until one is picked.
+    var todayChoice: TodayChoice?
+    /// A group plan to show in Today, set from outside (a join link). Taken by `openRequestedGroupPlan`.
+    var groupPlanToOpen: UUID?
+
+    /// Shows Today with the group plan that was asked for selected, then forgets the request.
+    func openRequestedGroupPlan() {
+        guard let id = groupPlanToOpen else { return }
+        groupPlanToOpen = nil
+        todayChoice = .group(id)
+        show(.today)
+    }
 
     func selection(in tab: AppTab) -> UUID? {
         switch tab {
@@ -102,9 +114,10 @@ final class SheetRouter {
         return pendingDraft
     }
 
-    /// After a plan is built: land on Today so the new route shows on the map.
+    /// After a plan is built: land on Today, on your own plan, so the new route shows on the map.
     func finishPlanning() {
         isPlanning = false
+        todayChoice = .mine
         show(.today)
     }
 
