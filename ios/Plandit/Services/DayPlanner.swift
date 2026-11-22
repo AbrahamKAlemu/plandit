@@ -82,7 +82,6 @@ extension Place {
     func closingTime(on day: Date, calendar: Calendar = .current) -> Date? {
         guard let hours = hours?.lowercased(), let range = hours.range(of: "until ") else { return nil }
         let rest = hours[range.upperBound...].trimmingCharacters(in: .whitespaces)
-        let startOfDay = calendar.startOfDay(for: day)
 
         var hour: Int
         var minute = 0
@@ -99,7 +98,7 @@ extension Place {
         } else {
             return nil
         }
-        return calendar.date(byAdding: .minute, value: hour * 60 + minute, to: startOfDay)
+        return calendar.date(atClockMinutes: hour * 60 + minute, on: day)
     }
 }
 
@@ -197,14 +196,12 @@ struct DayPlanner {
 
     /// The earliest a place should start, for evening-only places; nil when any time works.
     func opening(of candidate: PlanCandidate, on day: Date) -> Date? {
-        candidate.place.category.earliestStartMinutes.flatMap {
-            calendar.date(byAdding: .minute, value: $0, to: calendar.startOfDay(for: day))
-        }
+        candidate.place.category.earliestStartMinutes.flatMap { calendar.date(atClockMinutes: $0, on: day) }
     }
 
+    /// 2 AM after the start day.
     private func defaultDayEnd(for start: Date) -> Date {
-        let startOfDay = calendar.startOfDay(for: start)
-        return calendar.date(byAdding: .hour, value: 26, to: startOfDay) ?? start.addingTimeInterval(26 * 3600)
+        calendar.date(atClockMinutes: 26 * 60, on: start) ?? start.addingTimeInterval(26 * 3600)
     }
 
     /// The same place picked twice (e.g. two posts about one spot) becomes one stop.
