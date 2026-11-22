@@ -13,6 +13,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 - #41 (row level security) must be merged before any group slice.
 - #45 (G0): a human reads the name blocklist before merging. After it deploys, open a shared plan link
   from a phone on cellular and from a laptop, so the `proxy chain:` log lines can set the hop count.
+- #47 (G2a): decide whether `/g/` pages show the organizer's first name.
 
 ## Phases
 
@@ -22,7 +23,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 #45 and G1a #46 open. G1a merges after the proxy-chain measurement. G1b (iOS) next. |
+| Build (G0 to G3b) | G0 #45, G1a #46 and G2a #47 open. G1a and G2a merge after the proxy-chain measurement. G1b (iOS) next. |
 | Verify, ship, learn | Not started. |
 
 ## Tasks and evidence
@@ -43,9 +44,23 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
     now handled by locking the link before deleting). A second review of the fixes found nothing.
   - Copy: all five personas approve (8/10 each), no must_fix. Applied: a separate message for a
     full plan, a plainer blocked-name message, and a hint that "can't make it" names aren't shown.
+- G2a, `feat/group-requests-backend`, #47 (base `feat/group-answers-backend`):
+  - Tests: 753 passed on a local Postgres. The one failure is the date test fixed in #44.
+  - Deterministic race tests in `test_request_races.py`. Without the new profile lock, the
+    build-while-deleting test deadlocks and returns 500.
+  - Review (xhigh): findings fixed in b0388e8 to 20ba1cc. These are the profile lock before marking a
+    request built, take-back after the plan is built, `REQUEST_BASE_URL`, and the budget as a $5-step
+    select. A second review of the fixes found no must-fix.
+  - Copy: two persona rounds, all five approve, no must_fix. The second round (7 to 8) added the
+    plan's day to the ready page and "Taking your answer back won't change the plan."
 
 ## Decisions and events
 
+- November 21: G2a follow-ups noted in #47. The organizer's first name on `/g/` pages is a privacy
+  call for Abraham (three personas asked for it). A share without `request` during account deletion
+  returns 500, and the purge could deadlock with account deletion at the exact expiry moment.
+- November 21: a friend whose answer is on a built request sees a private page with the plan's link
+  and "Take back my answer". Everyone else goes straight to the plan.
 - November 21: the answer rate limit is 20 per hour per address on each link, not across all links,
   so students behind one campus network don't share one allowance. The 50-per-link cap still holds.
 - November 21: "Take back my answer" works on any existing link, even after answers are turned off.
