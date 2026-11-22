@@ -3,9 +3,9 @@ brief GE-1, GE-5, GE-7, GE-8, GE-10; CON-1 to CON-11 in docs/features/group-plan
 
 Each test runs a first request and holds it inside one of the steps that write after the group's
 lock is taken (`_write_plan`, `_add_member`, `_remove_member`, `_replace_token`, `_end_group`,
-`_create_group`, or the deletion's `_lock_group_plans`) until the second request is seen waiting for
-a lock. That forces the order that goes wrong, so the tests don't depend on timing, and each one
-asserts the second request really was blocked."""
+`_create_group`, the deletion's `_lock_group_plans`, or the purge's `lock_rows`) until the second
+request is seen waiting for a lock. That forces the order that goes wrong, so the tests don't depend
+on timing, and each one asserts the second request really was blocked."""
 
 import threading
 from datetime import timedelta
@@ -13,7 +13,7 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
-from django.db import connection, transaction
+from django.db import DatabaseError, connection, transaction
 
 from plandit.core import retention
 from plandit.core import views as core_views
@@ -545,3 +545,72 @@ def test_the_purge_and_a_members_account_deletion_on_an_expired_group_both_finis
     assert not GroupPlan.objects.filter(pk=expired.pk).exists()
     assert not GroupMember.objects.filter(group_id=expired.pk).exists()
     assert not Profile.objects.filter(pk=jordan.id).exists()
+
+
+# --- The retention purge against leaving, a removal and ending, on an expired group -------------
+
+
+def write_on(group: GroupPlan, action: str, maya: Person, jordan: Person):
+    """Leaving (Jordan), a removal (Maya removes Jordan) or ending (Maya) as a callable for a race,
+    with the step that runs once the group is locked."""
+    if action == "end":
+        return (lambda: maya.client.delete(detail(group.id))), "_end_group"
+    path = member_path(group, member_of(group, jordan))
+    who = jordan if action == "leave" else maya
+    return (lambda: who.client.delete(path)), "_remove_member"
+
+
+def purge_later(trigger: str, organizer: Person):
+    """The purge as a callable for a race: another organizer's create, which runs it first, or the
+    command (its result, or the error it raised)."""
+    if trigger == "a group create":
+        return lambda: create(organizer)
+
+    def run():
+        try:
+            call_command("purge_expired", stdout=StringIO())
+        except DatabaseError as exc:
+            return type(exc).__name__
+        return "purged"
+
+    return run
+
+
+@pytest.mark.parametrize("trigger", ["a group create", "the purge command"])
+@pytest.mark.parametrize("action", ["leave", "removal", "end"])
+@pytest.mark.parametrize("first", ["purge", "write"])
+def test_the_purge_and_leaving_a_removal_or_ending_on_an_expired_group_both_finish(
+    maya, jordan, casey, monkeypatch, caplog, first, action, trigger
+):
+    """Leaving, a removal and ending lock the group, then delete a member or all of them; the purge
+    locks the expired groups in primary-key order, then deletes them with their members. Both take
+    the group's lock before its members', so one waits for the other and neither deadlocks: a write
+    that waited for the purge finds no group (404, as for any group that's gone), and a purge that
+    waited for the write deletes whatever the write left, a new removal included. Without the
+    purge's `lock_first` the purge deletes the members first and the write that holds the group
+    then waits for them: deadlock (mutation-checked, races-item4-mutation.log)."""
+    expired = make_group(maya, jordan, casey, day=today() - timedelta(days=GROUP_RETENTION_DAYS))
+    sam = person("Sam Rivera")
+    warm(maya, jordan, sam)
+    write, step = write_on(expired, action, maya, jordan)
+    purge = purge_later(trigger, sam)
+    if first == "purge":
+        results = first_holds_until_second_waits(
+            monkeypatch, retention, "lock_rows", purge, write, when=lambda rows: rows.model is GroupPlan
+        )
+        purged, written = results["first"], results["second"]
+    else:
+        # Held with the group locked, before the write deletes anything.
+        results = first_holds_until_second_waits(monkeypatch, group_views, step, write, purge, before=True)
+        written, purged = results["first"], results["second"]
+
+    purge_outcome = purged if trigger == "the purge command" else purged.status_code
+    assert (written.status_code, purge_outcome) == (
+        404 if first == "purge" else 204,
+        "purged" if trigger == "the purge command" else 201,
+    )
+    assert "purge_expired failed" not in caplog.text
+    assert "deadlock" not in caplog.text
+    assert not GroupPlan.objects.filter(pk=expired.pk).exists()
+    for model in (GroupMember, GroupPlanEdit, GroupRemoval):
+        assert not model.objects.filter(group_id=expired.pk).exists(), model
