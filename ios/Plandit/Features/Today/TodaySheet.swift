@@ -19,6 +19,7 @@ struct TodaySheet: View {
                     Button { isSendingPlan = true } label: {
                         CircleIconLabel(icon: .share)
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("Send the plan")
                     .transition(.scale.combined(with: .opacity))
                 }
@@ -84,11 +85,9 @@ struct TodaySheet: View {
                                         Icon(.arrowUpDown, size: 16)
                                         Text("Edit")
                                     }
-                                    .font(.label)
-                                    .foregroundStyle(.ink)
-                                    .frame(minHeight: 44)
-                                    .contentShape(Rectangle())
+                                    .outlinedControl()
                                 }
+                                .buttonStyle(.plain)
                                 .accessibilityHint("Reorder or remove stops")
                                 .accessibilityIdentifier("edit-plan")
                             }
