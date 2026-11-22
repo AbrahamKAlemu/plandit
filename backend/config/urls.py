@@ -11,6 +11,7 @@ urlpatterns = [
     path("api/plans/", include("plandit.plans.urls")),
     path("api/waitlist/", include("plandit.waitlist.urls")),
     path("api/shares/", include("plandit.shares.urls")),
+    path("api/plan-requests/", include("plandit.plans.request_urls")),
     path("p/<slug:slug>", shared_plan_page, name="shared-plan"),
     path("p/<slug:slug>/answer", answer_plan, name="shared-plan-answer"),
     path("p/<slug:slug>/answer/delete", take_back_answer, name="shared-plan-answer-delete"),

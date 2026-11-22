@@ -134,3 +134,350 @@ def test_deleting_the_account_deletes_its_requests_and_their_answers(auth_client
     assert auth_client.delete("/api/me/").status_code == 204
     assert not GroupRequest.objects.exists()
     assert not GroupAnswer.objects.exists()
+
+
+# --- GI-1: the organizer creates a request --------------------------------------------------
+
+
+def request_payload(**overrides) -> dict:
+    """What the app sends: tomorrow, 12 to 8 PM in New York, answers in 2 hours."""
+    payload = {
+        "places": copy.deepcopy(PLACES),
+        "day": (local_today() + timedelta(days=1)).isoformat(),
+        "windowStart": "12:00",
+        "windowEnd": "20:00",
+        "timeZone": TZ,
+        "answersBy": (timezone.now() + timedelta(hours=2)).isoformat(),
+    }
+    payload.update(overrides)
+    return payload
+
+
+def create(client, payload):
+    return client.post("/api/plan-requests/", payload, format="json")
+
+
+def utc_text(moment: datetime) -> str:
+    return moment.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+REQUEST_KEYS = {
+    "slug",
+    "url",
+    "status",
+    "places",
+    "day",
+    "windowStart",
+    "windowEnd",
+    "timeZone",
+    "answersBy",
+    "planSlug",
+    "createdAt",
+    "answers",
+}
+
+
+def test_creating_a_request_returns_its_link_and_what_was_asked(auth_client, user_id):
+    payload = request_payload()
+    response = create(auth_client, payload)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert set(body) == REQUEST_KEYS
+    assert len(body["slug"]) == 10
+    assert body["url"] == f"http://testserver/g/{body['slug']}"
+    assert body["status"] == "open"
+    assert body["places"] == PLACES  # ids exactly as sent
+    assert (body["day"], body["windowStart"], body["windowEnd"], body["timeZone"]) == (
+        payload["day"],
+        "12:00",
+        "20:00",
+        TZ,
+    )
+    assert body["answersBy"] == utc_text(datetime.fromisoformat(payload["answersBy"]))
+    assert body["planSlug"] is None
+    assert body["answers"] == []
+
+    stored = GroupRequest.objects.get()
+    assert stored.owner_id == user_id
+    assert stored.slug == body["slug"]
+    assert (stored.window_start, stored.window_end) == (time(12), time(20))
+    assert stored.answers_by == datetime.fromisoformat(payload["answersBy"])
+    assert stored.status == "open"
+
+
+def test_request_links_use_the_site_address_once_configured(auth_client, settings):
+    settings.SHARE_BASE_URL = "https://plandit.app"
+    body = create(auth_client, request_payload()).json()
+    assert body["url"] == f"https://plandit.app/g/{body['slug']}"
+
+
+def test_creating_a_request_needs_an_account(api_client):
+    assert create(api_client, request_payload()).status_code in (401, 403)
+    assert not GroupRequest.objects.exists()
+
+
+def ten_places():
+    return [{"id": str(uuid.uuid4()).upper(), "name": f"Place {n}", "costText": "Free"} for n in range(10)]
+
+
+def at(day: str, hour: int, minute: int = 0, zone: str = TZ) -> str:
+    return datetime.combine(date.fromisoformat(day), time(hour, minute), tzinfo=ZoneInfo(zone)).isoformat()
+
+
+BAD_REQUESTS = {
+    "one place": ("places", lambda p: p.update(places=PLACES[:1])),
+    "eleven places": ("places", lambda p: p.update(places=ten_places() + PLACES[:1])),
+    "no places": ("places", lambda p: p.update(places=[])),
+    "places missing": ("places", lambda p: p.pop("places")),
+    "the same place twice, in any case": (
+        "places",
+        lambda p: p.update(places=[PLACES[0], {**PLACES[1], "id": MET.lower()}]),
+    ),
+    "a place id that isn't a UUID": ("places", lambda p: p["places"][0].update(id="the-met")),
+    "a place without a name": ("places", lambda p: p["places"][0].pop("name")),
+    "a place name over 120 characters": ("places", lambda p: p["places"][0].update(name="x" * 121)),
+    "a cost text over 40 characters": ("places", lambda p: p["places"][0].update(costText="$" * 41)),
+    "yesterday": ("day", lambda p: p.update(day=(local_today() - timedelta(days=1)).isoformat())),
+    "15 days ahead": ("day", lambda p: p.update(day=(local_today() + timedelta(days=15)).isoformat())),
+    "a day not written YYYY-MM-DD": ("day", lambda p: p.update(day="11/22/2026")),
+    "a day with a time": ("day", lambda p: p.update(day=p["day"] + "T12:00:00")),
+    "a range under an hour": ("windowEnd", lambda p: p.update(windowEnd="12:59")),
+    "a range that ends before it starts": ("windowEnd", lambda p: p.update(windowStart="20:00", windowEnd="12:00")),
+    "a time with seconds": ("windowStart", lambda p: p.update(windowStart="12:00:00")),
+    "a time that isn't one": ("windowStart", lambda p: p.update(windowStart="noon")),
+    "hour 24": ("windowEnd", lambda p: p.update(windowEnd="24:00")),
+    "an unknown time zone": ("timeZone", lambda p: p.update(timeZone="Mars/Olympus_Mons")),
+    "a path for a time zone": ("timeZone", lambda p: p.update(timeZone="../../etc/passwd")),
+    "no time zone": ("timeZone", lambda p: p.update(timeZone="")),
+    "a deadline that has passed": (
+        "answersBy",
+        lambda p: p.update(answersBy=(timezone.now() - timedelta(minutes=1)).isoformat()),
+    ),
+    "a deadline after the range ends": ("answersBy", lambda p: p.update(answersBy=at(p["day"], 20, 1))),
+    "a deadline without a UTC offset": ("answersBy", lambda p: p.update(answersBy=p["day"] + "T10:00:00")),
+    "a deadline that isn't a moment": ("answersBy", lambda p: p.update(answersBy="Friday 9 PM")),
+}
+
+
+@pytest.mark.parametrize(("field", "change"), BAD_REQUESTS.values(), ids=BAD_REQUESTS.keys())
+def test_bad_requests_are_refused(auth_client, field, change):
+    payload = request_payload()
+    change(payload)
+    response = create(auth_client, payload)
+    assert response.status_code == 400
+    assert set(response.json()) == {field}
+    assert not GroupRequest.objects.exists()
+
+
+GOOD_EDGES = {
+    "exactly 2 places": lambda p: p.update(places=PLACES[:2]),
+    "exactly 10 places": lambda p: p.update(places=ten_places()),
+    "14 days ahead": lambda p: p.update(day=(local_today() + timedelta(days=14)).isoformat()),
+    "a range of exactly 1 hour": lambda p: p.update(windowStart="12:00", windowEnd="13:00"),
+    "a deadline at the end of the range": lambda p: p.update(answersBy=at(p["day"], 20)),
+    "a deadline in UTC with a Z": lambda p: p.update(answersBy=utc_text(timezone.now() + timedelta(hours=2))),
+    "lower-case ids": lambda p: p.update(places=[{**place, "id": place["id"].lower()} for place in PLACES]),
+    "a place with only an id and a name": lambda p: p.update(places=[{"id": MET, "name": "The Met"}, PLACES[1]]),
+    "UTC": lambda p: p.update(timeZone="UTC", day=(local_today("UTC") + timedelta(days=1)).isoformat()),
+}
+
+
+@pytest.mark.parametrize("change", GOOD_EDGES.values(), ids=GOOD_EDGES.keys())
+def test_requests_at_the_edges_are_accepted(auth_client, change):
+    payload = request_payload()
+    change(payload)
+    response = create(auth_client, payload)
+    assert response.status_code == 201, response.json()
+    assert response.json()["places"] == [
+        {"neighborhood": "", "kind": "", "costText": "", **place} for place in payload["places"]
+    ]
+
+
+@pytest.fixture
+def today_payload():
+    """Brief GI-1: today to 14 days out. Skipped in the last minutes of the day, when no deadline
+    is left before the range ends."""
+    if datetime.now(ZoneInfo(TZ)).time() > time(23, 55):
+        pytest.skip("too close to midnight in New York")
+    return request_payload(
+        day=local_today().isoformat(),
+        windowStart="00:00",
+        windowEnd="23:59",
+        answersBy=(timezone.now() + timedelta(minutes=2)).isoformat(),
+    )
+
+
+def test_a_request_for_later_today_is_accepted(auth_client, today_payload):
+    assert create(auth_client, today_payload).status_code == 201
+
+
+def test_the_day_is_checked_in_the_requests_own_time_zone(auth_client):
+    """Kiritimati is 14 hours ahead of UTC: its yesterday can be New York's today."""
+    zone = "Pacific/Kiritimati"
+    yesterday_there = (local_today(zone) - timedelta(days=1)).isoformat()
+    payload = request_payload(
+        timeZone=zone, day=yesterday_there, answersBy=utc_text(timezone.now() + timedelta(minutes=5))
+    )
+    assert create(auth_client, payload).status_code == 400
+    tomorrow_there = (local_today(zone) + timedelta(days=1)).isoformat()
+    assert create(auth_client, {**payload, "day": tomorrow_there}).status_code == 201
+
+
+def test_the_deadline_is_checked_against_the_range_in_the_requests_time_zone(auth_client):
+    """8 PM in Los Angeles is 11 PM in New York."""
+    zone = "America/Los_Angeles"
+    day = (local_today(zone) + timedelta(days=1)).isoformat()
+    payload = request_payload(timeZone=zone, day=day)
+    assert create(auth_client, {**payload, "answersBy": at(day, 22, zone=TZ)}).status_code == 201
+    assert create(auth_client, {**payload, "answersBy": at(day, 23, 1, zone=TZ)}).status_code == 400
+
+
+# --- GI-4: the owner reads every answer; everyone else gets 404 ------------------------------
+
+
+@pytest.fixture
+def group(profile):
+    return make_request(profile)
+
+
+def owner_get(client, slug):
+    return client.get(f"/api/plan-requests/{slug}/")
+
+
+def test_the_owner_reads_the_request_with_every_answer_oldest_first(auth_client, group):
+    maya = add_answer(group, name="Maya", budget=20, free_from=time(12), free_until=time(18), stars=[MET, TACOS])
+    jordan = add_answer(group, name="Jordan", budget=150, free_from=time(14, 30), free_until=time(20), stars=[])
+    response = owner_get(auth_client, group.slug)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == REQUEST_KEYS
+    assert body["slug"] == group.slug and body["status"] == "open"
+    assert [(a["id"], a["name"], a["budget"], a["freeFrom"], a["freeUntil"], a["stars"]) for a in body["answers"]] == [
+        (str(maya.id), "Maya", 20, "12:00", "18:00", [MET, TACOS]),
+        (str(jordan.id), "Jordan", 150, "14:30", "20:00", []),
+    ]
+    first = body["answers"][0]
+    assert set(first) == {"id", "name", "budget", "freeFrom", "freeUntil", "stars", "createdAt", "updatedAt"}
+    assert first["createdAt"] == utc_text(maya.created_at)
+    assert maya.responder not in response.content.decode()
+
+
+def test_the_owner_reads_a_request_with_no_answers_yet(auth_client, group):
+    assert owner_get(auth_client, group.slug).json()["answers"] == []
+
+
+def test_status_says_closed_once_the_deadline_passes(auth_client, group):
+    GroupRequest.objects.filter(pk=group.pk).update(answers_by=timezone.now() - timedelta(seconds=1))
+    assert owner_get(auth_client, group.slug).json()["status"] == "closed"
+
+
+def test_status_says_built_with_the_plans_slug(auth_client, group, profile):
+    from plandit.shares.models import SharedPlan
+
+    shared = SharedPlan.objects.create(owner=profile, plan_id=uuid.uuid4(), data={})
+    GroupRequest.objects.filter(pk=group.pk).update(status="built", shared_plan=shared)
+    body = owner_get(auth_client, group.slug).json()
+    assert (body["status"], body["planSlug"]) == ("built", shared.slug)
+
+    shared.delete()  # stop sharing the built plan
+    body = owner_get(auth_client, group.slug).json()
+    assert (body["status"], body["planSlug"]) == ("built", None)
+
+
+@pytest.mark.parametrize("path", ["close/", "close"])
+def test_the_owner_closes_the_request(auth_client, group, path):
+    response = auth_client.post(f"/api/plan-requests/{group.slug}/{path}")
+    assert response.status_code == 204
+    group.refresh_from_db()
+    assert group.status == "closed"
+    assert owner_get(auth_client, group.slug).json()["status"] == "closed"
+    assert auth_client.post(f"/api/plan-requests/{group.slug}/{path}").status_code == 204  # again: still closed
+
+
+def test_closing_a_built_request_leaves_it_built(auth_client, group):
+    GroupRequest.objects.filter(pk=group.pk).update(status="built")
+    assert auth_client.post(f"/api/plan-requests/{group.slug}/close/").status_code == 204
+    group.refresh_from_db()
+    assert group.status == "built"
+
+
+def test_the_owner_deletes_the_request_and_its_answers(auth_client, group, profile):
+    add_answer(group, name="Maya")
+    other = add_answer(make_request(profile), name="Jordan")
+
+    assert auth_client.delete(f"/api/plan-requests/{group.slug}/").status_code == 204
+    assert not GroupRequest.objects.filter(pk=group.pk).exists()
+    assert list(GroupAnswer.objects.all()) == [other]
+    assert auth_client.delete(f"/api/plan-requests/{group.slug}/").status_code == 404
+    assert owner_get(auth_client, group.slug).status_code == 404
+
+
+@pytest.mark.parametrize("case", [str.upper, str.lower], ids=["upper-case", "lower-case"])
+def test_the_owner_removes_an_answer_by_its_id_in_either_case(auth_client, group, case):
+    """Brief GS-4: the organizer can remove any answer. The app sends Swift UUIDs, in upper case."""
+    maya = add_answer(group, name="Maya")
+    add_answer(group, name="Jordan")
+    response = auth_client.delete(f"/api/plan-requests/{group.slug}/answers/{case(str(maya.id))}/")
+    assert response.status_code == 204
+    assert [a["name"] for a in owner_get(auth_client, group.slug).json()["answers"]] == ["Jordan"]
+    assert auth_client.delete(f"/api/plan-requests/{group.slug}/answers/{maya.id}/").status_code == 404
+
+
+def test_an_answer_can_only_be_removed_through_its_own_request(auth_client, group, profile):
+    other = make_request(profile)
+    maya = add_answer(group, name="Maya")
+    assert auth_client.delete(f"/api/plan-requests/{other.slug}/answers/{maya.id}/").status_code == 404
+    assert GroupAnswer.objects.count() == 1
+
+
+def owner_calls(client, slug, answer_id):
+    return {
+        "get": lambda: client.get(f"/api/plan-requests/{slug}/"),
+        "close": lambda: client.post(f"/api/plan-requests/{slug}/close/"),
+        "close without a slash": lambda: client.post(f"/api/plan-requests/{slug}/close"),
+        "delete": lambda: client.delete(f"/api/plan-requests/{slug}/"),
+        "remove an answer": lambda: client.delete(f"/api/plan-requests/{slug}/answers/{answer_id}/"),
+        "remove an answer, upper case": lambda: client.delete(
+            f"/api/plan-requests/{slug}/answers/{str(answer_id).upper()}/"
+        ),
+    }
+
+
+def test_every_owner_endpoint_is_404_for_another_account(other_client, group):
+    maya = add_answer(group, name="Maya")
+    for label, call in owner_calls(other_client, group.slug, maya.id).items():
+        response = call()
+        assert response.status_code == 404, label
+        assert "Maya" not in response.content.decode(), label
+    group.refresh_from_db()
+    assert group.status == "open"
+    assert GroupAnswer.objects.count() == 1
+
+
+def test_owner_endpoints_need_an_account(api_client, group):
+    maya = add_answer(group, name="Maya")
+    for label, call in owner_calls(api_client, group.slug, maya.id).items():
+        assert call().status_code in (401, 403), label
+    group.refresh_from_db()
+    assert group.status == "open"
+    assert GroupAnswer.objects.count() == 1
+
+
+def test_unknown_requests_and_answers_are_404_for_the_owner_too(auth_client, group):
+    for label, call in owner_calls(auth_client, "doesnotexist", uuid.uuid4()).items():
+        assert call().status_code == 404, label
+    assert auth_client.delete(f"/api/plan-requests/{group.slug}/answers/{uuid.uuid4()}/").status_code == 404
+    for bad in ("not-a-uuid", "1234", "%20"):
+        response = auth_client.delete(f"/api/plan-requests/{group.slug}/answers/{bad}/")
+        assert response.status_code == 404, bad
+        assert "text/html" not in response.get("Content-Type", ""), bad  # the API's 404, not Django's page
+
+
+def test_the_owner_read_purges_expired_requests(auth_client, group, profile):
+    expired = make_request(profile, day=local_today() - timedelta(days=31))
+    add_answer(expired)
+    owner_get(auth_client, group.slug)
+    assert not GroupRequest.objects.filter(pk=expired.pk).exists()
+    assert not GroupAnswer.objects.exists()
