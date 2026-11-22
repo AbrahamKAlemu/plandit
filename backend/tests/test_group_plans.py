@@ -1525,6 +1525,36 @@ def test_inv_12_the_page_fits_its_policy_and_links_out_without_a_referrer(token)
     assert "body=" not in report.group(1)
 
 
+def test_the_page_says_how_to_join_with_the_apps_own_labels():
+    """The steps work for a friend without the app, and name what the app shows: the Saved tab, the
+    empty list's "Paste a link" button and the "+" in Saved's header (feat/group-requests-app:
+    PlanditTabBar, SavedSheet)."""
+    import re
+
+    html = anonymous_client().get(f"/j/{'h' * 22}").content.decode()
+
+    def text(fragment: str) -> str:
+        return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", fragment)).strip()
+
+    assert "<title>You're invited to plan together</title>" in html
+    assert re.findall(r"<h1>(.*?)</h1>", html) == ["You're invited to plan together"]
+    intro, after = (text(p) for p in re.findall(r"<main.*?<p>(.*?)</p>.*?</ol>\s*<p>(.*?)</p>", html, re.S)[0])
+    assert intro == (
+        "A friend wants to plan a day with you in Plandit. Everyone in the group can change the stops, "
+        "and you'll all see the same plan. Before you join, Plandit shows you whose plan it is and the day. "
+        "You can leave any time."
+    )
+    steps = re.findall(r"<li>(.*?)</li>", re.search(r'<ol class="steps">(.*?)</ol>', html, re.S).group(1), re.S)
+    assert [text(step) for step in steps] == [
+        "Get Plandit free on the App Store and sign in with email or Apple. Get Plandit free on the App Store",
+        "Come back to the link your friend sent and copy it.",
+        "In Plandit, open Saved and tap Paste a link (or + if you already have saves), then paste it.",
+    ]
+    assert f'<a class="cta" href="{APP_STORE_URL}" rel="noreferrer">Get Plandit free on the App Store</a>' in steps[0]
+    assert after == "Already have Plandit? Start at step 2."
+    assert "Add a link" not in html
+
+
 def test_inv_12_the_page_links_to_the_app_store():
     html = anonymous_client().get(f"/j/{'d' * 22}").content.decode()
     assert f'href="{APP_STORE_URL}"' in html

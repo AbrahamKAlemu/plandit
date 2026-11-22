@@ -1,8 +1,8 @@
 """GET /j/<token>: the page a group plan's invite link opens in a browser (architecture "Mode 3").
 
-The same page for every well-formed token, from no database query: it says to open Plandit and
-paste the link, with the App Store link, and shows nothing about the group, so a guessed or old
-token learns nothing (INV-10). Joining happens in the app, signed in (/api/group-plans/invites/).
+The same page for every well-formed token, from no database query: three steps (get the app and
+sign in, copy the link, paste it in Saved), with the App Store link, and nothing about the group,
+so a guessed or old token learns nothing (INV-10). Joining happens in the app, signed in (/api/group-plans/invites/).
 It has the public pages' CSP, and no link out of it sends the address, which is the invitation
 (INV-11). The styles are /p/'s own, so the site forwards only /j/ and /static/shares/ here.
 """
