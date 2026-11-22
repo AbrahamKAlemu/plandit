@@ -70,6 +70,7 @@ struct PlanBuilderSheet: View {
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
 
+                    if store.canAskFriends { askFriendsRow }
                     if hasPlan { modePicker }
                     placesSection
                     timeAndBudget
@@ -92,6 +93,21 @@ struct PlanBuilderSheet: View {
             }
             .background(Color.surface)
         }
+    }
+
+    /// Group plans, mode 2: a link friends answer, then a plan from their answers.
+    private var askFriendsRow: some View {
+        NavigationLink {
+            AskFriendsView()
+        } label: {
+            ListRow(icon: .users, title: "Ask friends what works",
+                    detail: store.activeRequest() == nil
+                        ? "Send a link. Friends say when they're free, what they can spend and what they'd pick."
+                        : "See their answers and build your plan.")
+        }
+        .buttonStyle(.plain)
+        .planditCard(padding: 0)
+        .accessibilityIdentifier("ask-friends")
     }
 
     private var modePicker: some View {
@@ -231,10 +247,13 @@ struct PlanBuilderSheet: View {
 
 // MARK: - Rows
 
-private struct PickRow: View {
+/// A saved place to pick, here and in "Ask friends what works".
+struct PickRow: View {
     let post: SavedPost
     let isPicked: Bool
     let isLocked: Bool
+    /// The rows' accessibility identifiers start with this, then the post's title.
+    var idPrefix = "pick"
     let toggle: () -> Void
 
     var body: some View {
@@ -271,7 +290,7 @@ private struct PickRow: View {
         .disabled(isLocked)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isPicked ? .isSelected : [])
-        .accessibilityIdentifier("pick-\(post.title)")
+        .accessibilityIdentifier("\(idPrefix)-\(post.title)")
     }
 }
 
@@ -284,7 +303,7 @@ extension PickRow {
 }
 
 /// Selected is an ink fill, the same as a selected chip.
-private struct Checkbox: View {
+struct Checkbox: View {
     let isOn: Bool
 
     var body: some View {
