@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from rest_framework import status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -25,6 +26,7 @@ from plandit.core.public_forms import (
     responder_token,
 )
 from plandit.core.retention import purge_expired
+from plandit.plans.models import GroupRequest
 
 from .models import ANSWER_RETENTION_DAYS, ShareAnswer, SharedPlan
 from .serializers import SharedPlanSerializer
@@ -54,13 +56,17 @@ def share_url(request, slug: str) -> str:
 class SharedPlanListView(APIView):
     """POST /api/shares/: share a plan, or update its existing link. 201 the first time, 200 after.
 
-    Updating keeps friends' answers (brief GV-8), minus their swaps for stops no longer in the plan."""
+    Updating keeps friends' answers (brief GV-8), minus their swaps for stops no longer in the plan.
+    With `request`, the plan was built from that friends' input link, which is marked built and now
+    opens this plan (brief GI-7). Only the owner's own request can be: any other slug is a 400 and
+    nothing is saved."""
 
     def post(self, request):
         serializer = SharedPlanSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
         plan_id = data.pop("planId")
+        request_slug = data.pop("request", None)
         with transaction.atomic():
             # update_or_create locks the link's row, as answering does, so an answer can't be saved
             # against the old stops while this replaces them.
@@ -69,10 +75,25 @@ class SharedPlanListView(APIView):
             )
             if not created:
                 _keep_answers_in_step(shared)
+            if request_slug is not None:
+                _mark_request_built(request.user, request_slug, shared)
         return Response(
             {"slug": shared.slug, "url": share_url(request, shared.slug)},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+def _mark_request_built(owner, slug, shared) -> None:
+    """Point the owner's request at its built plan. Locked after the plan's link, the order every
+    path that takes both locks follows (stopping sharing locks the link, then clears the request's
+    plan; deleting the account locks links, then requests). Raising rolls the whole share back."""
+    group = GroupRequest.objects.select_for_update().filter(slug=slug, owner=owner).first()
+    if group is None:
+        # The same answer for someone else's request as for one that doesn't exist.
+        raise DRFValidationError({"request": ["No such request."]})
+    group.status = GroupRequest.Status.BUILT
+    group.shared_plan = shared
+    group.save(update_fields=["status", "shared_plan", "updated_at"])
 
 
 class SharedPlanDetailView(APIView):

@@ -4,6 +4,8 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
 
+from .models import SLUG_LENGTH
+
 MAX_STOPS = 30
 MAX_ALTERNATES = 2
 # How far ahead a plan's `date` may be. It sets when friends' answers are deleted (30 days after
@@ -95,7 +97,10 @@ class SharedPlanSerializer(serializers.Serializer):
 
     Group plans (mode 1) add optional fields, which today's app doesn't send: `answers` turns on
     the answer form on the page, `date` (needed with it) is the plan's day, and stops may carry an
-    `id` and up to 2 `alternates`, which friends can pick from with "I'd swap this"."""
+    `id` and up to 2 `alternates`, which friends can pick from with "I'd swap this".
+
+    Mode 2 adds `request`: the slug of the owner's friends' input link this plan was built from.
+    It isn't stored with the plan; it marks that request built and points its link at this plan."""
 
     planId = serializers.UUIDField()
     title = serializers.CharField(max_length=120)
@@ -107,6 +112,7 @@ class SharedPlanSerializer(serializers.Serializer):
     legs = SharedLegSerializer(many=True, required=False, default=list)
     answers = StrictBooleanField(required=False)
     date = IsoDateField(required=False)
+    request = serializers.SlugField(max_length=SLUG_LENGTH, required=False)
 
     def validate_stops(self, stops):
         if not stops:

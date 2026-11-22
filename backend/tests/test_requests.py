@@ -1144,3 +1144,124 @@ def test_the_public_page_purges_expired_requests(browser, group, profile, visit)
         "take back": lambda: take_back_request(browser, group.slug),
     }[visit]()
     assert not GroupRequest.objects.filter(pk=expired.pk).exists()
+
+
+# --- GI-7: the organizer shares the built plan with the request's slug -----------------------
+
+
+def share_built(client, slug, plan_id=None):
+    from tests.test_shares import plan_payload, share
+
+    return share(client, plan_payload(plan_id, request=slug))
+
+
+def test_sharing_the_plan_with_the_requests_slug_marks_it_built(auth_client, browser, group):
+    from plandit.shares.models import SharedPlan
+
+    response = share_built(auth_client, group.slug)
+    assert response.status_code == 201
+    shared = SharedPlan.objects.get(slug=response.json()["slug"])
+    assert set(response.json()) == {"slug", "url"}
+    assert "request" not in shared.data  # used, not stored with the plan
+
+    group.refresh_from_db()
+    assert (group.status, group.shared_plan_id) == ("built", shared.pk)
+    assert owner_get(auth_client, group.slug).json()["planSlug"] == shared.slug
+    page = request_page(browser, group.slug)
+    assert (page.status_code, page["Location"]) == (302, f"/p/{shared.slug}")
+    assert friend_answer(browser, group.slug).status_code == 410
+
+
+@pytest.mark.parametrize("state", ["closed", "past the deadline"])
+def test_a_closed_request_can_still_be_built(auth_client, group, state):
+    """The organizer can build at any time with whoever answered (brief GI-5)."""
+    if state == "closed":
+        closed_by_the_organizer(group)
+    else:
+        past_deadline(group)
+    assert share_built(auth_client, group.slug).status_code == 201
+    group.refresh_from_db()
+    assert group.status == "built"
+
+
+def test_sharing_the_same_plan_again_keeps_the_request_built(auth_client, group):
+    plan_id = uuid.uuid4()
+    first = share_built(auth_client, group.slug, plan_id).json()["slug"]
+    again = share_built(auth_client, group.slug, plan_id)
+    assert again.status_code == 200 and again.json()["slug"] == first
+    group.refresh_from_db()
+    assert (group.status, group.shared_plan.slug) == ("built", first)
+
+
+def test_building_again_from_another_plan_moves_the_link(auth_client, group):
+    share_built(auth_client, group.slug)
+    second = share_built(auth_client, group.slug).json()["slug"]
+    group.refresh_from_db()
+    assert group.shared_plan.slug == second
+
+
+def test_sharing_without_a_request_leaves_requests_alone(auth_client, group):
+    from tests.test_shares import plan_payload, share
+
+    assert share(auth_client, plan_payload()).status_code == 201
+    group.refresh_from_db()
+    assert (group.status, group.shared_plan_id) == ("open", None)
+
+
+def test_stopping_sharing_the_built_plan_closes_the_link(auth_client, browser, group):
+    slug = share_built(auth_client, group.slug).json()["slug"]
+    assert auth_client.delete(f"/api/shares/{slug}/").status_code == 204
+    group.refresh_from_db()
+    assert (group.status, group.shared_plan_id) == ("built", None)
+    assert owner_get(auth_client, group.slug).json()["planSlug"] is None
+    page = request_page(browser, group.slug)
+    assert page.status_code == 200 and CLOSED in html(page)
+
+
+def someone_elses_request() -> GroupRequest:
+    from plandit.core.models import Profile
+
+    stranger = Profile.objects.create(id=uuid.uuid4(), email="stranger@nyu.edu", name="Stranger")
+    return make_request(stranger)
+
+
+@pytest.mark.parametrize("whose", ["another account's", "unknown"])
+def test_only_the_owner_can_mark_a_request_built_and_nothing_else_changes(auth_client, profile, whose):
+    from plandit.shares.models import SharedPlan
+
+    target = someone_elses_request() if whose == "another account's" else None
+    slug = target.slug if target else "doesnotexi"
+    plan_id = uuid.uuid4()
+    from tests.test_shares import plan_payload, share
+
+    original = share(auth_client, plan_payload(plan_id, title="Before")).json()["slug"]
+
+    refused = share(auth_client, plan_payload(plan_id, title="After", request=slug))
+    assert refused.status_code == 400
+    assert refused.json() == {"request": ["No such request."]}  # the same answer either way
+    assert SharedPlan.objects.get(slug=original).data["title"] == "Before"  # the update rolled back
+    assert share(auth_client, plan_payload(request=slug)).status_code == 400
+    assert SharedPlan.objects.count() == 1  # and no new link was made
+    if target:
+        target.refresh_from_db()
+        assert (target.status, target.shared_plan_id) == ("open", None)
+
+
+def test_an_outsider_cannot_mark_the_organizers_request_built(other_client, browser, group):
+    from plandit.shares.models import SharedPlan
+
+    assert share_built(other_client, group.slug).status_code == 400
+    assert not SharedPlan.objects.exists()
+    group.refresh_from_db()
+    assert (group.status, group.shared_plan_id) == ("open", None)
+    assert request_page(browser, group.slug).status_code == 200
+
+
+@pytest.mark.parametrize("bad", ["", None, "not a slug", "abcdefghijk", 12, ["abc"]])
+def test_a_request_field_that_isnt_a_slug_is_refused(auth_client, group, bad):
+    from plandit.shares.models import SharedPlan
+
+    response = share_built(auth_client, bad)
+    assert response.status_code == 400
+    assert set(response.json()) == {"request"}
+    assert not SharedPlan.objects.exists()
