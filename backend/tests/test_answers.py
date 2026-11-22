@@ -693,6 +693,22 @@ def test_the_21st_answer_from_one_address_in_an_hour_is_refused(slug, settings, 
     assert answer(new_browser(), slug, name="Later", REMOTE_ADDR="203.0.113.7").status_code == 303
 
 
+def test_the_address_limit_is_per_link(auth_client, slug, settings, clock):
+    """Students behind one campus address don't share one limit across every link."""
+    settings.BEHIND_TRUSTED_PROXY = False
+    other_slug = share(auth_client, answers_payload()).json()["slug"]
+    for n in range(20):
+        assert (
+            answer(
+                new_browser(), slug, name=f"Friend {'abcdefghijklmnopqrstu'[n]}", REMOTE_ADDR="203.0.113.7"
+            ).status_code
+            == 303
+        )
+
+    assert answer(new_browser(), other_slug, name="Maya", REMOTE_ADDR="203.0.113.7").status_code == 303
+    assert answer(new_browser(), slug, name="Late", REMOTE_ADDR="203.0.113.7").status_code == 429
+
+
 def test_changing_an_answer_counts_against_the_address_too(browser, slug, settings, clock):
     settings.BEHIND_TRUSTED_PROXY = False
     for _ in range(20):

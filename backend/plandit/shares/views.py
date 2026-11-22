@@ -31,9 +31,9 @@ from .serializers import SharedPlanSerializer
 
 logger = logging.getLogger(__name__)
 
-# Brief GS-2. The address limit counts every answer posted from one address, on any link; the
-# link cap is a count of the link's answers in the database (a rate limit's cache can evict live
-# counts once it's full).
+# Brief GS-2. The address limit counts the answers posted from one address to one link, so students
+# behind one campus address don't share a limit across every link; the link cap bounds each link,
+# as a count of its answers in the database (a rate limit's cache can evict live counts once full).
 ANSWERS_PER_ADDRESS = 20
 ANSWERS_PER_ADDRESS_WINDOW = 60 * 60
 ANSWERS_PER_LINK = 50
@@ -140,15 +140,16 @@ def shared_plan_page(request, slug):
 @require_POST
 def answer_plan(request, slug):
     """POST /p/<slug>/answer: a friend's answer, from the page's form. Django's CSRF check runs
-    first. Then the address limit, the first name and the buttons; then, with the link locked,
-    the per-link cap and the save, matched to the browser by its cookie. 303 back to the page.
-    Over a limit (429) or with a bad name (400), the page comes back with the reason."""
+    first. Then the address's limit on this link, the first name and the buttons; then, with the
+    link locked, the per-link cap and the save, matched to the browser by its cookie, which is
+    renewed to last as long as the answer. 303 back to the page. Over a limit (429) or with a bad
+    name (400), the page comes back with the reason."""
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
         return _not_found_page(request)
     if not _takes_answers(shared):
         raise Http404
-    if rate_limited(f"answer-address:{client_ip(request)}", ANSWERS_PER_ADDRESS, ANSWERS_PER_ADDRESS_WINDOW):
+    if rate_limited(f"answer:{slug}:{client_ip(request)}", ANSWERS_PER_ADDRESS, ANSWERS_PER_ADDRESS_WINDOW):
         return _plan_page(request, shared, form=_typed(request, shared), error=TRY_LATER, status=429)
     # After the limit, so a refused request costs as little as possible.
     purge_expired()
