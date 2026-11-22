@@ -51,6 +51,8 @@ struct PlanRequestLink: Codable, Equatable {
     var placeIDs: [UUID]
     /// Today's plan (`DayPlan.id`) once "Build our plan" put the answers in it.
     var builtPlanID: UUID?
+    /// The stops "Build our plan" put in it, so "Try again" never puts another plan on the link.
+    var builtStopIDs: [UUID]?
 
     var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)

@@ -121,8 +121,8 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Friends' answers"].waitForNonExistence(timeout: 5), "the planner closes")
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos No. 1'")).firstMatch.waitForExistence(timeout: 5),
                       "Today shows the plan")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Built our plan'")).firstMatch.waitForExistence(timeout: 3),
-                      "and it can be undone")
+        // Friends' link opens it now, so there's no Undo: it would put the old plan there.
+        XCTAssertFalse(app.staticTexts["undo-message"].exists)
 
         openAskFriends(app)
         XCTAssertTrue(app.navigationBars["Friends' answers"].waitForExistence(timeout: 3))
@@ -162,6 +162,8 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertTrue(build.isEnabled)
         build.tap()
         XCTAssertTrue(app.navigationBars["Friends' answers"].waitForNonExistence(timeout: 5), "the planner closes")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Built our plan'")).firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos No. 1'")).firstMatch.waitForExistence(timeout: 5),
+                      "Today shows the plan")
+        XCTAssertFalse(app.staticTexts["undo-message"].exists)
     }
 }

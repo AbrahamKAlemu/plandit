@@ -314,7 +314,7 @@ private struct FriendsAnswersView: View {
         let plan = result.flatMap(\.plan)
         let outcome = plan.flatMap { store.previewGroupPlan($0) }
         // Built into Today, but the link didn't get it: "Try again" only puts it on the link.
-        let needsLink = !isBuilt && link.builtPlanID != nil && link.builtPlanID == store.today.id
+        let needsLink = store.groupPlanAwaitsLink
         return VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
@@ -730,7 +730,7 @@ private struct FriendsAnswersView: View {
         if !onlyShare {
             guard let plan else { return }
             _ = withAnimation(.snappy(duration: 0.35)) { store.buildGroupPlan(plan) }
-            guard store.planRequest?.builtPlanID == store.today.id else { return }
+            guard store.groupPlanAwaitsLink else { return }
         }
         do {
             try await store.shareGroupPlan()

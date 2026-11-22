@@ -1317,20 +1317,23 @@ final class PlanditStore {
         groupPlanRequest(plan, now: now).map { DayPlanner(travel: travelPreference).plan($0) }
     }
 
-    /// "Build our plan": the answers' plan replaces today's (Undo puts it back) and the link
-    /// remembers it. Then `shareGroupPlan` puts it on the link. Nil when the link isn't for today.
+    /// "Build our plan": the answers' plan replaces today's and the link remembers it. Then
+    /// `shareGroupPlan` puts it on the link. Until that works, Undo puts the old plan back (and
+    /// Build is offered again); once friends' link opens it, there's no Undo: the organizer changes
+    /// it in Today, as with any shared plan. Nil when the link isn't for today.
     @discardableResult
     func buildGroupPlan(_ plan: GroupInputs.Plan, now: Date = AppClock.now) -> DayPlanner.Outcome? {
         guard var link = planRequest, let request = groupPlanRequest(plan, now: now) else { return nil }
         let outcome = DayPlanner(travel: travelPreference).plan(request)
         guard !outcome.stops.isEmpty else { return outcome }
-        remember("Built our plan")
+        remember(Self.groupBuildUndoMessage, isGroupBuild: true)
         today.stops = outcome.stops
         today.legs = outcome.legs
         legPaths = [:]
         today.budget = plan.budget
         today.title = Self.title(for: today.stops)
         link.builtPlanID = today.id
+        link.builtStopIDs = today.stops.map(\.id)
         planRequest = link
         requestChanges += 1
         persist()
@@ -1344,14 +1347,27 @@ final class PlanditStore {
     /// An existing link keeps its settings; a new one shows prices, and no swaps, since the
     /// organizer hasn't seen swap options for this plan (GV-9).
     func shareGroupPlan() async throws {
-        guard let link = planRequest, link.builtPlanID == today.id else { throw APIError.invalidResponse }
+        guard groupPlanAwaitsLink, let link = planRequest else { throw APIError.invalidResponse }
         let current = todayLink
         try await shareToday(showPrices: current?.showPrices ?? true, note: current?.note ?? "",
                              suggestsSwaps: current?.suggestsSwaps ?? false, request: link.slug)
+        // Friends' link opens this plan now: undoing the build would put the old one there.
+        if undo?.isGroupBuild == true { undo = nil }
         requestChanges += 1
         if fetchedRequest?.slug == link.slug { fetchedRequest?.status = .built }
         await refreshPlanRequest(force: true)
     }
+
+    /// The plan "Build our plan" put in Today is still there, with the same stops, and isn't on
+    /// friends' link yet: "Try again" puts it there. False once it's undone or another plan
+    /// replaced it, so the link never gets a plan that wasn't built from the answers.
+    var groupPlanAwaitsLink: Bool {
+        guard let link = planRequest, let builtID = link.builtPlanID, builtID == today.id,
+              let stopIDs = link.builtStopIDs, requestDetails?.status != .built else { return false }
+        return Set(stopIDs) == Set(today.stops.map(\.id))
+    }
+
+    static let groupBuildUndoMessage = "Built our plan. It isn't on the link yet."
 
     /// The planner's inputs for the answers' plan: from the start of everyone's time (or the next
     /// quarter hour, if that's later) to its end, on the lowest budget, most-starred places first.
@@ -1373,11 +1389,13 @@ final class PlanditStore {
         let id = UUID()
         let message: String
         let plan: DayPlan
+        /// "Build our plan", before the plan went on friends' link.
+        var isGroupBuild = false
     }
 
     /// Call before changing `today`.
-    private func remember(_ message: String) {
-        undo = PlanUndo(message: message, plan: today)
+    private func remember(_ message: String, isGroupBuild: Bool = false) {
+        undo = PlanUndo(message: message, plan: today, isGroupBuild: isGroupBuild)
     }
 
     /// Puts today's plan back the way it was before the last change.
@@ -1385,6 +1403,12 @@ final class PlanditStore {
         guard let undo else { return }
         today = undo.plan
         self.undo = nil
+        if undo.isGroupBuild, var link = planRequest {
+            // The built plan is gone: no "Try again" for it, and Build is offered again.
+            link.builtPlanID = nil
+            link.builtStopIDs = nil
+            planRequest = link
+        }
         persist()
         Task { await loadRoutes() }
     }

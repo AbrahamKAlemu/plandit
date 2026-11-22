@@ -251,8 +251,9 @@ import XCTest
         let afterSettling = await sharing.published
         XCTAssertEqual(afterSettling.count, 1)
 
-        store.undoLastChange()
-        XCTAssertEqual(store.today.stops.map(\.id), before, "Undo puts the old plan back")
+        // Friends' link opens it now: Undo would put the old plan there (GroupBuildUndoTests).
+        XCTAssertNil(store.undo)
+        XCTAssertNotEqual(store.today.stops.map(\.id), before)
     }
 
     func testOnlyTodaysLinkCanBeBuilt() async throws {
@@ -336,65 +337,5 @@ import XCTest
 
     private func api(_ transport: FakeTransport) -> PlanditAPIClient {
         PlanditAPIClient(baseURL: URL(string: "https://api.example")!, userID: "user-1", tokenProvider: FakeTokenProvider(), transport: transport)
-    }
-}
-
-/// A server the test sets, recording what the store asked for.
-private actor RecordingRequests: PlanRequesting {
-    private var request: PlanRequest?
-    private var failsNext = false
-    private var holdsNext = false
-    private var held: CheckedContinuation<Void, Never>?
-    private(set) var fetches = 0
-    private(set) var removed: [UUID] = []
-    private(set) var closed: [String] = []
-    private(set) var deleted: [String] = []
-    var isHolding: Bool { held != nil }
-
-    func setAnswers(_ answers: [GroupAnswer]) { request?.answers = answers }
-    func setStatus(_ status: PlanRequest.Status) { request?.status = status }
-    func setGone() { request = nil }
-    func failNext() { failsNext = true }
-    /// The next fetch waits for `release()`, then answers with what was set when it was asked.
-    func holdNext() { holdsNext = true }
-    func release() {
-        held?.resume()
-        held = nil
-    }
-
-    func create(_ draft: PlanRequestDraft) async throws -> PlanRequest {
-        let created = PlanRequest(slug: "req1", url: URL(string: "https://plandit.app/g/req1")!, status: .open,
-                                  placeIDs: draft.places.map(\.id), answersBy: Date(), planSlug: nil, answers: [])
-        request = created
-        return created
-    }
-
-    func fetch(slug: String) async throws -> PlanRequest? {
-        fetches += 1
-        if failsNext {
-            failsNext = false
-            throw APIError.network
-        }
-        let current = request
-        if holdsNext {
-            holdsNext = false
-            await withCheckedContinuation { held = $0 }
-        }
-        return current
-    }
-
-    func close(slug: String) async throws {
-        closed.append(slug)
-        request?.status = .closed
-    }
-
-    func delete(slug: String) async throws {
-        deleted.append(slug)
-        request = nil
-    }
-
-    func removeAnswer(slug: String, answerID: UUID) async throws {
-        removed.append(answerID)
-        request?.answers.removeAll { $0.id == answerID }
     }
 }
