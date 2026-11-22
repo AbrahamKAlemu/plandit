@@ -488,6 +488,8 @@ extension FakeGroupPlanServer {
     nonisolated static let joinableGroupID = UUID(uuidString: "AD1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
     /// Its link is `https://plandit.app/j/` and this.
     nonisolated static let joinableToken = "fake-invite-jordans-day"
+    /// With `youOrganize`: a group plan you organize, with Maya and Jordan in it.
+    nonisolated static let organizedGroupID = UUID(uuidString: "DE1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
 
     /// `-fakeGroupPlans [scenario]`, for UI tests: a server where you're in Maya's group plan for
     /// today (with Jordan; every stop planned), and Jordan's group is open to join by link.
@@ -496,6 +498,7 @@ extension FakeGroupPlanServer {
     /// - `mayaRemovesStop2`: just before your first change reaches the server, Maya removes the
     ///   plan's second stop, so a change to that stop isn't made and the message names her; a
     ///   change to another stop lands after it.
+    /// - `youOrganize`: you also organize a group plan for today, with Maya and Jordan in it.
     /// nil without the argument.
     @MainActor
     static func launch(_ arguments: [String] = CommandLine.arguments, now: Date = .now, calendar: Calendar = .current) async -> FakeGroupPlanServer? {
@@ -513,6 +516,11 @@ extension FakeGroupPlanServer {
         other.id = UUID(uuidString: "CF1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
         other.title = "Jordan's day"
         await server.seedGroup(id: joinableGroupID, plan: other, date: date, organizer: "Jordan", youAreMember: false, token: joinableToken)
+        if scenario == "youOrganize" {
+            var yours = plan
+            yours.id = UUID(uuidString: "EF1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
+            await server.seedGroup(id: organizedGroupID, plan: yours, date: date, organizer: nil, others: ["Maya", "Jordan"])
+        }
         if scenario == "mayaRemovesStop2" {
             await server.beforeNext(.put) { [weak server] in
                 guard let server, let info = await server.info(seededGroupID), info.plan.stops.count > 1 else { return }
