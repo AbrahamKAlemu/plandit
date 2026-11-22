@@ -393,4 +393,109 @@ final class PlanditStoreTests: XCTestCase {
             "Automatic imports are paused for today. Add the place name or address below, or use the video instead."
         )
     }
+
+    // MARK: - Suggested plans (SP-10, SP-11)
+
+    @MainActor private final class EventLog {
+        var events: [UsageEvent] = []
+    }
+
+    /// Three places a block apart in Chelsea: one closes at 3 PM, so starting later changes the plan.
+    @MainActor private func suggestionPosts() -> [SavedPost] {
+        func post(_ name: String, north: Double, category: PlaceCategory, hours: String?, cost: Double) -> SavedPost {
+            SavedPost(
+                url: URL(string: "https://www.tiktok.com/@test/video/\(name.count)")!, platform: .tiktok,
+                savedAt: SampleData.daysAgo(2), status: .ready,
+                place: Place(name: name, category: category, neighborhood: "Chelsea", address: "\(name) St",
+                             latitude: 40.7424 + north, longitude: -74.0060, hours: hours),
+                estimatedCost: cost
+            )
+        }
+        return [
+            post("Lunch counter", north: 0, category: .food, hours: "Open until 3 PM", cost: 12),
+            post("Gallery", north: 0.002, category: .culture, hours: nil, cost: 0),
+            post("Bookshop", north: 0.004, category: .shopping, hours: "Open until 9 PM", cost: 8),
+        ]
+    }
+
+    @MainActor private func suggestionStore(_ posts: [SavedPost], start: Date) -> (PlanditStore, EventLog) {
+        let log = EventLog()
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: posts, profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: nil,
+            events: { log.events.append($0) }
+        )
+        store.suggestionStart = { start }
+        store.refreshSuggestions()
+        return (store, log)
+    }
+
+    @MainActor func testUseSuggestionMatchesPreview() throws {
+        let start = SampleData.at(14)
+        let (store, log) = suggestionStore(suggestionPosts(), start: start)
+        let suggestion = try XCTUnwrap(store.suggestions.first)
+
+        let preview = store.previewPlan(postIDs: suggestion.postIDs, start: start, budget: store.profile.defaultBudget,
+                                        mode: .replace, end: start.addingTimeInterval(4 * 3600))
+        XCTAssertTrue(preview.isSamePlan(as: suggestion.outcome), "the card shows what the planner would build")
+
+        XCTAssertEqual(store.useSuggestion(suggestion), .applied)
+        XCTAssertEqual(store.today.stops.map(\.sourcePostID), suggestion.postIDs, "same stops in the same order")
+        XCTAssertEqual(store.today.stops.map(\.start), suggestion.outcome.stops.map(\.start), "same times")
+        XCTAssertEqual(store.today.totalCost, suggestion.outcome.cost, accuracy: 0.005, "same cost")
+        XCTAssertEqual(store.today.budget, store.profile.defaultBudget)
+        XCTAssertEqual(store.undo?.message, "Made a new plan", "the same undo step as building a plan by hand")
+        XCTAssertEqual(log.events, [.planBuilt, .suggestionUsed])
+        XCTAssertTrue(store.suggestions.isEmpty, "Today has a plan now")
+        XCTAssertNil(store.suggestionNotice)
+
+        store.undoLastChange()
+        XCTAssertTrue(store.today.stops.isEmpty, "Undo empties Today again")
+        XCTAssertEqual(store.suggestions.first, suggestion, "and the same cards come back")
+    }
+
+    @MainActor func testUseSuggestionStale() throws {
+        let posts = suggestionPosts()
+        let lunch = posts[0].id
+        let (store, log) = suggestionStore(posts, start: SampleData.at(14))
+        let shown = try XCTUnwrap(store.suggestions.first { $0.postIDs.contains(lunch) })
+
+        // Later, the lunch counter (open until 3 PM) has closed for a new plan.
+        store.suggestionStart = { SampleData.at(15) }
+        XCTAssertEqual(store.useSuggestion(shown), .stale)
+        XCTAssertTrue(store.today.stops.isEmpty, "a stale card doesn't change Today")
+        XCTAssertNil(store.undo)
+        XCTAssertTrue(log.events.isEmpty)
+        XCTAssertEqual(store.suggestionNotice, "It's later now, so these plans changed.")
+        XCTAssertFalse(store.suggestions.isEmpty, "the cards refresh")
+        XCTAssertFalse(store.suggestions.contains { $0.postIDs.contains(lunch) }, "without the place that closed")
+
+        // The time slot moved, same places: still not applied silently.
+        let current = try XCTUnwrap(store.suggestions.first)
+        store.suggestionStart = { SampleData.at(15, 15) }
+        XCTAssertEqual(store.useSuggestion(current), .stale)
+        XCTAssertTrue(store.today.stops.isEmpty)
+
+        // A fresh card applies, and the message goes.
+        let fresh = try XCTUnwrap(store.suggestions.first)
+        XCTAssertEqual(store.useSuggestion(fresh), .applied)
+        XCTAssertNil(store.suggestionNotice)
+    }
+
+    @MainActor func testSuggestionsStayPutWithinATimeSlotAndOnlyForAnEmptyToday() throws {
+        let start = SampleData.at(14)
+        let (store, _) = suggestionStore(suggestionPosts(), start: start)
+        let first = store.suggestions
+        XCTAssertFalse(first.isEmpty)
+        store.refreshSuggestions()
+        XCTAssertEqual(store.suggestions, first, "same saves, settings and slot: the same cards")
+
+        store.updateProfile { $0.defaultBudget = 0 }
+        XCTAssertTrue(store.suggestions.isEmpty, "a budget change recomputes them")
+        store.updateProfile { $0.defaultBudget = 60 }
+        XCTAssertEqual(store.suggestions, first)
+
+        _ = store.addToToday(store.plannablePosts[1].id)
+        XCTAssertTrue(store.suggestions.isEmpty, "no suggestions once Today has a plan")
+    }
 }
