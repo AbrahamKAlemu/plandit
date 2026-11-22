@@ -51,9 +51,10 @@ final class AccountSession {
     /// `-fakeGroupPlans [scenario]` with `-skipAuth`: group plans from `FakeGroupPlanServer`, for UI
     /// tests. Every launch starts from the fake's seed, so the cache an earlier launch left goes first.
     func attachFakeGroupPlans(_ arguments: [String] = CommandLine.arguments, directory: URL = SnapshotStore.directory) async {
-        guard groups == nil, let server = await FakeGroupPlanServer.launch(arguments) else { return }
+        guard groups == nil, let server = await FakeGroupPlanServer.launch(arguments, now: AppClock.now) else { return }
         try? FileManager.default.removeItem(at: GroupPlanStore.cacheURL(for: userID, in: directory))
-        let groups = GroupPlanStore(userID: userID, server: server, directory: directory)
+        // On Today's clock (`-clock`), so "Mark them done" and "Start from now" agree with the card.
+        let groups = GroupPlanStore(userID: userID, server: server, directory: directory, now: { AppClock.now })
         groups.history = store
         self.groups = groups
         await groups.refreshList()

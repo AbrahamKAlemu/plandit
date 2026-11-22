@@ -369,8 +369,12 @@ final class GroupPlanStore {
     /// Makes an edit on the plan shown and queues it for the server.
     @discardableResult
     func apply(_ edit: PlanEdit, to id: UUID) -> GroupEditResult {
-        guard !isClosed, !readOnly.contains(id), let index = index(id), !isDayOver(records[index].date),
-              let shown = shownPlan(records[index]) else { return .unavailable }
+        guard !isClosed, !readOnly.contains(id), let index = index(id) else { return .unavailable }
+        guard !isDayOver(records[index].date) else {
+            publish()  // so the plan shows as over, and the refusal says why
+            return .unavailable
+        }
+        guard let shown = shownPlan(records[index]) else { return .unavailable }
         switch PlanEdit.apply(edit, to: shown, now: now(), calendar: calendar) {
         case .alreadyApplied:
             return .alreadyApplied
@@ -586,6 +590,7 @@ final class GroupPlanStore {
             guard !isClosed, index(id) != nil else { return false }
             switch answer {
             case .notModified:
+                publish()  // nothing new, but 4 AM may have passed: the day can be over
                 return true
             case .gone:
                 removeGroup(id, announce: !isDayOver(held.date))

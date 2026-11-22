@@ -3,13 +3,15 @@ import SwiftUI
 struct StopDetailView: View {
     let stopID: UUID
     @Environment(PlanditStore.self) private var store
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
     @Environment(\.dismiss) private var dismiss
     @State private var isEditingCost = false
     @State private var isEditingTime = false
     @State private var choosingLeg: StopRef?
 
     var body: some View {
-        if let stop = store.stop(id: stopID), let number = store.stopNumber(id: stopID) {
+        if let stop = today.stop(id: stopID), let number = today.stopNumber(id: stopID) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     VStack(alignment: .leading, spacing: Space.xs) {
@@ -35,24 +37,30 @@ struct StopDetailView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .disabled(stop.status == .done)
+                        .disabled(stop.status == .done || !today.canEdit)
                         .accessibilityHint("Change when you go and how long you stay")
                         .accessibilityIdentifier("stop-time")
-                        Button { isEditingCost = true } label: {
-                            HStack {
-                                FactRow(icon: .wallet, title: stop.costIsCustom ? "Your estimate" : "Estimated cost", value: costValue(stop))
-                                Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
+                        if today.controls.budgetAndExtras {
+                            Button { isEditingCost = true } label: {
+                                HStack {
+                                    FactRow(icon: .wallet, title: stop.costIsCustom ? "Your estimate" : "Estimated cost", value: costValue(stop))
+                                    Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
+                                }
+                                .contentShape(Rectangle())
                             }
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Change what this stop costs")
+                            .accessibilityIdentifier("stop-cost")
+                        } else {
+                            // A group plan's costs aren't edited (G3b-2).
+                            FactRow(icon: .wallet, title: "Estimated cost", value: stop.estimatedCost.dollarsText)
+                                .accessibilityIdentifier("stop-cost-fixed")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Change what this stop costs")
-                        .accessibilityIdentifier("stop-cost")
                         FactRow(icon: .mapPin, title: "Address", value: stop.place.address)
                         if let hours = stop.place.hours {
                             FactRow(icon: .info, title: "Hours", value: hours)
                         }
-                        if let leg = store.today.leg(after: stop) {
+                        if let leg = today.plan.leg(after: stop) {
                             Button { choosingLeg = StopRef(id: leg.id) } label: {
                                 HStack {
                                     FactRow(icon: leg.mode.icon, title: "Next", value: leg.summary)
@@ -61,7 +69,7 @@ struct StopDetailView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .disabled(store.today.state(of: leg) == .completed)
+                            .disabled(today.plan.state(of: leg) == .completed || !today.canEdit)
                             .accessibilityHint("Choose walk, subway or drive")
                         }
                     }
@@ -80,7 +88,7 @@ struct StopDetailView: View {
 
                     VStack(spacing: Space.sm) {
                         Button {
-                            stop.place.openDirections(by: store.travelMode(into: stop.id))
+                            stop.place.openDirections(by: today.travelMode(into: stop.id))
                         } label: {
                             HStack(spacing: Space.xs) {
                                 Icon(.navigation, size: 18)
@@ -90,16 +98,18 @@ struct StopDetailView: View {
                         .buttonStyle(.primary)
 
 
-                        Button(role: .destructive) {
-                            dismiss()
-                            withAnimation(.snappy) { store.removeStop(stop.id) }
-                        } label: {
-                            Text("Remove from plan")
-                                .font(.label)
-                                .foregroundStyle(.error)
-                                .frame(maxWidth: .infinity, minHeight: 44)
+                        if today.canEdit {
+                            Button(role: .destructive) {
+                                dismiss()
+                                withAnimation(.snappy) { today.remove(stop.id) }
+                            } label: {
+                                Text("Remove from plan")
+                                    .font(.label)
+                                    .foregroundStyle(.error)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .accessibilityIdentifier("remove-from-plan")
                         }
-                        .accessibilityIdentifier("remove-from-plan")
                     }
                 }
                 .padding(Space.lg)
@@ -128,7 +138,8 @@ struct StopDetailView: View {
 /// and the Undo bar covers what it did to the stops around it.
 private struct StatusPicker: View {
     let stop: PlanStop
-    @Environment(PlanditStore.self) private var store
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
@@ -138,6 +149,7 @@ private struct StatusPicker: View {
                 Text("Done").tag(StopStatus.done)
             }
             .pickerStyle(.segmented)
+            .disabled(!today.canEdit)
             .accessibilityIdentifier("stop-status")
             Text(hint)
                 .font(.metadata)
@@ -157,9 +169,9 @@ private struct StatusPicker: View {
         guard status != stop.status else { return }
         withAnimation(.snappy) {
             switch status {
-            case .upcoming: store.leave(stop.id)
-            case .now: store.arrive(at: stop.id)
-            case .done: store.complete(stop.id)
+            case .upcoming: today.leave(stop.id)
+            case .now: today.arrive(at: stop.id)
+            case .done: today.complete(stop.id)
             }
         }
     }

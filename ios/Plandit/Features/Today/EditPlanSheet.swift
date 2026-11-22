@@ -2,15 +2,21 @@ import SwiftUI
 
 /// Edit the stops still ahead: drag to reorder, tap the trash can to remove. Times update as you go;
 /// nothing changes until Save, and Save can be undone. Stops that are done or underway stay where they are.
+/// In a group plan, Save sends each move and removal as an edit against the plan as the sheet opened,
+/// so a stop someone else adds meanwhile stays.
 struct EditPlanSheet: View {
-    @Environment(PlanditStore.self) private var store
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
     @Environment(\.dismiss) private var dismiss
     @State private var order: [UUID] = []
     @State private var didLoad = false
+    /// The plan as the sheet opened.
+    @State private var base: DayPlan?
 
     var body: some View {
-        let current = store.today
-        let preview = store.previewReorder(order)
+        let current = today.plan
+        let opened = base ?? current
+        let preview = today.previewReorder(order, from: opened)
         let first = current.firstMovableIndex
         NavigationStack {
             List {
@@ -50,7 +56,7 @@ struct EditPlanSheet: View {
                 } header: {
                     Text("Still ahead")
                 } footer: {
-                    Text(footer(removed: current.stops.count - first - order.count))
+                    Text(footer(removed: opened.stops.count - opened.firstMovableIndex - order.count))
                 }
                 let warnings = warnings(current: current, preview: preview)
                 if !warnings.isEmpty {
@@ -71,7 +77,7 @@ struct EditPlanSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        withAnimation(.snappy) { store.reorder(order) }
+                        withAnimation(.snappy) { today.reorder(order, from: opened) }
                         dismiss()
                     }
                     .accessibilityIdentifier("reorder-save")
@@ -83,7 +89,9 @@ struct EditPlanSheet: View {
         .onAppear {
             guard !didLoad else { return }
             didLoad = true
-            order = store.today.stops[store.today.firstMovableIndex...].map(\.id)
+            let plan = today.plan
+            base = plan
+            order = plan.stops[plan.firstMovableIndex...].map(\.id)
         }
     }
 

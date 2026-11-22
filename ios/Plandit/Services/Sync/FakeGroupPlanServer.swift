@@ -480,6 +480,26 @@ actor FakeGroupPlanServer: GroupPlanServing {
     }
 }
 
+extension DayPlan {
+    /// A copy whose stops and trips have new ids, trips still joining the same stops: a group plan
+    /// for tests that shares no stop ids with the sample day.
+    func withFreshStopIDs() -> DayPlan {
+        var copy = self
+        var fresh: [UUID: UUID] = [:]
+        for index in copy.stops.indices {
+            let id = UUID()
+            fresh[copy.stops[index].id] = id
+            copy.stops[index].id = id
+        }
+        for index in copy.legs.indices {
+            copy.legs[index].id = UUID()
+            copy.legs[index].fromStopID = fresh[copy.legs[index].fromStopID] ?? copy.legs[index].fromStopID
+            copy.legs[index].toStopID = fresh[copy.legs[index].toStopID] ?? copy.legs[index].toStopID
+        }
+        return copy
+    }
+}
+
 extension FakeGroupPlanServer {
     nonisolated static let launchArgument = "-fakeGroupPlans"
     /// The seeded group's link, already joined (joining again changes nothing).
@@ -488,6 +508,8 @@ extension FakeGroupPlanServer {
     nonisolated static let joinableGroupID = UUID(uuidString: "AD1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
     /// Its link is `https://plandit.app/j/` and this.
     nonisolated static let joinableToken = "fake-invite-jordans-day"
+    /// With `youOrganize`: a group plan you organize, with Maya and Jordan in it.
+    nonisolated static let organizedGroupID = UUID(uuidString: "DE1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
 
     /// `-fakeGroupPlans [scenario]`, for UI tests: a server where you're in Maya's group plan for
     /// today (with Jordan; every stop planned), and Jordan's group is open to join by link.
@@ -496,6 +518,7 @@ extension FakeGroupPlanServer {
     /// - `mayaRemovesStop2`: just before your first change reaches the server, Maya removes the
     ///   plan's second stop, so a change to that stop isn't made and the message names her; a
     ///   change to another stop lands after it.
+    /// - `youOrganize`: you also organize a group plan for today, with Maya and Jordan in it.
     /// nil without the argument.
     @MainActor
     static func launch(_ arguments: [String] = CommandLine.arguments, now: Date = .now, calendar: Calendar = .current) async -> FakeGroupPlanServer? {
@@ -503,16 +526,23 @@ extension FakeGroupPlanServer {
         let scenario = arguments.indices.contains(index + 1) ? arguments[index + 1] : ""
         let server = FakeGroupPlanServer()
         guard scenario != "empty" else { return server }
-        var plan = SampleData.dayPlan
+        // Every group's stops get their own ids, as on the server, so nothing found in your own
+        // plan by id can pass for a group plan's stop.
+        var plan = SampleData.dayPlan.withFreshStopIDs()
         plan.id = UUID(uuidString: "BE1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
         plan.date = now
         for stop in plan.stops.indices { plan.stops[stop].status = .upcoming }
         let date = GroupPlanDay.string(for: now, calendar: calendar)
         await server.seedGroup(id: seededGroupID, plan: plan, date: date, organizer: "Maya", others: ["Jordan"])
-        var other = plan
+        var other = plan.withFreshStopIDs()
         other.id = UUID(uuidString: "CF1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
         other.title = "Jordan's day"
         await server.seedGroup(id: joinableGroupID, plan: other, date: date, organizer: "Jordan", youAreMember: false, token: joinableToken)
+        if scenario == "youOrganize" {
+            var yours = plan.withFreshStopIDs()
+            yours.id = UUID(uuidString: "EF1C2A4E-1B2C-4D3E-8F90-A1B2C3D4E5F6")!
+            await server.seedGroup(id: organizedGroupID, plan: yours, date: date, organizer: nil, others: ["Maya", "Jordan"])
+        }
         if scenario == "mayaRemovesStop2" {
             await server.beforeNext(.put) { [weak server] in
                 guard let server, let info = await server.info(seededGroupID), info.plan.stops.count > 1 else { return }

@@ -5,6 +5,8 @@ import SwiftUI
 struct PlanBuilderSheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
+    /// "Ask friends what works" is off while a group plan is shown in Today.
+    @TodayContext private var today
     @Environment(\.dismiss) private var dismiss
     /// Picked post ids, in the order they were picked.
     @State private var picked: [UUID] = []
@@ -70,7 +72,7 @@ struct PlanBuilderSheet: View {
                         .font(.bodyText)
                         .foregroundStyle(.inkMuted)
 
-                    if store.canAskFriends { askFriendsRow }
+                    if store.canAskFriends && today.controls.askFriends { askFriendsRow }
                     if hasPlan { modePicker }
                     placesSection
                     timeAndBudget

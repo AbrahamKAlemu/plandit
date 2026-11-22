@@ -4,6 +4,8 @@ import SwiftUI
 struct SavedSheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
+    /// Where + puts a place: your own plan, or the group plan picked in Today.
+    @TodayContext private var today
     @State private var query = SavedListQuery()
     /// Counts + taps that added a place, for the success haptic.
     @State private var adds = 0
@@ -70,7 +72,7 @@ struct SavedSheet: View {
 
                         VStack(spacing: 0) {
                             ForEach(posts) { post in
-                                SavedListRow(post: post, isInToday: store.isInToday(post)) {
+                                SavedListRow(post: post, isInToday: today.contains(post)) {
                                     add(post)
                                 }
                                 .contextMenu {
@@ -111,11 +113,9 @@ struct SavedSheet: View {
         }
         .onAppear { query.forgetMissingGroup(in: store.saved) }
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $isAddingLink) {
-            AddLinkSheet { id in
-                // Land on the new post so the user watches it get mapped.
-                router.savedPath = [id]
-            }
+        .addLinkSheet(isPresented: $isAddingLink) { id in
+            // Land on the new post so the user watches it get mapped.
+            router.savedPath = [id]
         }
     }
 
@@ -145,11 +145,11 @@ struct SavedSheet: View {
     /// the tap never looks like it did nothing.
     private func add(_ post: SavedPost) {
         var added: UUID?
-        withAnimation(.snappy) { added = store.addToToday(post.id) }
+        withAnimation(.snappy) { added = today.add(post) }
         if added != nil {
             adds += 1
             // The + button goes away, so VoiceOver focus has nowhere to land: say what happened.
-            AccessibilityNotification.Announcement("Added to today's plan").post()
+            AccessibilityNotification.Announcement("Added to \(today.planName)").post()
         } else {
             router.savedPath = [post.id]
         }
@@ -186,12 +186,13 @@ struct SavedPostActions: View {
     /// Adds the place the way the row's + does, with the same haptic and announcement.
     let onAdd: () -> Void
     @Environment(PlanditStore.self) private var store
+    @TodayContext private var today
 
     var body: some View {
         // Offered exactly when the row shows +, so a needs-review place gets checked first.
-        if SavedRowTrailing(post: post, isInToday: store.isInToday(post)) == .add {
+        if SavedRowTrailing(post: post, isInToday: today.contains(post)) == .add {
             Button(action: onAdd) {
-                Label("Add to today's plan", image: "Icons/plus")
+                Label("Add to \(today.planName)", image: "Icons/plus")
             }
         }
         if post.status == .failed {

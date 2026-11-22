@@ -16,10 +16,43 @@ struct PickedVideo: Transferable {
     }
 }
 
-/// Manual fallback for the share extension: paste a TikTok or Reel link.
-struct AddLinkSheet: View {
+extension View {
+    /// "Add a link", the manual fallback for the share extension. The only way to show it, so a
+    /// group plan invite pasted from anywhere opens the join sheet once this sheet has gone (JN-1).
+    /// `onSaved` gets the saved post's id after the sheet closes.
+    func addLinkSheet(isPresented: Binding<Bool>, onSaved: @escaping (UUID) -> Void) -> some View {
+        modifier(AddLinkPresenter(isPresented: isPresented, onSaved: onSaved))
+    }
+}
+
+/// Holds an invite pasted in "Add a link" until that sheet has gone: a second sheet can't open
+/// while it's still up.
+private struct AddLinkPresenter: ViewModifier {
+    @Binding var isPresented: Bool
+    let onSaved: (UUID) -> Void
+    @Environment(SheetRouter.self) private var router
+    @State private var invite: String?
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented, onDismiss: openInvite) {
+            AddLinkSheet(onSaved: onSaved, onInvite: { invite = $0 })
+        }
+    }
+
+    private func openInvite() {
+        guard let token = invite else { return }
+        invite = nil
+        router.join(invite: token)
+    }
+}
+
+/// Manual fallback for the share extension: paste a TikTok or Reel link. A group plan invite
+/// link pasted here goes to the join sheet instead (JN-1). Shown with `addLinkSheet`.
+private struct AddLinkSheet: View {
     /// Called with the saved post's id after the sheet closes.
-    var onSaved: (UUID) -> Void = { _ in }
+    let onSaved: (UUID) -> Void
+    /// Called with an invite link's token, just before the sheet closes for the join sheet.
+    let onInvite: (String) -> Void
     @Environment(PlanditStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
@@ -65,6 +98,8 @@ struct AddLinkSheet: View {
                         PasteButton(payloadType: String.self) { strings in
                             text = strings.first ?? ""
                             errorMessage = nil
+                            // An invite goes straight to its join sheet; a post waits for Save.
+                            if InviteLink.token(in: text) != nil { save() }
                         }
                         .labelStyle(.titleOnly)
                         .tint(Color.ink)
@@ -159,6 +194,12 @@ struct AddLinkSheet: View {
     }
 
     private func save() {
+        // A group plan invite opens the join sheet, not place finding (JN-1).
+        if let token = InviteLink.token(in: text) {
+            onInvite(token)
+            dismiss()
+            return
+        }
         guard let url = LinkParser.firstWebURL(in: text) else {
             errorMessage = "Paste a link to a TikTok or an Instagram post or Reel."
             return

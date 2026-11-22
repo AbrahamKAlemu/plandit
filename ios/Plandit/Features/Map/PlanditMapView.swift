@@ -9,6 +9,8 @@ struct PlanditMapView: View {
     /// Called from the locate button; location permission is requested then, not at launch.
     let onLocate: () -> Void
     @Environment(PlanditStore.self) private var store
+    /// Your own plan or the group plan picked in Today.
+    @TodayContext private var today
     @Namespace private var mapScope
 
     var body: some View {
@@ -28,7 +30,8 @@ struct PlanditMapView: View {
     private var map: some View {
         // Read the routes here, in the view's body, so the map redraws when street paths arrive.
         // (Reads inside Map's content builder alone don't always trigger an update.)
-        let lines = tab == .today ? store.today.legs.map { RouteLine(leg: $0, plan: store.today, path: store.path(for: $0)) } : []
+        let plan = today.plan
+        let lines = tab == .today ? plan.legs.map { RouteLine(leg: $0, plan: plan, path: path(for: $0, in: plan)) } : []
         return Map(position: $camera, bounds: Manhattan.cameraBounds, selection: $selection, scope: mapScope) {
             UserAnnotation()
 
@@ -42,7 +45,7 @@ struct PlanditMapView: View {
                             dash: line.mode.dash // solid walk, dotted transit, dashed drive
                         ))
                 }
-                ForEach(Array(store.today.stops.enumerated()), id: \.element.id) { index, stop in
+                ForEach(Array(plan.stops.enumerated()), id: \.element.id) { index, stop in
                     Annotation(stop.place.name, coordinate: stop.place.coordinate, anchor: .center) {
                         StopPin(number: index + 1, status: stop.status, isSelected: selection == stop.id)
                     }
@@ -79,6 +82,15 @@ struct PlanditMapView: View {
 
 /// One trip as drawn on the map. Its id changes when the street path arrives or the mode changes,
 /// so MapKit replaces the line instead of keeping the first straight one.
+extension PlanditMapView {
+    /// Street paths are loaded for your own plan; a group plan's trips are drawn straight.
+    fileprivate func path(for leg: TravelLeg, in plan: DayPlan) -> [CLLocationCoordinate2D] {
+        guard today.isGroup else { return store.path(for: leg) }
+        guard let from = plan.stop(id: leg.fromStopID), let to = plan.stop(id: leg.toStopID) else { return [] }
+        return [from.place.coordinate, to.place.coordinate]
+    }
+}
+
 private struct RouteLine: Identifiable {
     let id: String
     let mode: TravelMode

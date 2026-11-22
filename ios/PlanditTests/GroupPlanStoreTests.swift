@@ -855,6 +855,35 @@ import XCTest
         XCTAssertEqual(store.group(id)?.isDayOver, true)
     }
 
+    /// A poll after 4 AM that finds nothing new (a 304) still locks the plan: its day is over.
+    func testAPollWithNothingNewAfterFourLocksThePlan() async throws {
+        let (store, id) = await joinedGroup()
+        XCTAssertEqual(store.group(id)?.isDayOver, false)
+
+        now = at(4, 1, day: 21)
+        let fetched = await store.refresh(id)
+
+        let last = await server.fetches.last
+        XCTAssertTrue(fetched)
+        XCTAssertNotNil(last?.etag, "a conditional fetch, answered 304")
+        XCTAssertEqual(store.group(id)?.isDayOver, true)
+        XCTAssertFalse(GroupToday.controls(for: store.group(id), groupsAvailable: true).editing)
+    }
+
+    /// An edit after 4 AM, before any poll noticed, is refused with the day-over line, not a
+    /// generic "couldn't change it".
+    func testAnEditAfterFourIsRefusedWithTheDayOverLine() async throws {
+        let (store, id) = await joinedGroup()
+        let edit = try removeEdit(store, id, 1)
+
+        now = at(4, 1, day: 21)
+        let result = store.apply(edit, to: id)
+
+        XCTAssertEqual(result, .unavailable)
+        XCTAssertEqual(store.group(id)?.isDayOver, true)
+        XCTAssertEqual(GroupToday.message(for: [result], group: store.group(id)), GroupToday.dayOverLine)
+    }
+
     /// RO-2: rollover at launch and again on foreground: still one.
     func testRO2_RollingOverTwiceFilesOnce() async throws {
         let (store, id) = await joinedGroup()
