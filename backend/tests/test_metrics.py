@@ -8,6 +8,7 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from plandit.core.models import ActivityDay, ActivityEvent, Profile
 from plandit.core.views import MetricsView
+from plandit.plans.models import GroupAnswer, GroupRequest
 from plandit.shares.models import ShareAnswer, SharedPlan
 from plandit.waitlist.models import WaitlistSignup
 
@@ -121,6 +122,8 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
         "anonymous_sessions": 0,
         "links_with_answers": 0,
         "answers_per_link": 0.0,
+        "plan_requests": 0,
+        "plan_requests_built": 0,
     }
 
 
@@ -172,6 +175,8 @@ def test_totals_and_daily_counts(api_client, metrics_key):
         "anonymous_sessions": 2,
         "links_with_answers": 0,
         "answers_per_link": 0.0,
+        "plan_requests": 0,
+        "plan_requests_built": 0,
     }
 
     by_date = {row["date"]: row for row in body["daily"]}
@@ -284,3 +289,39 @@ def test_answer_counts_without_names(api_client, metrics_key):
     text = json.dumps(body)
     for name in ("Quentinia", "Zebulon", "Marisol", "Leopoldine", "Bartholomew"):
         assert name not in text
+
+
+def make_plan_request(owner, status="open") -> GroupRequest:
+    return GroupRequest.objects.create(
+        owner=owner,
+        places=[],
+        day=timezone.localdate() + timedelta(days=1),
+        window_start=time(12),
+        window_end=time(20),
+        time_zone="America/New_York",
+        answers_by=timezone.now() + timedelta(hours=2),
+        status=status,
+    )
+
+
+def test_friends_input_link_counts_without_names(api_client, metrics_key):
+    """Group plans, mode 2: how many friends' input links there are and how many got built."""
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    make_plan_request(owner)
+    make_plan_request(owner, status="closed")
+    built = make_plan_request(owner, status="built")
+    make_plan_request(owner, status="built")
+    make_plan_request(make_profile(is_anonymous=True), status="built")
+    GroupAnswer.objects.create(
+        request=built,
+        responder=uuid.uuid4().hex * 2,
+        name="Quentinia",
+        budget=137,
+        free_from=time(13),
+        free_until=time(18),
+    )
+
+    body = get(api_client).json()
+    assert (body["totals"]["plan_requests"], body["totals"]["plan_requests_built"]) == (4, 2)
+    text = json.dumps(body)
+    assert "Quentinia" not in text and "137" not in text
