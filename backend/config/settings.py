@@ -177,7 +177,10 @@ CORS_URLS_REGEX = r"^/api/.*$"
 
 # --- Behind a TLS-terminating proxy in every deployed environment ---
 
-if not DEBUG:
+# The proxy also passes the client's address in X-Forwarded-For. plandit.core.public_forms.client_ip
+# reads that header only when this is on; without a proxy in front, anyone could set it.
+BEHIND_TRUSTED_PROXY = not DEBUG
+if BEHIND_TRUSTED_PROXY:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
