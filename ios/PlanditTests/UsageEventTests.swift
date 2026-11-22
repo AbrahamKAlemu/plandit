@@ -58,7 +58,7 @@ final class UsageEventTests: XCTestCase {
     }
 
     func testEventNamesMatchTheAPI() {
-        XCTAssertEqual(UsageEvent.allCases.map(\.rawValue), ["plan_built", "link_saved", "place_saved"])
+        XCTAssertEqual(UsageEvent.allCases.map(\.rawValue), ["plan_built", "link_saved", "place_saved", "suggestion_used"])
     }
 
     func testEventClientPostsNameAndTime() async throws {

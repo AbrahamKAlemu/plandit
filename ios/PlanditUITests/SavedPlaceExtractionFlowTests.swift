@@ -10,6 +10,8 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
         ]
         app.launch()
 
+        XCTAssertTrue(app.buttons["Add a link"].waitForExistence(timeout: 5))
+
         app.buttons["Add a link"].tap()
 
         XCTAssertTrue(app.buttons["choose-video-photos"].waitForExistence(timeout: 5))
@@ -29,6 +31,8 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
             "-resetSavedData",
         ]
         app.launch()
+
+        XCTAssertTrue(app.buttons["Add a link"].waitForExistence(timeout: 5))
 
         app.buttons["Add a link"].tap()
         let field = app.textFields["social-link-field"]
@@ -74,6 +78,8 @@ final class SavedPlaceExtractionFlowTests: XCTestCase {
             "-resetSavedData",
         ]
         app.launch()
+
+        XCTAssertTrue(app.buttons["Add a link"].waitForExistence(timeout: 5))
 
         app.buttons["Add a link"].tap()
         let field = app.textFields["social-link-field"]

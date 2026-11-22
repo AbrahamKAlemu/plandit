@@ -133,10 +133,11 @@ class ActivityEventName(models.TextChoices):
     LINK_SAVED = "link_saved", "Link saved"
     PLACE_SAVED = "place_saved", "Place saved"
     PLAN_BUILT = "plan_built", "Plan built"
+    SUGGESTION_USED = "suggestion_used", "Suggestion used"
 
 
 class ActivityEvent(models.Model):
-    """A usage event the app reports: link_saved, place_saved or plan_built."""
+    """A usage event the app reports: link_saved, place_saved, plan_built or suggestion_used."""
 
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="events")
     name = models.CharField(max_length=32, choices=ActivityEventName.choices)

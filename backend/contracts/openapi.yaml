@@ -490,7 +490,7 @@ components:
               $ref: "#/components/schemas/StoreSnapshot"
     EventName:
       type: string
-      enum: [link_saved, place_saved, plan_built]
+      enum: [link_saved, place_saved, plan_built, suggestion_used]
     EventRequest:
       type: object
       required: [name]
@@ -535,6 +535,7 @@ components:
               plans_built,
               places_saved,
               links_saved,
+              suggestions_used,
               waitlist_signups,
               anonymous_sessions,
               links_with_answers,
@@ -550,6 +551,7 @@ components:
             plans_built: { type: integer }
             places_saved: { type: integer }
             links_saved: { type: integer }
+            suggestions_used: { type: integer }
             waitlist_signups: { type: integer }
             anonymous_sessions: { type: integer }
             links_with_answers:
@@ -565,7 +567,8 @@ components:
             $ref: "#/components/schemas/DailyMetrics"
     DailyMetrics:
       type: object
-      required: [date, signups, new_real_users, active_users, plans_built, places_saved, links_saved]
+      required:
+        [date, signups, new_real_users, active_users, plans_built, places_saved, links_saved, suggestions_used]
       properties:
         date: { type: string, format: date }
         signups: { type: integer }
@@ -574,6 +577,7 @@ components:
         plans_built: { type: integer }
         places_saved: { type: integer }
         links_saved: { type: integer }
+        suggestions_used: { type: integer }
     ResolutionRequest:
       type: object
       required: [requestId, platform, evidence]

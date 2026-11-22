@@ -62,5 +62,40 @@ struct SnapshotStore {
 
     func reset() {
         try? FileManager.default.removeItem(at: url)
+        try? FileManager.default.removeItem(at: doneTodayURL)
+    }
+
+    // MARK: - Places done today
+
+    /// Beside the snapshot and never synced: `plandit-store.done-today.json`.
+    var doneTodayURL: URL {
+        url.deletingPathExtension().appendingPathExtension("done-today.json")
+    }
+
+    func loadDoneToday() -> DoneToday? {
+        guard let data = try? Data(contentsOf: doneTodayURL) else { return nil }
+        return try? Self.decoder.decode(DoneToday.self, from: data)
+    }
+
+    func saveDoneToday(_ doneToday: DoneToday) throws {
+        let data = try Self.encoder.encode(doneToday)
+        try FileManager.default.createDirectory(at: doneTodayURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: doneTodayURL, options: .atomic)
+    }
+}
+
+/// The saved posts checked off ("Done here") on one local date, kept on this phone only so a place
+/// done today and then taken out of the plan isn't suggested again today (SP-9).
+struct DoneToday: Codable, Equatable {
+    /// The local date, "2026-11-21".
+    var day: String
+    var postIDs: Set<UUID>
+
+    /// Always Gregorian, in the phone's time zone, whatever calendar the phone is set to.
+    static func key(for date: Date, timeZone: TimeZone = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 }

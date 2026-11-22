@@ -11,7 +11,9 @@ final class EmptyTodayFlowTests: XCTestCase {
     /// Removes every stop from the sample day at full height, then quits so the next launch opens at half height.
     @MainActor private func emptyTheSampleDay() {
         let app = XCUIApplication()
-        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "11:00"]
+        // Planning from 11:45 PM: the sample saves still open then are too far apart for a suggested
+        // plan, so the emptied day shows the empty Today, not suggestion cards.
+        app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "11:00", "-planStart", "23:45"]
         app.launch()
         XCTAssertTrue(app.buttons["edit-plan"].waitForExistence(timeout: 5))
         let firstStop = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Stop 1,'")).firstMatch
@@ -60,7 +62,8 @@ final class EmptyTodayFlowTests: XCTestCase {
 
     @MainActor func testPlanADayShowsAboveTheTabBarAtHalfHeight() {
         emptyTheSampleDay()
-        assertAboveTheTabBar("today-plan-a-day")
+        // The empty Today itself, not the cards: those are checked in SuggestedPlansFlowTests.
+        assertAboveTheTabBar("today-plan-a-day", extraArguments: ["-planStart", "23:45"])
     }
 
     @MainActor func testPasteALinkShowsAboveTheTabBarAtHalfHeight() {
