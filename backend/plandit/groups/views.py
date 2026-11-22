@@ -5,6 +5,8 @@ member gets an empty 404, never a 304 or a 409, which would show that the group 
 addressed by their GroupMember id; no response carries an email or a profile id (N-11).
 
 Locking (MF-E), so writes never deadlock or fail at commit:
+- a write by someone who isn't a member (or, for ending the group and a new link, the organizer)
+  is 404 before any lock, so they never wait for one (ISO-2);
 - every write locks the GroupPlan row by its primary key alone, then checks membership (or the
   invite) again with a fresh query. A lock taken through a join with the members table would
   re-check against the member rows it read before waiting, and miss a removal committed meanwhile;
@@ -141,6 +143,18 @@ def hold_profile(profile: Profile) -> None:
 def lock_group(pk) -> GroupPlan | None:
     """Row-lock the group by its primary key alone (see the module docstring)."""
     return GroupPlan.objects.select_for_update().filter(pk=pk).first()
+
+
+def _is_organizer(pk, profile: Profile) -> bool:
+    """Checked before the lock as well as under it: someone who may not write must never wait for
+    the lock, or a lock held past LOCK_TIMEOUT would answer them 503 for a real group and 404 for
+    a random id (ISO-2)."""
+    return pk is not None and GroupPlan.objects.filter(pk=pk, owner=profile).exists()
+
+
+def _is_member(pk, profile: Profile) -> bool:
+    """`_is_organizer`'s check for the routes any member may use."""
+    return pk is not None and GroupMember.objects.filter(group_id=pk, profile=profile).exists()
 
 
 def _refuse_anonymous(request) -> None:
@@ -431,7 +445,7 @@ class GroupPlanDetailView(APIView):
         stores the plan as the next version; any other is 409 with what changed since."""
         pk = parse_uuid(group_id)
         # Before anything about the body, so an outsider gets the same 404 for any request.
-        if pk is None or not GroupMember.objects.filter(group_id=pk, profile=request.user).exists():
+        if not _is_member(pk, request.user):
             return _not_found()
         too_large = _declared_too_large(request)
         if too_large is not None:
@@ -465,7 +479,7 @@ class GroupPlanDetailView(APIView):
     def delete(self, request, group_id):
         """The organizer ends the group for everyone (brief GE-7). 204; anyone else gets 404."""
         pk = parse_uuid(group_id)
-        if pk is None:
+        if not _is_organizer(pk, request.user):
             return _not_found()
         with locking():
             group = lock_group(pk)
@@ -483,7 +497,7 @@ class GroupMemberDetailView(APIView):
     @try_again_on_lock_timeout
     def delete(self, request, group_id, member_id):
         pk, target_id = parse_uuid(group_id), parse_uuid(member_id)
-        if pk is None or target_id is None:
+        if target_id is None or not _is_member(pk, request.user):
             return _not_found()
         with locking():
             group = lock_group(pk)
@@ -554,7 +568,7 @@ class GroupInviteReplaceView(APIView):
     @try_again_on_lock_timeout
     def post(self, request, group_id):
         pk = parse_uuid(group_id)
-        if pk is None:
+        if not _is_organizer(pk, request.user):
             return _not_found()
         with locking():
             group = lock_group(pk)

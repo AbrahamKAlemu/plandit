@@ -447,3 +447,49 @@ def delete_account_later(who: Person, settings, monkeypatch, with_supabase: bool
     settings.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-for-tests" if with_supabase else ""
     monkeypatch.setattr(httpx, "delete", FakeDelete(200))
     return lambda: who.client.delete("/api/me/")
+
+
+# --- ISO-2 with the group's row locked: an outsider's write is 404 without waiting ---------------
+
+
+def outsider_write(route: str, who: Person, group_id, member_id):
+    if route == "end":
+        return who.client.delete(detail(group_id))
+    if route == "remove":
+        return who.client.delete(f"{BASE}{group_id}/members/{member_id}/")
+    return who.client.post(f"{BASE}{group_id}/invite")
+
+
+@pytest.mark.parametrize(
+    ("route", "actor"),
+    [("end", "outsider"), ("end", "member"), ("remove", "outsider"), ("new link", "outsider"), ("new link", "member")],
+)
+def test_iso_2_an_outsider_gets_the_same_404_while_the_group_is_locked(group, maya, jordan, monkeypatch, route, actor):
+    """These routes checked the caller only after taking the group's lock. With the row held past
+    LOCK_TIMEOUT, the real group answered 503 and a random id 404, which told them apart."""
+    import uuid
+
+    monkeypatch.setattr(group_views, "LOCK_TIMEOUT", "200ms")
+    sam = person("Sam Rivera")
+    warm(sam)
+    caller = sam if actor == "outsider" else jordan
+    member_id = member_of(group, jordan).id
+    before = row(group)
+    release, held = threading.Event(), threading.Event()
+    holder = threading.Thread(
+        target=hold_row_lock,
+        args=("SELECT 1 FROM groups_groupplan WHERE id = %s FOR UPDATE", [group.id], release, held),
+    )
+    holder.start()
+    try:
+        assert held.wait(WAIT_SECONDS)
+        pair = [outsider_write(route, caller, gid, member_id) for gid in (group.id, uuid.uuid4())]
+    finally:
+        release.set()
+        holder.join(WAIT_SECONDS)
+    assert [r.status_code for r in pair] == [404, 404]
+    assert pair[0].content == pair[1].content == b""
+    assert not pair[0].has_header("ETag") and not pair[1].has_header("ETag")
+    assert not pair[0].has_header("Retry-After")
+    assert row(group) == before
+    assert group.members.count() == 3

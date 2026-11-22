@@ -932,7 +932,11 @@ def test_iso_2_an_outsider_cannot_tell_a_group_from_a_random_id(group):
     body = {"baseVersion": 1, "editId": new_id(), "edit": {"kind": "remove", "stopIds": []}, "plan": edited(group)}
     puts = [sam.client.put(detail(gid), body, format="json") for gid in (group.id, random_id)]
     bad_puts = [sam.client.put(detail(gid), {"plan": 3}, format="json") for gid in (group.id, random_id)]
-    for pair in (gets, puts, bad_puts):
+    member_id = group.members.first().id
+    ends = [sam.client.delete(detail(gid)) for gid in (group.id, random_id)]
+    removals = [sam.client.delete(f"{BASE}{gid}/members/{member_id}/") for gid in (group.id, random_id)]
+    new_links = [sam.client.post(f"{BASE}{gid}/invite") for gid in (group.id, random_id)]
+    for pair in (gets, puts, bad_puts, ends, removals, new_links):
         assert [r.status_code for r in pair] == [404, 404]
         assert pair[0].content == pair[1].content == b""
         assert not pair[0].has_header("ETag") and not pair[1].has_header("ETag")
