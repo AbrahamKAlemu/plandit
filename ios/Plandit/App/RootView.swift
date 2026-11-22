@@ -204,6 +204,8 @@ private struct SheetContainer: View {
             .sheet(isPresented: $router.isPlanning) {
                 PlanBuilderSheet()
             }
+            // A group plan invite, from "Add a link" or the share sheet, over any tab (JN-1).
+            .joinGroupSheet()
     }
 
     private var stacks: some View {

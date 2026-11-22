@@ -184,6 +184,8 @@ private struct PlanditRoot: View {
             .environment(store)
             .environment(appearance)
             .environment(router)
+            // nil for a local-only account: the join sheet then says group plans need an account.
+            .environment(groups)
             .tint(Color.emeraldDeep)
             .preferredColorScheme(appearance.mode.colorScheme)
             .accessibilityIdentifier("appearance-\(appearance.mode.rawValue)")
@@ -202,10 +204,13 @@ private struct PlanditRoot: View {
                     store.removeExpiredTemporaryMedia()
 #if DEBUG
                     ShareInbox.seedFromLaunchArguments()
+                    InviteInbox.seedFromLaunchArguments()
 #endif
                     // Coming back from "Share → Plandit": one share opens its post, several open
                     // Saved with them on top; none leaves the app where it was (PRC-1).
                     router.showShares(store.ingestPendingShares())
+                    // A group plan invite shared from another app: its join sheet, once (JN-1).
+                    router.openPendingInvite()
                     if let sync {
                         Task { await sync.appBecameActive() }
                     }

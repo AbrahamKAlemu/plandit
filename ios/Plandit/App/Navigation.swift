@@ -44,6 +44,11 @@ final class SheetRouter {
     var savedPath: [UUID] = []
     /// The "Plan a day" sheet behind the + in the tab bar. Launch with `-openPlanner YES` to start there.
     var isPlanning = UserDefaults.standard.bool(forKey: "openPlanner")
+    /// The group plan invite the join sheet shows: pasted in "Add a link", or shared from another
+    /// app and picked up when Plandit became active (JN-1). Nil closes the sheet.
+    var inviteToJoin: GroupInvite?
+    /// The group plan Today should open, set after joining one. Today selects it, then clears this.
+    var groupPlanToOpen: UUID?
 
     func selection(in tab: AppTab) -> UUID? {
         switch tab {
