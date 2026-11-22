@@ -4,6 +4,7 @@ import SwiftUI
 struct PlanTimeline: View {
     let plan: DayPlan
     @Environment(PlanditStore.self) private var store
+    @TodayContext private var today
     /// The trip whose walk / subway / drive options are open.
     @State private var choosingLeg: StopRef?
     /// The stop whose friends' swap picks are open.
@@ -18,11 +19,14 @@ struct PlanTimeline: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
-                    StopActions(stop: stop)
+                    if today.canEdit {
+                        StopActions(stop: stop)
+                    }
                 }
                 .transition(.opacity.combined(with: .move(edge: .leading)))
 
-                if let picks = store.swapMarks[stop.id] {
+                // Mode 1's swap picks are about your own shared plan, not a group plan.
+                if today.controls.shareAnswers, let picks = store.swapMarks[stop.id] {
                     SwapMarkRow(count: picks.count, stopName: stop.place.name, railColor: leg.map { plan.state(of: $0).color }) {
                         reviewingSwaps = StopRef(id: stop.id)
                     }
@@ -37,8 +41,8 @@ struct PlanTimeline: View {
                         TravelLegRow(leg: leg, state: state)
                     }
                     .buttonStyle(.plain)
-                    .disabled(state == .completed)
-                    .accessibilityHint(state == .completed ? "" : "Choose walk, subway or drive")
+                    .disabled(state == .completed || !today.canEdit)
+                    .accessibilityHint(state == .completed || !today.canEdit ? "" : "Choose walk, subway or drive")
                     .accessibilityIdentifier("leg-\(index + 1)")
                     .transition(.opacity)
                 }
@@ -53,39 +57,39 @@ struct PlanTimeline: View {
 struct StopActions: View {
     let stop: PlanStop
     var onRemove: (() -> Void)?
-    @Environment(PlanditStore.self) private var store
+    @TodayContext private var today
 
     var body: some View {
         switch stop.status {
         case .upcoming:
             Button {
-                withAnimation(.snappy) { store.arrive(at: stop.id) }
+                withAnimation(.snappy) { today.arrive(at: stop.id) }
             } label: {
                 Label("I'm here", image: "Icons/map-pin")
             }
         case .now:
             Button {
-                withAnimation(.snappy) { store.leave(stop.id) }
+                withAnimation(.snappy) { today.leave(stop.id) }
             } label: {
                 Label("Not here yet", image: "Icons/undo-2")
             }
         case .done:
             Button {
-                withAnimation(.snappy) { store.arrive(at: stop.id) }
+                withAnimation(.snappy) { today.arrive(at: stop.id) }
             } label: {
                 Label("Not done yet", image: "Icons/undo-2")
             }
         }
         if stop.status != .done {
             Button {
-                withAnimation(.snappy) { store.complete(stop.id) }
+                withAnimation(.snappy) { today.complete(stop.id) }
             } label: {
                 Label("Done here", image: "Icons/circle-check")
             }
         }
         Button(role: .destructive) {
             onRemove?()
-            withAnimation(.snappy) { store.removeStop(stop.id) }
+            withAnimation(.snappy) { today.remove(stop.id) }
         } label: {
             Label("Remove from plan", image: "Icons/trash-2")
         }

@@ -4,7 +4,7 @@ import SwiftUI
 /// Shows what moves before saving, and warns when a place would be closed.
 struct StopTimeSheet: View {
     let stopID: UUID
-    @Environment(PlanditStore.self) private var store
+    @TodayContext private var today
     @Environment(\.dismiss) private var dismiss
     @State private var start = Date()
     @State private var minutes = 60
@@ -14,7 +14,7 @@ struct StopTimeSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let stop = store.stop(id: stopID), stop.status != .done {
+                if let stop = today.stop(id: stopID), stop.status != .done {
                     content(stop)
                 } else {
                     ContentUnavailableView("Can't change this stop", image: "Icons/route", description: Text("It's done or no longer in today's plan."))
@@ -31,7 +31,7 @@ struct StopTimeSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         withAnimation(.snappy) {
-                            store.setTime(ofStop: stopID, start: start, durationMinutes: minutes, moveLaterStops: moveLaterStops)
+                            today.setTime(ofStop: stopID, start: start, durationMinutes: minutes, moveLaterStops: moveLaterStops)
                         }
                         dismiss()
                     }
@@ -42,7 +42,7 @@ struct StopTimeSheet: View {
         .presentationDetents([.medium, .large])
         .presentationBackground(Color.surface)
         .onAppear {
-            guard !didLoad, let stop = store.stop(id: stopID) else { return }
+            guard !didLoad, let stop = today.stop(id: stopID) else { return }
             didLoad = true
             start = stop.start
             minutes = stop.durationMinutes
@@ -50,9 +50,9 @@ struct StopTimeSheet: View {
     }
 
     private func content(_ stop: PlanStop) -> some View {
-        let preview = store.previewTime(ofStop: stop.id, start: start, durationMinutes: minutes, moveLaterStops: moveLaterStops)
+        let preview = today.previewTime(ofStop: stop.id, start: start, durationMinutes: minutes, moveLaterStops: moveLaterStops)
         let edited = preview.stops.first { $0.id == stop.id } ?? stop
-        let laterStops = store.today.stops.drop { $0.id != stop.id }.dropFirst().filter { $0.status == .upcoming }
+        let laterStops = today.plan.stops.drop { $0.id != stop.id }.dropFirst().filter { $0.status == .upcoming }
         return ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
                 Text(stop.place.name).font(.cardHeading).foregroundStyle(.ink)
@@ -148,13 +148,13 @@ struct StopTimeSheet: View {
 
     private func warnings(stop: PlanStop, edited: PlanStop, preview: DayPlan) -> [String] {
         var lines: [String] = []
-        if stop.status == .upcoming, edited.start > start, let earliest = store.today.earliestStart(ofStop: stop.id) {
+        if stop.status == .upcoming, edited.start > start, let earliest = today.plan.earliestStart(ofStop: stop.id) {
             lines.append("Earliest is \(earliest.shortTime), after the stop before it and the trip here.")
         }
         if let close = stop.place.closingTime(on: preview.date), edited.end > close {
             lines.append("\(stop.place.name) closes at \(close.shortTime).")
         }
-        let alreadyLate = Set(store.today.stopsArrivingAfterClose().map(\.id))
+        let alreadyLate = Set(today.plan.stopsArrivingAfterClose().map(\.id))
         for late in preview.stopsArrivingAfterClose() where late.id != stop.id && !alreadyLate.contains(late.id) {
             lines.append("You'd get to \(late.place.name) after it closes.")
         }

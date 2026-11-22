@@ -4,15 +4,15 @@ import SwiftUI
 /// when you'd arrive. Picking one moves the rest of the day to match.
 struct TravelOptionsSheet: View {
     let legID: UUID
-    @Environment(PlanditStore.self) private var store
+    @TodayContext private var today
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
             Group {
-                if let leg = store.today.legs.first(where: { $0.id == legID }),
-                   let from = store.stop(id: leg.fromStopID), let to = store.stop(id: leg.toStopID) {
+                if let leg = today.plan.legs.first(where: { $0.id == legID }),
+                   let from = today.stop(id: leg.fromStopID), let to = today.stop(id: leg.toStopID) {
                     content(leg: leg, from: from, to: to)
                 } else {
                     ContentUnavailableView("Trip removed", image: "Icons/route", description: Text("These stops aren't next to each other anymore."))
@@ -31,15 +31,15 @@ struct TravelOptionsSheet: View {
         .presentationDetents([.medium, .large])
         .presentationBackground(Color.surface)
         .task {
-            await store.loadTravelOptions(forLeg: legID)
+            await today.loadTravelOptions(forLeg: legID)
             isLoading = false
         }
     }
 
     private func content(leg: TravelLeg, from: PlanStop, to: PlanStop) -> some View {
-        let rows = Self.rows(store.travelOptions(forLeg: leg.id), planned: leg)
-        let upcomingTrips = store.today.legs.filter { store.today.state(of: $0) != .completed }.count
-        let alreadyLate = Set(store.today.stopsArrivingAfterClose().map(\.id))
+        let rows = Self.rows(today.travelOptions(forLeg: leg.id), planned: leg)
+        let upcomingTrips = today.plan.legs.filter { today.plan.state(of: $0) != .completed }.count
+        let alreadyLate = Set(today.plan.stopsArrivingAfterClose().map(\.id))
         return ScrollView {
             VStack(alignment: .leading, spacing: Space.lg) {
                 VStack(alignment: .leading, spacing: Space.xxs) {
@@ -58,15 +58,15 @@ struct TravelOptionsSheet: View {
                     ForEach(rows) { row in
                         OptionRow(
                             row: row,
-                            preview: store.previewTravel(row.option),
+                            preview: today.previewTravel(row.option),
                             alreadyLate: alreadyLate,
                             destination: to
                         ) {
-                            withAnimation(.snappy) { store.chooseTravel(row.option) }
+                            withAnimation(.snappy) { today.chooseTravel(row.option) }
                         }
                         if let update = row.update, let minutes = row.liveMinutes {
-                            LiveTimeButton(minutes: minutes, pickupNote: row.pickupNote, preview: store.previewTravel(update), destination: to) {
-                                withAnimation(.snappy) { store.chooseTravel(update) }
+                            LiveTimeButton(minutes: minutes, pickupNote: row.pickupNote, preview: today.previewTravel(update), destination: to) {
+                                withAnimation(.snappy) { today.chooseTravel(update) }
                             }
                         }
                         if row.id != rows.last?.id { Hairline() }
@@ -94,7 +94,7 @@ struct TravelOptionsSheet: View {
 
                     if upcomingTrips > 1 {
                         Button {
-                            withAnimation(.snappy) { store.chooseTravelForRestOfDay(leg.mode) }
+                            withAnimation(.snappy) { today.chooseTravelForRestOfDay(leg.mode) }
                         } label: {
                             Text(Self.restOfDayTitle(leg.mode))
                                 .font(.label)
