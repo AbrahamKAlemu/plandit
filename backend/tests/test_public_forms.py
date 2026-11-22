@@ -143,6 +143,30 @@ def test_a_returning_visitor_keeps_their_cookie():
     assert "pa" not in again.cookies
 
 
+def test_a_new_visitor_can_get_a_longer_cookie():
+    response = HttpResponse()
+    responder = responder_token(page_request(), response, "/p/abc123defg", max_age=200 * 24 * 60 * 60)
+    cookie = response.cookies["pa"]
+    assert cookie["max-age"] == 200 * 24 * 60 * 60
+    assert responder == hashlib.sha256(cookie.value.encode()).hexdigest()
+
+
+def test_a_returning_visitors_cookie_can_be_renewed():
+    first = HttpResponse()
+    responder = responder_token(page_request(), first, "/p/abc123defg")
+    token = first.cookies["pa"].value
+
+    again = HttpResponse()
+    assert (
+        responder_token(page_request(token), again, "/p/abc123defg", max_age=90 * 24 * 60 * 60, renew=True) == responder
+    )
+    cookie = again.cookies["pa"]
+    assert cookie.value == token
+    assert cookie["max-age"] == 90 * 24 * 60 * 60
+    assert cookie["path"] == "/p/abc123defg"
+    assert cookie["httponly"] is True and cookie["secure"] is True and cookie["samesite"] == "Lax"
+
+
 def test_two_visitors_get_different_responders():
     a = responder_token(page_request(), HttpResponse(), "/p/abc123defg")
     b = responder_token(page_request(), HttpResponse(), "/p/abc123defg")
@@ -311,6 +335,7 @@ def test_blocked_words_match_whole_words_in_any_case(monkeypatch):
         with pytest.raises(ValidationError) as error:
             clean_first_name(name)
         assert error.value.code == "blocked", name
+        assert error.value.messages == ["That name can't be used here. Try another."]
     for name in ["Joanna", "Annie", "Hannah"]:
         assert clean_first_name(name) == name
 

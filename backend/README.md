@@ -14,6 +14,7 @@ backend/
     saved/           Saved TikToks/Reels/links and the extraction pipeline (oEmbed -> place matcher)
     plans/           Day plans, stops, travel legs
     waitlist/        Public signup endpoint used by website/
+    shares/          Shared plan links: /api/shares/, the public /p/ page, and friends' answers on it
   tests/             pytest (runs against a real Postgres)
   Dockerfile         production image: migrate, then gunicorn
   docker-compose.yml local Postgres only
@@ -117,6 +118,7 @@ Required environment in production:
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (Project Settings → API keys, secret); used only to delete auth users on `DELETE /api/me/`. Without it, account deletion removes Plandit data only |
 | `APPLE_TEAM_ID`, `APPLE_SIGNIN_KEY_ID`, `APPLE_SIGNIN_PRIVATE_KEY` | Sign in with Apple token revocation on `DELETE /api/me/` (App Store guideline 5.1.1(v)): the team ID (`9A6H44778K`), the Key ID of a Sign in with Apple key, and that key's `.p8` contents (literal `\n` escapes accepted). `APPLE_CLIENT_ID` defaults to `com.plandit.app`. Without them, deletion still completes and the revocation is skipped with a warning |
 | `METRICS_API_KEY` | shared secret for `GET /api/metrics/` (course staff). Empty turns the endpoint off. The Render blueprint generates one |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | `https://plandit.app` once the site forwards `/p/` here (`SHARE_BASE_URL`): the answer form posts from that origin, and Django's CSRF check refuses origins other than this API's own host unless they're listed |
 
 Point `api.plandit.app` at the host, then set `endpoint: "https://api.plandit.app/api/waitlist/"`
 in `website/config.js` so the landing page's form starts saving signups.
@@ -125,7 +127,7 @@ in `website/config.js` so the landing page's form starts saving signups.
 
 JSON in and out, snake_case keys, money as numbers, UUID ids, ISO 8601 timestamps. Every route
 needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/api/waitlist/`,
-`/api/metrics/` (secret key) and the public shared-plan page `/p/<slug>`. Unauthenticated calls get `401`; another user's objects return `404`.
+`/api/metrics/` (secret key) and the public shared-plan page `/p/<slug>` with its answer form posts. Unauthenticated calls get `401`; another user's objects return `404`.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -138,7 +140,7 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | GET | `/api/me/snapshot/` | the app's whole local store for this account: `{"version", "updated_at", "data"}`; `data` is the iOS `StoreSnapshot` exactly as sent (camelCase). `404` until the first PUT |
 | PUT | `/api/me/snapshot/` | `{"data": {...}}` → `{"version", "updated_at"}`; last writer wins, `version` starts at 1. `data` must be an object under 1,000,000 bytes (`413`). Mirrors `data.profile` into `/api/me/` and marks the account activated when a plan has stops |
 | POST | `/api/me/events/` | `{"name": "link_saved"\|"place_saved"\|"plan_built"\|"suggestion_used", "occurred_at"?}` → `201`. `occurred_at` is clamped to the last 7 days; `plan_built` activates the account. 120/min per user |
-| GET | `/api/metrics/?days=30` | aggregate usage for the course staff; no JWT, key in the `X-Metrics-Key` header (preferred; `?key=` also works but lands in access logs, so rotate the key after the course). `totals` (signups, real users, actives, events, waitlist, anonymous sessions) plus a zero-filled `daily` series of `days` (1–365) entries in America/New_York. Counts only, never emails. `404` when `METRICS_API_KEY` is unset, `403` on a bad key, 30/min per IP |
+| GET | `/api/metrics/?days=30` | aggregate usage for the course staff; no JWT, key in the `X-Metrics-Key` header (preferred; `?key=` also works but lands in access logs, so rotate the key after the course). `totals` (signups, real users, actives, events, waitlist, anonymous sessions, links with friends' answers and answers per such link) plus a zero-filled `daily` series of `days` (1–365) entries in America/New_York. Counts only, never emails. `404` when `METRICS_API_KEY` is unset, `403` on a bad key, 30/min per IP |
 | GET | `/api/places/?q=&category=` | search the shared place catalog (max 100) |
 | GET | `/api/places/<id>/` | one place |
 | GET | `/api/saved/` | my saved posts, newest first |
@@ -153,9 +155,13 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | POST | `/api/plans/<id>/stops/reorder/` | `{"stop_ids":[...]}` every stop exactly once |
 | PATCH, DELETE | `/api/plans/<id>/stops/<stop_id>/` | PATCH `status`, `start`, `duration_minutes`, `estimated_cost`, `note` |
 | POST | `/api/plans/<id>/build/` | the planner: `{"saved_post_ids":[...], "start", "end", "budget", "mode":"add"\|"replace", "dry_run"}`; returns the plan plus `skipped` (`closed`, `over_budget`, `out_of_time`, `evening_only`). `dry_run` previews without saving. Same rules as the iOS planner; see `plandit/plans/planner.py` |
-| POST | `/api/shares/` | share a plan as a link: camelCase, display-ready texts from the app (`planId`, `title`, `dateText`, `timeText`, `note`, `costText`, `stops[]`, `legs[]`; see `contracts/openapi.yaml`) → `{"slug","url"}`. `201` new, `200` when that plan already had a link (same slug, page updated). One link per plan per account |
-| DELETE | `/api/shares/<slug>/` | stop sharing: `204`, the page 404s at once. Another account's slug is `404` |
-| GET | `/p/<slug>` | the public page (HTML, no sign-in, `noindex`, Open Graph tags for link previews). Link host is `SHARE_BASE_URL` when set (`https://plandit.app` once the site forwards `/p/` here), else this API's own host |
+| POST | `/api/shares/` | share a plan as a link: camelCase, display-ready texts from the app (`planId`, `title`, `dateText`, `timeText`, `note`, `costText`, `stops[]`, `legs[]`; see `contracts/openapi.yaml`) → `{"slug","url"}`. `201` new, `200` when that plan already had a link (same slug, page updated). One link per plan per account. Optional, for friends' answers: `answers` (boolean), `date` (`YYYY-MM-DD`, needed with `answers: true`), `stops[].id` and `stops[].alternates` (≤ 2 of `{id, name, neighborhood, kind, costText}`), ids as UUIDs kept as sent. Updating keeps answers and drops swaps for stops no longer in the plan |
+| DELETE | `/api/shares/<slug>/` | stop sharing: `204`, the page 404s at once, and friends' answers are deleted. Another account's slug is `404` |
+| GET | `/api/shares/<slug>/answers/` | friends' answers on your link, oldest first: `{"answers": [{"id","name","status":"in"\|"out","swaps":{stopId: alternateId\|null},"createdAt","updatedAt"}]}` (camelCase, UTC). Another account's slug is `404` |
+| DELETE | `/api/shares/<slug>/answers/<id>/` | remove a friend's answer: `204`, gone from the page at once. The id may be in either case (the app sends upper case). Otherwise `404` |
+| GET | `/p/<slug>` | the public page (HTML, no sign-in, `noindex`, Open Graph tags for link previews). Link host is `SHARE_BASE_URL` when set (`https://plandit.app` once the site forwards `/p/` here), else this API's own host. Plans shared with `answers: true` also show who's in (count and up to 3 first names; never who can't make it), "I'd swap this" on stops with ids, and the answer form; those pages are `private, no-store` |
+| POST | `/p/<slug>/answer` | the page's form (CSRF token, `name`, `status` = `in`\|`out`, `swap` = stop ids, `swap_to_<stopId>` = alternate id). Upserts this browser's answer by its `pa` cookie (path `/p/<slug>`; only the hash is stored; set again on every answer to last until the answers are deleted, at least 30 days) and answers `303` to the page; `400` or `429` show the page again with the reason. 20 answers per address per hour on each link, 50 per link. `404` unless shared with `answers: true` |
+| POST | `/p/<slug>/answer/delete` | takes back this browser's own answer, `303` to the page. Works on any link that exists, even after it stops taking answers; `404` only for a missing link. Not rate limited |
 
 Every plan mutation returns the full plan, with legs rebuilt between consecutive stops.
 
@@ -163,6 +169,20 @@ Enum values: saved `status` = `processing | ready | needs_review | failed`; `pla
 `tiktok | instagram | web`; place `category` = `food | coffee | activity | outdoors | culture |
 nightlife | shopping`; stop `status` = `done | now | upcoming`; leg `mode` = `walk | subway | bus`.
 These are the iOS enums with snake_case raw values.
+
+## Friends' answers (group plans)
+
+Friends who open a shared plan's link can answer without an account, on plans the app shared with
+`answers: true`. Only their first name is free text (`plandit/core/public_forms.py`). Answers are
+deleted with the link, when the organizer removes them, and 30 days after the plan's `date`
+(`plandit/core/retention.py`). The deletion runs on every answer post, page view with the form and
+owner list, and by hand with `python manage.py purge_expired`.
+
+Limits: 20 answers an hour from one address on each link (per link, so students behind one campus
+address don't share a limit across every link), and 50 answers per link. A friend can always take
+back their own answer while the link exists. Answers are saved with the link's row locked, and
+stopping sharing or deleting the account takes that lock before deleting, so an answer saved at
+the same moment is deleted with the rest.
 
 ## Decisions and what is still stubbed
 

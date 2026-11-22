@@ -19,6 +19,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from plandit.shares.models import SharedPlan
+
 from . import apple_signin, supabase_admin
 from .metrics import DEFAULT_DAYS, MAX_DAYS, MIN_DAYS, compute_metrics, iso_utc
 from .models import ActivityEvent, ActivityEventName, AppSnapshot, DeletedAccount, Profile
@@ -87,7 +89,7 @@ class MeView(APIView):
         if not supabase_admin.is_configured():
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is not configured; deleting only Plandit data for %s", profile.id)
             with transaction.atomic():
-                self._lock(profile.pk).delete()
+                self._delete(self._lock(profile.pk))
                 self._revoke_apple_tokens_after_commit(profile.id, apple_code)
             return Response(status=status.HTTP_204_NO_CONTENT)
         try:
@@ -102,9 +104,17 @@ class MeView(APIView):
             # Same row lock as PATCH, so a concurrent PATCH either finishes first or sees no row.
             locked = self._lock(profile.pk)
             DeletedAccount.objects.get_or_create(id=profile.pk)
-            locked.delete()
+            self._delete(locked)
             self._revoke_apple_tokens_after_commit(profile.id, apple_code)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _delete(locked: Profile) -> None:
+        """Delete the locked profile, which cascades to all of its data. Its shared plans are locked
+        first: a friend's answer is saved with the plan's row locked (plandit.shares.views), so the
+        cascade waits for it and deletes it too, instead of missing it and failing at commit."""
+        list(SharedPlan.objects.select_for_update().filter(owner=locked).order_by("pk").values_list("pk", flat=True))
+        locked.delete()
 
     @staticmethod
     def _lock(pk) -> Profile:
