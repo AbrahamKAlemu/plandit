@@ -225,6 +225,20 @@ import XCTest
     }
 
     /// "Edit with friends" tapped twice before the first tap is done: one group plan, one create.
+    /// With a group plan's stop open, the map centers on that stop, not on nothing.
+    func testTheMapCentersOnTheOpenStopOfTheGroupPlanShown() async throws {
+        let id = await mayasGroup()
+        let context = context()
+        context.select(.group(id))
+        let stop = try XCTUnwrap(context.plan.stops.last)
+        router.todayPath = [stop.id]
+
+        let focus = try XCTUnwrap(MapFocus.coordinate(in: .today, router: router, today: context, store: store))
+
+        XCTAssertEqual(focus.latitude, stop.place.coordinate.latitude)
+        XCTAssertEqual(focus.longitude, stop.place.coordinate.longitude)
+    }
+
     func testTwoTapsMakeOneGroupPlan() async throws {
         let starter = GroupStarter()
         let context = context()

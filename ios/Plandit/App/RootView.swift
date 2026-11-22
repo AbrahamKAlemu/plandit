@@ -149,9 +149,18 @@ struct RootView: View {
     }
 
     private func focusedCoordinate() -> CLLocationCoordinate2D? {
+        MapFocus.coordinate(in: tab, router: router, today: today, store: store)
+    }
+}
+
+/// Where the map centers while a stop or a saved place is open.
+enum MapFocus {
+    static func coordinate(in tab: AppTab, router: SheetRouter, today: TodayPlanContext,
+                           store: PlanditStore) -> CLLocationCoordinate2D? {
         guard let id = router.selection(in: tab) else { return nil }
         switch tab {
-        case .today: return store.stop(id: id)?.place.coordinate
+        // The stop in the plan shown, a group plan included, whose stop ids aren't your own plan's.
+        case .today: return today.stop(id: id)?.place.coordinate
         case .saved: return store.post(id: id)?.place?.coordinate
         case .profile: return nil
         }
