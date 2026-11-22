@@ -10,10 +10,12 @@ in its AppConfig.ready():
 each public answer POST and owner GET, and `manage.py purge_expired` runs it by hand or on a
 schedule. Until a slice registers a table, it deletes nothing.
 
-A table whose writes lock its rows before changing what hangs off them (group plans) registers
-with `lock_first=True`: the purge then locks the expired rows in primary-key order, as those
-writes and account deletion do, before the cascade, in one transaction. Deleting the children
-first and the row last would wait on a write that holds the row and waits for those children.
+A table whose writes lock its rows before changing what hangs off them (friends' input links,
+group plans) registers with `lock_first=True`: the purge then locks the expired rows in primary-key
+order, as those writes and account deletion do, before the cascade, in one transaction. Deleting
+the children first and the row last would wait on a write that holds the row and waits for those
+children. A table with nothing hanging off it (friends' answers on a shared plan) needs no lock:
+its purge is one DELETE that never holds one row while it waits for another table's.
 """
 
 from dataclasses import dataclass

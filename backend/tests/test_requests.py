@@ -112,9 +112,10 @@ def test_one_answer_per_browser_per_request(profile):
 # --- GS-5: deleted 30 days after the day, with the request, or with the account ------------
 
 
-def test_requests_are_registered_for_expiry_30_days_after_their_day():
+def test_requests_are_registered_for_expiry_30_days_after_their_day_and_locked_first():
+    """Locked first, as account deletion locks them (tests/test_account_deletion_races.py)."""
     rules = [rule for rule in retention.RULES if rule.model is GroupRequest]
-    assert [(rule.date_field, rule.days) for rule in rules] == [("day", 30)]
+    assert [(rule.date_field, rule.days, rule.lock_first) for rule in rules] == [("day", 30, True)]
 
 
 def test_purge_expired_deletes_expired_requests_with_their_answers_and_nothing_else(profile):

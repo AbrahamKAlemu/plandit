@@ -529,7 +529,10 @@ def test_the_purge_and_a_members_account_deletion_on_an_expired_group_both_finis
     else:
         purge = lambda: call_command("purge_expired", stdout=StringIO()) or "purged"  # noqa: E731
     if first == "purge":
-        results = first_holds_until_second_waits(monkeypatch, retention, "lock_rows", purge, delete)
+        # Held at the group rule's lock: the request rule locks its expired rows (none here) first.
+        results = first_holds_until_second_waits(
+            monkeypatch, retention, "lock_rows", purge, delete, when=lambda rows: rows.model is GroupPlan
+        )
         purged, deleted = results["first"], results["second"]
     else:
         results = first_holds_until_second_waits(monkeypatch, core_views, "_lock_group_plans", delete, purge)

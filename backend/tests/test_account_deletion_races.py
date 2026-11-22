@@ -12,15 +12,21 @@ lost the deadlock failed after Supabase had already removed the sign-in.
 Each test holds one request at the step where the order matters until the other is seen waiting
 for a lock (first_holds_until_second_waits), so they don't depend on timing."""
 
-import pytest
+from datetime import timedelta
+from io import StringIO
 
+import pytest
+from django.core.management import call_command
+from django.db import DatabaseError
+
+from plandit.core import retention
 from plandit.core import views as core_views
 from plandit.core.models import AppSnapshot, Profile
-from plandit.plans.models import GroupRequest
+from plandit.plans.models import REQUEST_RETENTION_DAYS, GroupAnswer, GroupRequest
 from plandit.shares.models import SharedPlan
 from tests.test_group_plan_races import delete_account_later, first_holds_until_second_waits, second_device, warm
 from tests.test_group_plans import person, plan_json, with_and_without_supabase
-from tests.test_requests import make_request
+from tests.test_requests import add_answer, local_today, make_request
 from tests.test_shares import plan_payload, share
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -130,3 +136,56 @@ def test_a_share_with_request_that_waited_for_the_accounts_deletion_is_401(maya,
     assert results["second"].json() == ACCOUNT_DELETED
     assert not SharedPlan.objects.exists()
     assert not GroupRequest.objects.exists()
+
+
+# --- The retention purge on an expired friends' input link ---------------------------------------
+
+
+def purge_by(trigger: str):
+    """The purge as a callable for a race: the command (its result, or the error it raised), or an
+    organizer's GET of their own request, which runs it first."""
+    if trigger == "the purge command":
+
+        def run():
+            try:
+                call_command("purge_expired", stdout=StringIO())
+            except DatabaseError as exc:
+                return type(exc).__name__
+            return "purged"
+
+        return run
+    sam = person("Sam Rivera")
+    warm(sam)
+    slug = make_request(sam.profile).slug
+    return lambda: sam.client.get(f"/api/plan-requests/{slug}/")
+
+
+@pytest.mark.parametrize("trigger", ["the purge command", "an organizer's GET"])
+@pytest.mark.parametrize("first", ["purge", "deletion"])
+def test_the_purge_and_the_accounts_deletion_on_an_expired_request_both_finish(
+    maya, settings, monkeypatch, caplog, first, trigger
+):
+    """The purge deleted an expired request's answers, then the request, without locking it first;
+    the organizer's account deletion locks the request, then deletes its answers. Each waited for
+    the other. The purge now locks expired requests first, in primary-key order, as account
+    deletion, the organizer's delete and a friend's answer do (the group plan rule's `lock_first`)."""
+    expired = make_request(maya.profile, day=local_today() - timedelta(days=REQUEST_RETENTION_DAYS))
+    add_answer(expired, name="Jordan")
+    warm(maya)
+    purge = purge_by(trigger)
+    delete = delete_account_later(maya, settings, monkeypatch, with_supabase=False)
+    if first == "purge":
+        results = first_holds_until_second_waits(
+            monkeypatch, retention, "lock_rows", purge, delete, when=lambda rows: rows.model is GroupRequest
+        )
+        purged, deleted = results["first"], results["second"]
+    else:
+        results = first_holds_until_second_waits(monkeypatch, core_views, "_lock_group_plans", delete, purge)
+        deleted, purged = results["first"], results["second"]
+
+    purge_outcome = purged if trigger == "the purge command" else purged.status_code
+    assert (deleted.status_code, purge_outcome) == (204, "purged" if trigger == "the purge command" else 200)
+    assert "deadlock" not in caplog.text
+    assert not GroupRequest.objects.filter(pk=expired.pk).exists()
+    assert not GroupAnswer.objects.filter(request_id=expired.pk).exists()
+    assert not Profile.objects.filter(pk=maya.id).exists()
