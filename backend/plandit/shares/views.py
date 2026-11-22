@@ -131,7 +131,7 @@ def shared_plan_page(request, slug):
     logger.info("proxy chain: %s", describe_forwarding(request))
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
-        return _not_found_page(request)
+        return not_found_page(request)
     if _takes_answers(shared):
         purge_expired()
     return _plan_page(request, shared)
@@ -147,7 +147,7 @@ def answer_plan(request, slug):
     name (400), the page comes back with the reason."""
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
-        return _not_found_page(request)
+        return not_found_page(request)
     if not _takes_answers(shared):
         raise Http404
     if rate_limited(f"answer:{slug}:{client_ip(request)}", ANSWERS_PER_ADDRESS, ANSWERS_PER_ADDRESS_WINDOW):
@@ -163,12 +163,12 @@ def answer_plan(request, slug):
     if form["status"] not in ShareAnswer.Status.values:
         return _plan_page(request, shared, form=form, error=CHOOSE_A_BUTTON, status=400)
 
-    response = _with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
+    response = with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
     responder = responder_token(request, response, _page_path(slug), max_age=_cookie_max_age(shared), renew=True)
     with transaction.atomic():
         shared = SharedPlan.objects.select_for_update().filter(pk=shared.pk).first()
         if shared is None:
-            return _not_found_page(request)
+            return not_found_page(request)
         if not _takes_answers(shared):
             raise Http404
         answers = shared.answers.all()
@@ -196,18 +196,18 @@ def take_back_answer(request, slug):
     rate limited: it can only remove what this browser's cookie wrote. 303 back to the page."""
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
-        return _not_found_page(request)
+        return not_found_page(request)
     purge_expired()
     responder = _existing_responder(request, slug)
     ShareAnswer.objects.filter(shared_plan=shared, responder=responder).delete()
-    return _with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
+    return with_page_headers(HttpResponseRedirect(_page_path(slug), status=303), takes_answers=True)
 
 
-def _not_found_page(request):
+def not_found_page(request):
     """A link that doesn't exist, or stopped being shared while the page was open. (A link shared
     without answers answers the answer POSTs with a bare 404 instead, so nothing is collected before
     the app asks for it.)"""
-    return _with_page_headers(render(request, "shares/not_found.html", status=404), takes_answers=False)
+    return with_page_headers(render(request, "shares/not_found.html", status=404), takes_answers=False)
 
 
 def _plan_page(request, shared, *, form=None, error="", name_invalid=False, status=200):
@@ -260,13 +260,13 @@ def _plan_page(request, shared, *, form=None, error="", name_invalid=False, stat
         },
         status=status,
     )
-    return _with_page_headers(response, takes_answers=takes_answers)
+    return with_page_headers(response, takes_answers=takes_answers)
 
 
 _ALTERNATE_DETAILS = ("kind", "neighborhood", "costText")
 
 
-def _with_page_headers(response, *, takes_answers: bool):
+def with_page_headers(response, *, takes_answers: bool):
     response["X-Robots-Tag"] = "noindex, nofollow"
     if takes_answers:
         # The page depends on the browser's cookie and carries a CSRF token, so nothing may keep it.

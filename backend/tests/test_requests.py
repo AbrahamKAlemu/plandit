@@ -6,17 +6,25 @@ the owner API and builds the plan on the phone, then shares it with the request'
 
 import copy
 import hashlib
+import re
+import time as clock_module
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.contrib.staticfiles import finders
 from django.db import IntegrityError, connection, transaction
+from django.test import Client
 from django.utils import timezone
+from django.utils.html import escape
 
-from plandit.core import retention
+from plandit.core import public_forms, retention
+from plandit.plans import request_views
 from plandit.plans.models import GroupAnswer, GroupRequest
-from tests.test_answers import empty_throttle_cache  # noqa: F401
+from plandit.shares.models import ShareAnswer
+from tests.test_answers import csrf_browser, empty_throttle_cache, form_token, html, new_browser  # noqa: F401
+from tests.test_shares import PUBLIC_PAGE_CSP
 
 pytestmark = pytest.mark.django_db
 
@@ -481,3 +489,658 @@ def test_the_owner_read_purges_expired_requests(auth_client, group, profile):
     owner_get(auth_client, group.slug)
     assert not GroupRequest.objects.filter(pk=expired.pk).exists()
     assert not GroupAnswer.objects.exists()
+
+
+# --- The public page: /g/<slug> ------------------------------------------------------------
+
+
+@pytest.fixture
+def browser():
+    return Client()
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """The rate limit's clock, at the start of an hour."""
+    now = {"t": 1_800_000_000.0 - 1_800_000_000.0 % 3600}
+    monkeypatch.setattr(clock_module, "time", lambda: now["t"])
+    return now
+
+
+def friend_answer(
+    client, slug, name="Maya", budget="40", free_from="13:00", free_until="18:00", stars=(TACOS,), **extra
+):
+    """Submit the page's form the way a browser does: the slider's value, the two times, and each
+    ticked place as `star`. A field given as None isn't sent."""
+    data = {"name": name, "budget": budget, "free_from": free_from, "free_until": free_until}
+    data = {key: value for key, value in data.items() if value is not None}
+    if stars:
+        data["star"] = list(stars)
+    return client.post(f"/g/{slug}/answer", data, **extra)
+
+
+def take_back_request(client, slug, **extra):
+    return client.post(f"/g/{slug}/answer/delete", {}, **extra)
+
+
+def request_page(client, slug):
+    return client.get(f"/g/{slug}")
+
+
+def stored() -> tuple:
+    answer = GroupAnswer.objects.get()
+    return answer.name, answer.budget, answer.free_from, answer.free_until, answer.stars
+
+
+# --- GI-2: a friend answers with a first name, a budget, a free window and up to 3 stars -----
+
+
+def test_a_friend_answers_and_goes_back_to_the_page(browser, group):
+    response = friend_answer(browser, group.slug, stars=(TACOS, MET))
+    assert response.status_code == 303
+    assert response["Location"] == f"/g/{group.slug}"
+    assert stored() == ("Maya", 40, time(13), time(18), [MET, TACOS])  # in the request's order
+
+
+def test_the_page_shows_the_places_their_costs_and_the_deadline(browser, group):
+    body = html(request_page(browser, group.slug))
+    for place in PLACES:
+        assert escape(place["name"]) in body
+        assert f"{place['neighborhood']} · {place['kind']}" in body
+        assert place["costText"] in body
+    assert f"Answers by {request_views.deadline_text(group)}" in body
+    assert request_views.day_text(group.day) in body
+    assert "12 PM to 8 PM" in body
+
+
+@pytest.mark.parametrize(
+    ("moment", "text"),
+    [
+        (time(12), "12 PM"),
+        (time(20), "8 PM"),
+        (time(12, 30), "12:30 PM"),
+        (time(0), "12 AM"),
+        (time(9, 5), "9:05 AM"),
+        (time(23, 59), "11:59 PM"),
+    ],
+)
+def test_times_are_written_the_way_the_app_writes_them(moment, text):
+    assert request_views.clock_text(moment) == text
+
+
+def test_the_day_and_the_deadline_are_written_out(profile):
+    group = make_request(profile, answers_by=datetime(2026, 11, 28, 2, tzinfo=UTC))
+    assert request_views.day_text(date(2026, 11, 28)) == "Saturday, November 28"
+    # 2 AM in UTC is 9 PM the evening before in the request's own time zone.
+    assert request_views.deadline_text(group) == "Friday, November 27 at 9 PM"
+
+
+def test_the_form_starts_at_the_whole_range_with_no_stars(browser, group):
+    body = html(request_page(browser, group.slug))
+    assert re.search(r'<input[^>]*type="time"[^>]*name="free_from"[^>]*min="12:00" max="20:00" value="12:00"', body)
+    assert re.search(r'<input[^>]*type="time"[^>]*name="free_until"[^>]*min="12:00" max="20:00" value="20:00"', body)
+    assert re.search(r'<input[^>]*type="range"[^>]*name="budget"[^>]*min="0" max="150"', body)
+    assert "Your budget for the day, train included" in body
+    assert "Star up to 3 places you want most." in body
+    assert not re.search(r'name="star"[^>]* checked', body)
+
+
+def test_the_name_field_says_who_sees_the_answer(browser, group):
+    assert "Only the person who sent this link sees your answer." in html(request_page(browser, group.slug))
+
+
+def test_stars_are_stored_in_the_requests_own_spelling_and_order_and_once_each(browser, group):
+    friend_answer(browser, group.slug, stars=(TACOS.lower(), TACOS, MET.lower()))
+    assert GroupAnswer.objects.get().stars == [MET, TACOS]
+
+
+def test_stars_for_places_not_in_the_request_are_ignored(browser, group):
+    friend_answer(browser, group.slug, stars=(str(uuid.uuid4()), "the-met", TACOS))
+    assert GroupAnswer.objects.get().stars == [TACOS]
+
+
+GOOD_ANSWERS = {
+    "no stars": {"stars": ()},
+    "3 stars": {"stars": (MET, TACOS, HIGH_LINE)},
+    "a budget of $0": {"budget": "0"},
+    "a budget of $150": {"budget": "150"},
+    "the whole range": {"free_from": "12:00", "free_until": "20:00"},
+    "a minute's window": {"free_from": "19:59", "free_until": "20:00"},
+    "times with seconds, as some browsers send them": {"free_from": "13:00:00", "free_until": "18:30:00"},
+    "a name with an apostrophe": {"name": "D'Andre"},
+}
+
+
+@pytest.mark.parametrize("fields", GOOD_ANSWERS.values(), ids=GOOD_ANSWERS.keys())
+def test_answers_at_the_edges_are_accepted(browser, group, fields):
+    assert friend_answer(browser, group.slug, **fields).status_code == 303
+    assert GroupAnswer.objects.count() == 1
+
+
+BUDGET_MESSAGE = "Choose a budget from $0 to $150."
+TIMES_MESSAGE = 'Choose times from 12 PM to 8 PM, with "until" after "from".'
+BAD_ANSWERS = {
+    "no budget": ({"budget": None}, BUDGET_MESSAGE),
+    "an empty budget": ({"budget": ""}, BUDGET_MESSAGE),
+    "a budget over $150": ({"budget": "151"}, BUDGET_MESSAGE),
+    "a negative budget": ({"budget": "-1"}, BUDGET_MESSAGE),
+    "cents": ({"budget": "40.5"}, BUDGET_MESSAGE),
+    "a budget that isn't a number": ({"budget": "forty"}, BUDGET_MESSAGE),
+    "a budget with an exponent": ({"budget": "1e2"}, BUDGET_MESSAGE),
+    "free from before the range": ({"free_from": "11:59"}, TIMES_MESSAGE),
+    "free until after the range": ({"free_until": "20:01"}, TIMES_MESSAGE),
+    "until before from": ({"free_from": "18:00", "free_until": "13:00"}, TIMES_MESSAGE),
+    "until the same as from": ({"free_from": "13:00", "free_until": "13:00"}, TIMES_MESSAGE),
+    "no from": ({"free_from": None}, TIMES_MESSAGE),
+    "an empty until": ({"free_until": ""}, TIMES_MESSAGE),
+    "a time that isn't one": ({"free_from": "1pm"}, TIMES_MESSAGE),
+    "hour 25": ({"free_until": "25:00"}, TIMES_MESSAGE),
+    "4 stars": ({"stars": (MET, TACOS, HIGH_LINE, PIZZA)}, "Star up to 3 places."),
+    "no name": ({"name": ""}, "Enter your first name."),
+    "a name over 30 characters": ({"name": "A" * 31}, "Use 30 characters or fewer."),
+    "a name with a digit": ({"name": "Maya2"}, "Use letters, spaces, hyphens and apostrophes only."),
+}
+
+
+@pytest.mark.parametrize(("fields", "message"), BAD_ANSWERS.values(), ids=BAD_ANSWERS.keys())
+def test_bad_answers_show_the_form_again_with_the_reason(browser, group, fields, message):
+    response = friend_answer(browser, group.slug, **fields)
+
+    assert response.status_code == 400
+    body = html(response)
+    assert escape(message) in body
+    assert 'id="answer"' in body and "The Met" in body  # the whole page, not a bare error
+    assert not GroupAnswer.objects.exists()
+    assert "pa" not in response.cookies
+    assert response["Cache-Control"] == "private, no-store"
+    assert response["Content-Security-Policy"] == PUBLIC_PAGE_CSP
+
+
+def test_a_blocked_name_is_refused(browser, group, monkeypatch):
+    monkeypatch.setattr(public_forms, "name_blocklist", lambda: frozenset({"blockedword"}))
+    response = friend_answer(browser, group.slug, name="Blockedword")
+    assert response.status_code == 400
+    assert escape("That name can't be used here. Try another.") in html(response)
+    assert not GroupAnswer.objects.exists()
+
+
+def test_the_form_keeps_what_was_typed_when_it_comes_back(browser, group):
+    body = html(friend_answer(browser, group.slug, name="Maya!", budget="35", free_from="14:30", stars=(MET, PIZZA)))
+    assert 'value="Maya!"' in body
+    assert re.search(r'name="budget"[^>]* value="35"', body)
+    assert re.search(r'name="free_from"[^>]* value="14:30"', body)
+    assert re.search(r'name="free_until"[^>]* value="18:00"', body)
+    assert re.search(rf'name="star" value="{MET}"[^>]* checked', body)
+    assert re.search(rf'name="star" value="{PIZZA}"[^>]* checked', body)
+    assert not re.search(rf'name="star" value="{TACOS}"[^>]* checked', body)
+
+
+def test_values_the_form_cannot_show_come_back_as_its_starting_values(browser, group):
+    body = html(friend_answer(browser, group.slug, budget="999", free_from="nope", free_until="23:00"))
+    assert re.search(r'name="budget"[^>]* value="75"', body)
+    assert re.search(r'name="free_from"[^>]* value="12:00"', body)
+    assert re.search(r'name="free_until"[^>]* value="23:00"', body)  # a time: kept, for the friend to fix
+
+
+def test_the_answer_cookie_is_for_this_link_only_and_only_its_hash_is_stored(browser, group):
+    cookie = friend_answer(browser, group.slug).cookies["pa"]
+    assert cookie["path"] == f"/g/{group.slug}"
+    assert cookie["httponly"] is True and cookie["secure"] is True and cookie["samesite"] == "Lax"
+    answer = GroupAnswer.objects.get()
+    assert answer.responder == hashlib.sha256(cookie.value.encode()).hexdigest()
+    assert cookie.value not in str(GroupAnswer.objects.values().get())
+
+
+DAY = 24 * 60 * 60
+
+
+@pytest.mark.parametrize(("days_ahead", "cookie_days"), [(0, 30), (1, 31), (14, 44)])
+def test_the_cookie_lasts_until_the_answer_is_deleted(browser, profile, days_ahead, cookie_days):
+    """Answers go 30 days after the request's day (brief GS-5), and the cookie with them."""
+    group = make_request(
+        profile,
+        day=timezone.localdate() + timedelta(days=days_ahead),
+        answers_by=timezone.now() + timedelta(minutes=5),
+    )
+    cookie = friend_answer(browser, group.slug).cookies["pa"]
+    assert int(cookie["max-age"]) == cookie_days * DAY
+
+
+def test_the_page_itself_sets_no_answer_cookie(browser, group):
+    assert "pa" not in request_page(browser, group.slug).cookies
+
+
+# --- GI-2: the same browser changes or takes back its answer; nobody else can ---------------
+
+
+def test_the_same_browser_changes_its_answer(browser, group):
+    token = friend_answer(browser, group.slug).cookies["pa"].value
+    first = GroupAnswer.objects.get()
+    response = friend_answer(browser, group.slug, name="Maya J", budget="20", free_until="20:00", stars=())
+
+    assert response.status_code == 303
+    assert response.cookies["pa"].value == token  # the same cookie, renewed
+    changed = GroupAnswer.objects.get()
+    assert changed.id == first.id and changed.created_at == first.created_at
+    assert stored() == ("Maya J", 20, time(13), time(20), [])
+
+
+def test_the_same_browser_sees_its_own_answer(browser, group):
+    friend_answer(browser, group.slug, name="Jordan", budget="25", free_from="14:00", free_until="19:30", stars=(MET,))
+    body = html(request_page(browser, group.slug))
+    assert "You've answered: <strong>$25</strong>, free <strong>2 PM to 7:30 PM</strong>." in body
+    assert 'value="Jordan"' in body
+    assert re.search(r'name="budget"[^>]* value="25"', body)
+    assert re.search(r'name="free_from"[^>]* value="14:00"', body)
+    assert re.search(r'name="free_until"[^>]* value="19:30"', body)
+    assert re.search(rf'name="star" value="{MET}"[^>]* checked', body)
+    assert "Take back my answer" in body
+
+
+def test_another_browser_gets_its_own_answer_and_cannot_touch_the_first(browser, group):
+    friend_answer(browser, group.slug, name="Maya", budget="40")
+    other = new_browser()
+    friend_answer(other, group.slug, name="Maya", budget="90")
+    assert GroupAnswer.objects.count() == 2
+    assert take_back_request(other, group.slug).status_code == 303
+
+    assert stored()[:2] == ("Maya", 40)
+    other_page = html(request_page(other, group.slug))
+    assert "You've answered" not in other_page and "Take back my answer" not in other_page
+
+
+def test_a_forged_cookie_is_just_a_new_browser(browser, group):
+    friend_answer(browser, group.slug, name="Maya")
+    forger = Client()
+    forger.cookies["pa"] = "x" * 43
+    friend_answer(forger, group.slug, name="Mallory")
+    assert sorted(GroupAnswer.objects.values_list("name", flat=True)) == ["Mallory", "Maya"]
+
+
+def test_the_same_browser_takes_back_its_answer(browser, group):
+    friend_answer(browser, group.slug)
+    response = take_back_request(browser, group.slug)
+    assert response.status_code == 303
+    assert response["Location"] == f"/g/{group.slug}"
+    assert not GroupAnswer.objects.exists()
+    assert "You've answered" not in html(request_page(browser, group.slug))
+
+
+def test_taking_back_without_an_answer_does_nothing(browser, group):
+    add_answer(group, name="Maya")
+    assert take_back_request(browser, group.slug).status_code == 303
+    assert "pa" not in browser.cookies
+    assert GroupAnswer.objects.count() == 1
+
+
+def test_a_cookie_only_counts_on_its_own_link(browser, group, profile):
+    other = make_request(profile)
+    friend_answer(browser, group.slug, name="Maya")
+    # The test client sends the cookie to every path, unlike a browser; it still only counts here.
+    friend_answer(browser, other.slug, name="Maya")
+    assert GroupAnswer.objects.count() == 2
+    take_back_request(browser, other.slug)
+    assert GroupAnswer.objects.get().request == group
+
+
+def test_a_share_links_cookie_does_not_answer_for_a_request(auth_client, browser, group):
+    """Both pages use the `pa` cookie, each on its own path. Answers are kept per link, so even a
+    client that sends one cookie everywhere only changes the answer on the link it posts to."""
+    from tests.test_answers import answer, answers_payload
+    from tests.test_shares import share
+
+    plan_slug = share(auth_client, answers_payload()).json()["slug"]
+    answer(browser, plan_slug, name="Maya")
+    friend_answer(browser, group.slug, name="Maya")
+    assert GroupAnswer.objects.count() == 1
+    take_back_request(browser, group.slug)
+    assert not GroupAnswer.objects.exists()
+    assert ShareAnswer.objects.count() == 1
+
+
+# --- GI-8: a friend sees how many answered, never anyone else's answer ---------------------
+
+
+def test_the_page_shows_only_how_many_answered(browser, group):
+    add_answer(group, name="Zelda", budget=137, free_from=time(13, 37), free_until=time(19, 41), stars=[PIZZA])
+    add_answer(group, name="Quinn", budget=123, free_from=time(12, 23), free_until=time(17, 47), stars=[PIZZA])
+    body = html(request_page(browser, group.slug))
+
+    assert "2 answered" in body
+    for text in ("Zelda", "Quinn", "$137", "$123", '"137"', '"123"', ">137<", ">123<"):
+        assert text not in body, text
+    for text in ("13:37", "1:37 PM", "19:41", "7:41 PM", "12:23", "17:47", "5:47 PM"):
+        assert text not in body, text
+    assert not re.search(rf'name="star" value="{PIZZA}"[^>]* checked', body)
+
+
+def test_no_answers_yet_shows_no_count(browser, group):
+    assert "answered" not in html(request_page(browser, group.slug))
+
+
+def test_the_count_includes_the_friends_own_answer(browser, group):
+    add_answer(group, name="Zelda")
+    friend_answer(browser, group.slug)
+    body = html(request_page(browser, group.slug))
+    assert "2 answered" in body and "Zelda" not in body
+
+
+# --- GI-3: after the deadline, or once closed or built, the link stops taking answers -------
+
+
+CLOSED = "This plan isn't taking answers any more"
+
+
+def past_deadline(group):
+    GroupRequest.objects.filter(pk=group.pk).update(answers_by=timezone.now() - timedelta(seconds=1))
+
+
+def closed_by_the_organizer(group):
+    GroupRequest.objects.filter(pk=group.pk).update(status="closed")
+
+
+def built_and_no_longer_shared(group):
+    GroupRequest.objects.filter(pk=group.pk).update(status="built", shared_plan=None)
+
+
+@pytest.mark.parametrize("close", [past_deadline, closed_by_the_organizer, built_and_no_longer_shared])
+def test_a_closed_request_says_so_and_refuses_answers(browser, group, close):
+    friend_answer(browser, group.slug, name="Maya")
+    close(group)
+
+    page = request_page(browser, group.slug)
+    assert page.status_code == 200
+    body = html(page)
+    assert CLOSED in body
+    assert 'id="answer"' not in body and 'name="budget"' not in body
+    assert page["Cache-Control"] == "private, no-store"
+    assert page["Content-Security-Policy"] == PUBLIC_PAGE_CSP
+
+    refused = friend_answer(new_browser(), group.slug, name="Late")
+    assert refused.status_code == 410
+    assert CLOSED in html(refused)
+    assert "pa" not in refused.cookies
+    assert refused["Cache-Control"] == "private, no-store"
+    assert list(GroupAnswer.objects.values_list("name", flat=True)) == ["Maya"]
+
+
+def test_a_closed_request_still_lets_a_friend_take_back_their_answer(browser, group):
+    friend_answer(browser, group.slug, name="Maya")
+    past_deadline(group)
+    assert "Take back my answer" in html(request_page(browser, group.slug))
+    assert "Take back my answer" not in html(request_page(new_browser(), group.slug))
+    assert take_back_request(browser, group.slug).status_code == 303
+    assert not GroupAnswer.objects.exists()
+
+
+def test_a_change_after_the_deadline_is_refused(browser, group):
+    friend_answer(browser, group.slug, budget="40")
+    past_deadline(group)
+    assert friend_answer(browser, group.slug, budget="10").status_code == 410
+    assert GroupAnswer.objects.get().budget == 40
+
+
+# --- GI-7: once built, the link opens the plan ----------------------------------------------
+
+
+def test_a_built_request_redirects_to_its_plans_page(browser, group, profile):
+    from plandit.shares.models import SharedPlan
+
+    shared = SharedPlan.objects.create(owner=profile, plan_id=uuid.uuid4(), data={})
+    GroupRequest.objects.filter(pk=group.pk).update(status="built", shared_plan=shared)
+
+    response = request_page(browser, group.slug)
+    assert response.status_code == 302
+    assert response["Location"] == f"/p/{shared.slug}"
+    assert response["Cache-Control"] == "private, no-store"
+    assert response["X-Robots-Tag"] == "noindex, nofollow"
+    assert friend_answer(browser, group.slug).status_code == 410
+
+
+# --- Missing links and methods ---------------------------------------------------------------
+
+
+def test_a_link_that_does_not_exist_is_404_everywhere(browser):
+    page = request_page(browser, "doesnotexist")
+    assert page.status_code == 404
+    assert "This plan isn't shared anymore" in html(page)
+    assert page["Content-Security-Policy"] == PUBLIC_PAGE_CSP
+    assert friend_answer(browser, "doesnotexist").status_code == 404
+    assert take_back_request(browser, "doesnotexist").status_code == 404
+
+
+def test_a_deleted_request_is_404_and_its_form_posts_to_a_missing_page(auth_client, browser, group):
+    friend_answer(browser, group.slug)
+    auth_client.delete(f"/api/plan-requests/{group.slug}/")
+    assert request_page(browser, group.slug).status_code == 404
+    response = friend_answer(browser, group.slug)
+    assert response.status_code == 404
+    assert "This plan isn't shared anymore" in html(response)
+    assert take_back_request(browser, group.slug).status_code == 404
+
+
+def test_the_answer_urls_only_take_posts(browser, group):
+    assert browser.get(f"/g/{group.slug}/answer").status_code == 405
+    assert browser.get(f"/g/{group.slug}/answer/delete").status_code == 405
+    assert browser.post(f"/g/{group.slug}").status_code == 405
+
+
+# --- GS-3: CSRF, headers and the policy ------------------------------------------------------
+
+
+def test_a_post_without_the_csrf_token_is_refused(group):
+    client = csrf_browser()
+    assert friend_answer(client, group.slug).status_code == 403
+    request_page(client, group.slug)  # has the CSRF cookie now, but still no token in the form
+    assert friend_answer(client, group.slug).status_code == 403
+    assert take_back_request(client, group.slug).status_code == 403
+    assert not GroupAnswer.objects.exists()
+
+
+def test_a_post_with_the_pages_csrf_token_is_accepted(group):
+    client = csrf_browser()
+    token = form_token(html(request_page(client, group.slug)))
+    data = {"csrfmiddlewaretoken": token, "name": "Maya", "budget": "40", "free_from": "13:00", "free_until": "18:00"}
+    assert client.post(f"/g/{group.slug}/answer", data).status_code == 303
+    token = form_token(html(request_page(client, group.slug)))
+    assert client.post(f"/g/{group.slug}/answer/delete", {"csrfmiddlewaretoken": token}).status_code == 303
+    assert not GroupAnswer.objects.exists()
+
+
+def test_the_page_sends_its_origin_so_the_csrf_check_can_pass(group):
+    client = csrf_browser()
+    response = request_page(client, group.slug)
+    assert response["Referrer-Policy"] == "same-origin"
+    token = form_token(html(response))
+    data = {"csrfmiddlewaretoken": token, "name": "Maya", "budget": "40", "free_from": "13:00", "free_until": "18:00"}
+    assert client.post(f"/g/{group.slug}/answer", data, HTTP_ORIGIN="null").status_code == 403
+    assert client.post(f"/g/{group.slug}/answer", data, HTTP_ORIGIN="https://evil.example").status_code == 403
+    assert client.post(f"/g/{group.slug}/answer", data, HTTP_ORIGIN="http://testserver").status_code == 303
+
+
+def test_the_pages_are_never_cached(browser, group):
+    responses = [
+        request_page(browser, group.slug),
+        friend_answer(browser, group.slug),
+        friend_answer(browser, group.slug, name=""),
+        take_back_request(browser, group.slug),
+    ]
+    for response in responses:
+        assert response["Cache-Control"] == "private, no-store", response.status_code
+        assert response["X-Robots-Tag"] == "noindex, nofollow"
+        assert response["Referrer-Policy"] == "same-origin"
+        assert response["Content-Security-Policy"] == PUBLIC_PAGE_CSP
+
+
+@pytest.mark.parametrize("state", ["open", "closed"])
+def test_the_page_fits_its_policy_and_needs_no_javascript(browser, group, state):
+    friend_answer(browser, group.slug)
+    if state == "closed":
+        past_deadline(group)
+    body = html(request_page(browser, group.slug))
+    assert "<script" not in body and "<style" not in body and " style=" not in body
+    assert not re.search(r"<[^>]+\son[a-z]+=", body)  # no inline event handlers
+    stylesheets = re.findall(r'<link rel="stylesheet" href="([^"]+)">', body)
+    assert stylesheets[0].startswith("https://fonts.googleapis.com/")
+    for href in stylesheets[1:]:
+        assert href.startswith("/static/"), href
+        assert finders.find(href.removeprefix("/static/")), href
+    for src in re.findall(r'<img[^>]* src="([^"]+)"', body):
+        assert src.startswith("https://plandit.app/"), src
+    # Brief GI-2 and the architecture: a slider, two times and checkboxes, nothing that needs a script.
+    types = set(re.findall(r'<input[^>]*type="([^"]+)"', body))
+    assert types <= {"hidden", "text", "range", "time", "checkbox"}, types
+    forms = re.findall(r'<form[^>]*action="([^"]+)"', body)
+    if state == "open":
+        assert types == {"hidden", "text", "range", "time", "checkbox"}
+        assert forms == [f"/g/{group.slug}/answer", f"/g/{group.slug}/answer/delete"]
+    else:
+        assert forms == [f"/g/{group.slug}/answer/delete"]
+
+
+@pytest.mark.parametrize("found", [True, False])
+def test_every_request_page_has_a_report_link(browser, group, found):
+    slug = group.slug if found else "doesnotexist"
+    body = html(request_page(browser, slug))
+    link = re.search(r'<a href="(mailto:support@plandit\.app[^"]*)">Report this page</a>', body)
+    assert link, "no report link"
+    if found:
+        assert f"%2Fg%2F{slug}" in link.group(1)
+
+
+@pytest.mark.parametrize("state", ["open", "closed"])
+def test_links_off_the_page_send_no_referrer(browser, group, state):
+    if state == "closed":
+        past_deadline(group)
+    body = html(request_page(browser, group.slug))
+    links = re.findall(r'<a [^>]*href="https://[^"]*"[^>]*>', body)
+    assert len(links) >= 2  # brand, "Make your own plan"
+    for link in links:
+        rel = re.search(r'rel="([^"]*)"', link)
+        assert rel and "noreferrer" in rel.group(1).split(), link
+
+
+def test_place_names_are_escaped(browser, profile):
+    places = copy.deepcopy(PLACES)
+    places[0]["name"] = "<b>Tacos</b> & co"
+    group = make_request(profile, places=places)
+    body = html(request_page(browser, group.slug))
+    assert "<b>Tacos</b>" not in body
+    assert escape("<b>Tacos</b> & co") in body
+
+
+# --- GS-2: 20 answers per address per hour on each link, 50 per link -------------------------
+
+
+def test_the_21st_answer_from_one_address_in_an_hour_is_refused(group, settings, clock):
+    settings.BEHIND_TRUSTED_PROXY = False
+    for n in range(20):
+        name = f"Friend {'abcdefghijklmnopqrstu'[n]}"
+        assert friend_answer(new_browser(), group.slug, name=name, REMOTE_ADDR="203.0.113.7").status_code == 303, n
+
+    refused = friend_answer(new_browser(), group.slug, name="Late", REMOTE_ADDR="203.0.113.7")
+    assert refused.status_code == 429
+    assert "Too many answers right now. Please try again later." in html(refused)
+    assert refused["Cache-Control"] == "private, no-store"
+    assert "pa" not in refused.cookies
+    assert GroupAnswer.objects.count() == 20
+    assert friend_answer(new_browser(), group.slug, name="Other", REMOTE_ADDR="198.51.100.4").status_code == 303
+
+    clock["t"] += 3600
+    assert friend_answer(new_browser(), group.slug, name="Later", REMOTE_ADDR="203.0.113.7").status_code == 303
+
+
+def test_the_address_limit_is_per_link(group, profile, settings, clock):
+    settings.BEHIND_TRUSTED_PROXY = False
+    other = make_request(profile)
+    for n in range(20):
+        name = f"Friend {'abcdefghijklmnopqrstu'[n]}"
+        assert friend_answer(new_browser(), group.slug, name=name, REMOTE_ADDR="203.0.113.7").status_code == 303
+    assert friend_answer(new_browser(), other.slug, REMOTE_ADDR="203.0.113.7").status_code == 303
+    assert friend_answer(new_browser(), group.slug, REMOTE_ADDR="203.0.113.7").status_code == 429
+
+
+def test_the_address_limit_is_not_shared_with_share_links(auth_client, group, settings, clock):
+    """A request and a shared plan could have the same slug; their limits are counted apart."""
+    from tests.test_answers import answer, answers_payload
+    from tests.test_shares import share
+
+    settings.BEHIND_TRUSTED_PROXY = False
+    plan_slug = share(auth_client, answers_payload()).json()["slug"]
+    for _ in range(20):
+        answer(new_browser(), plan_slug, REMOTE_ADDR="203.0.113.7")
+    GroupRequest.objects.filter(pk=group.pk).update(slug=plan_slug)
+    assert friend_answer(new_browser(), plan_slug, REMOTE_ADDR="203.0.113.7").status_code == 303
+
+
+def test_changing_an_answer_counts_against_the_address_too(browser, group, settings, clock):
+    settings.BEHIND_TRUSTED_PROXY = False
+    for _ in range(20):
+        assert friend_answer(browser, group.slug, REMOTE_ADDR="203.0.113.7").status_code == 303
+    assert friend_answer(browser, group.slug, budget="10", REMOTE_ADDR="203.0.113.7").status_code == 429
+    assert GroupAnswer.objects.get().budget == 40
+
+
+def test_taking_back_an_answer_is_never_refused_by_the_limit(browser, group, settings, clock):
+    settings.BEHIND_TRUSTED_PROXY = False
+    for _ in range(20):
+        friend_answer(browser, group.slug, REMOTE_ADDR="203.0.113.7")
+    assert take_back_request(browser, group.slug, REMOTE_ADDR="203.0.113.7").status_code == 303
+    assert not GroupAnswer.objects.exists()
+
+
+def fill_request(group, count):
+    GroupAnswer.objects.bulk_create(
+        GroupAnswer(
+            request=group,
+            responder=hashlib.sha256(f"seed-{n}".encode()).hexdigest(),
+            name=f"Seed {'abcdefghijklmnopqrstuvwxyz'[n % 26]}",
+            budget=40,
+            free_from=time(12),
+            free_until=time(20),
+        )
+        for n in range(count)
+    )
+
+
+def test_the_51st_answer_on_a_link_is_refused(browser, group):
+    friend_answer(browser, group.slug, name="Maya")
+    fill_request(group, 49)
+    assert GroupAnswer.objects.count() == 50
+
+    refused = friend_answer(new_browser(), group.slug, name="Late")
+    assert refused.status_code == 429
+    assert escape("This plan isn't taking more answers.") in html(refused)
+    assert "Too many answers right now" not in html(refused)
+    assert "pa" not in refused.cookies
+    assert GroupAnswer.objects.count() == 50
+    # Someone who already answered can still change their answer.
+    assert friend_answer(browser, group.slug, name="Maya", budget="10").status_code == 303
+    assert GroupAnswer.objects.get(name="Maya").budget == 10
+
+
+def test_the_cap_is_per_link(group, profile):
+    fill_request(group, 50)
+    assert friend_answer(new_browser(), make_request(profile).slug).status_code == 303
+
+
+def test_the_organizer_removing_answers_makes_room_again(auth_client, group):
+    fill_request(group, 50)
+    removed = GroupAnswer.objects.first()
+    assert auth_client.delete(f"/api/plan-requests/{group.slug}/answers/{removed.id}/").status_code == 204
+    assert friend_answer(new_browser(), group.slug).status_code == 303
+
+
+# --- GS-5: public posts and the open page purge expired requests ----------------------------
+
+
+@pytest.mark.parametrize("visit", ["page", "answer", "take back"])
+def test_the_public_page_purges_expired_requests(browser, group, profile, visit):
+    expired = make_request(profile, day=local_today() - timedelta(days=31))
+    add_answer(expired)
+    {
+        "page": lambda: request_page(browser, group.slug),
+        "answer": lambda: friend_answer(browser, group.slug),
+        "take back": lambda: take_back_request(browser, group.slug),
+    }[visit]()
+    assert not GroupRequest.objects.filter(pk=expired.pk).exists()
