@@ -81,7 +81,7 @@ final class ShareAnswersFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Little Island'")).firstMatch.exists)
     }
 
-    /// "Keep it" keeps the stop and hides the mark.
+    /// "Keep The High Line" keeps the stop and hides the mark.
     @MainActor func testKeepItHidesTheMark() {
         let app = launch()
         shareWithSwaps(app)
@@ -91,6 +91,7 @@ final class ShareAnswersFlowTests: XCTestCase {
         mark.tap()
         let keep = app.buttons["keep-it"]
         XCTAssertTrue(keep.waitForExistence(timeout: 3))
+        XCTAssertEqual(keep.label, "Keep The High Line")
         keep.tap()
         XCTAssertTrue(mark.waitForNonExistence(timeout: 3))
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'The High Line'")).firstMatch.exists, "the stop stays")

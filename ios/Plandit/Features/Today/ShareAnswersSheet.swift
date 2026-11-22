@@ -141,7 +141,7 @@ struct ShareAnswersSheet: View {
 }
 
 /// What friends picked instead of one stop: "Swap it" puts their pick in its place and plans the
-/// times again (GV-6); "Keep it" keeps the stop and hides these picks.
+/// times again (GV-6); "Keep <stop>" keeps the stop and hides these picks.
 struct StopSwapSheet: View {
     let stopID: UUID
     @Environment(PlanditStore.self) private var store
@@ -170,7 +170,7 @@ struct StopSwapSheet: View {
                                 noPickCard(group.names)
                             }
                         }
-                        Button("Keep it") {
+                        Button("Keep \(stop.place.name)") {
                             withAnimation(.snappy) { store.keepStop(stopID) }
                             dismiss()
                         }
