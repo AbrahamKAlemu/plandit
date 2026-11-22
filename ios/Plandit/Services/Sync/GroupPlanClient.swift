@@ -6,7 +6,7 @@ import Foundation
 /// Every call throws `APIError.network` when no HTTP answer came, `APIError.status` for a status
 /// it doesn't expect (5xx, 503 while a lock is busy), and `APIError.invalidResponse` for a body
 /// this build can't read. Auth errors come from `PlanditAPIClient`.
-protocol GroupPlanServing: Sendable {
+nonisolated protocol GroupPlanServing: Sendable {
     /// `GET /api/group-plans/`: every group this person is in.
     func list() async throws -> [GroupPlanSummary]
     /// `POST /api/group-plans/`. Throws `GroupPlanError` when refused (400, 403) or too big (413).

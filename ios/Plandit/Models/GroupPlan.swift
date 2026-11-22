@@ -4,16 +4,40 @@ import Foundation
 // Plans go both ways with a plain `JSONEncoder`/`JSONDecoder`, so dates are numbers, as the server
 // requires; never the snapshot's ISO 8601 coder.
 
+/// A group plan's day as the server keeps it, `YYYY-MM-DD`. Like the server's, it's over at 4 AM
+/// New York time the morning after: then edits are refused and the day is filed under recent plans.
+nonisolated enum GroupPlanDay {
+    static func string(for date: Date, calendar: Calendar) -> String {
+        let day = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+    }
+
+    /// 4 AM New York time the morning after `day`; nil for a day that isn't `YYYY-MM-DD`.
+    static func end(of day: String) -> Date? {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3,
+              let noon = newYork.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)),
+              let next = newYork.date(byAdding: .day, value: 1, to: noon) else { return nil }
+        return newYork.date(bySettingHour: 4, minute: 0, second: 0, of: next)
+    }
+
+    private static let newYork: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        return calendar
+    }()
+}
+
 /// One person in a group plan, in join order (the organizer first). Named apart from
 /// `GroupMember`, the friends' answers in mode 2.
-struct GroupPlanMember: Identifiable, Codable, Equatable, Hashable {
+nonisolated struct GroupPlanMember: Identifiable, Codable, Equatable, Hashable, Sendable {
     var id: UUID
     var name: String
     var isOrganizer: Bool
 }
 
 /// A group as create, join and GET answer it.
-struct GroupPlanDetail: Codable, Equatable {
+struct GroupPlanDetail: Codable, Equatable, Sendable {
     var id: UUID
     /// The plan's day, `YYYY-MM-DD`.
     var date: String
@@ -30,7 +54,7 @@ struct GroupPlanDetail: Codable, Equatable {
 }
 
 /// One row of `GET /api/group-plans/`.
-struct GroupPlanSummary: Codable, Equatable {
+nonisolated struct GroupPlanSummary: Codable, Equatable, Sendable {
     var id: UUID
     var date: String
     var version: Int
@@ -44,14 +68,14 @@ struct GroupPlanSummary: Codable, Equatable {
 }
 
 /// What the join sheet shows before joining.
-struct GroupInvitePreview: Codable, Equatable {
+nonisolated struct GroupInvitePreview: Codable, Equatable, Sendable {
     var organizerName: String
     var date: String
     var memberCount: Int
 }
 
 /// An edit someone made, from a 409: who (nil once they've left) and which stops.
-struct GroupPlanLoggedEdit: Codable, Equatable {
+nonisolated struct GroupPlanLoggedEdit: Codable, Equatable, Sendable {
     var version: Int
     var authorId: UUID?
     var authorName: String?
@@ -60,7 +84,7 @@ struct GroupPlanLoggedEdit: Codable, Equatable {
 }
 
 /// A 409: the plan moved on from the version the edit was made on.
-struct GroupPlanConflict: Codable, Equatable {
+struct GroupPlanConflict: Codable, Equatable, Sendable {
     var version: Int
     var membersVersion: Int
     var plan: DayPlan
@@ -72,15 +96,15 @@ struct GroupPlanConflict: Codable, Equatable {
 }
 
 /// A PUT the server stored (or had already stored, for a retried `editId`).
-struct GroupPlanSaved: Codable, Equatable {
+nonisolated struct GroupPlanSaved: Codable, Equatable, Sendable {
     var version: Int
     var membersVersion: Int
     var members: [GroupPlanMember]
 }
 
 /// The body of a PUT.
-struct GroupPlanUpdate: Codable, Equatable {
-    struct Edit: Codable, Equatable {
+struct GroupPlanUpdate: Codable, Equatable, Sendable {
+    nonisolated struct Edit: Codable, Equatable, Sendable {
         var kind: String
         var stopIds: [UUID]
     }
@@ -91,7 +115,7 @@ struct GroupPlanUpdate: Codable, Equatable {
     var plan: DayPlan
 }
 
-enum GroupPlanFetch: Equatable {
+enum GroupPlanFetch: Equatable, Sendable {
     /// 304: the ETag sent still matches.
     case notModified
     case plan(GroupPlanDetail, etag: String?)
@@ -99,7 +123,7 @@ enum GroupPlanFetch: Equatable {
     case gone
 }
 
-enum GroupPlanPutResult: Equatable {
+enum GroupPlanPutResult: Equatable, Sendable {
     case saved(GroupPlanSaved, etag: String?)
     case conflict(GroupPlanConflict, etag: String?)
     case gone
