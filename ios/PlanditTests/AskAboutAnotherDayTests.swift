@@ -85,6 +85,33 @@ import XCTest
         XCTAssertEqual(store.requestDetails?.answers.map(\.name), ["Jordan"], "Maya's removed answer came back")
     }
 
+    // Round 3, R3: built on another phone between the check and the confirmation: forgotten, not deleted.
+    func testALinkBuiltElsewhereAfterTheCheckIsNotDeleted() async throws {
+        let (store, requests) = try await F.requestedStore()
+        let kind = try await store.discardKind()
+        XCTAssertEqual(kind, .delete)
+        // While the organizer reads "Delete this link?", the other phone builds the plan.
+        await requests.setStatus(.built, planSlug: "plan1")
+        try await store.discardPlanRequest(kind)
+        let deleted = await requests.deleted
+        XCTAssertEqual(deleted, [], "friends' link keeps opening the plan")
+        XCTAssertNil(store.planRequest, "the app lets go of it")
+    }
+
+    // Round 3, R3: the second check can't be read: nothing is deleted, and the link stays.
+    func testWhenTheSecondCheckFailsNothingIsDeleted() async throws {
+        let (store, requests) = try await F.requestedStore()
+        let kind = try await store.discardKind()
+        await requests.failNext()
+        do {
+            try await store.discardPlanRequest(kind)
+            XCTFail("it couldn't tell whether the link opens a plan now")
+        } catch {}
+        let deleted = await requests.deleted
+        XCTAssertEqual(deleted, [])
+        XCTAssertNotNil(store.planRequest)
+    }
+
     // R7
     func testTheStatusLineAfterTheBuiltPlanStopsBeingShared() {
         let link = PlanRequestLink(slug: "req1", url: URL(string: "https://plandit.app/g/req1")!, day: "2026-11-22",

@@ -1326,7 +1326,14 @@ final class PlanditStore {
     /// one can be made.
     func discardPlanRequest(_ kind: RequestDiscard) async throws {
         guard let link = planRequest else { return }
-        if kind == .delete, let requestClient { try await requestClient.delete(slug: link.slug) }
+        if kind == .delete, let requestClient {
+            // Read once more right before deleting: another phone may have built the plan while
+            // the organizer confirmed, and friends' link then opens it, so it's only forgotten. The
+            // server's delete doesn't check, so a build landing between these two calls still goes.
+            if let current = try await requestClient.fetch(slug: link.slug), current.status != .built {
+                try await requestClient.delete(slug: link.slug)
+            }
+        }
         requestChanges += 1
         planRequest = nil
         fetchedRequest = nil
