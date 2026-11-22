@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
+from plandit.groups.pages import join_page
 from plandit.plans.request_views import answer_request, request_page, take_back_request_answer
 from plandit.shares.views import answer_plan, shared_plan_page, take_back_answer
 
@@ -20,5 +21,6 @@ urlpatterns = [
     path("g/<slug:slug>", request_page, name="plan-request"),
     path("g/<slug:slug>/answer", answer_request, name="plan-request-answer"),
     path("g/<slug:slug>/answer/delete", take_back_request_answer, name="plan-request-answer-delete"),
+    path("j/<str:token>", join_page, name="group-plan-join-page"),
     path("v1/", include("resolution.urls")),
 ]

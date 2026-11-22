@@ -1284,3 +1284,92 @@ def test_only_the_organizer_ends_the_group(group, jordan):
     assert person("Sam Rivera").client.delete(detail(group.id)).status_code == 404
     assert row(group) == before
     assert group.members.count() == 2
+
+
+# --- The /j/ page (brief GS-3; INV-10 to INV-13) ----------------------------------------------
+
+APP_STORE_URL = "https://apps.apple.com/app/id6826263440"
+
+
+def page_csp() -> str:
+    from tests.test_shares import PUBLIC_PAGE_CSP
+
+    return PUBLIC_PAGE_CSP
+
+
+def test_inv_10_the_page_is_the_same_for_any_token_and_reads_nothing(group, maya, django_assert_num_queries):
+    """It shows no group details: a valid, a replaced and a made-up token give the same bytes."""
+    valid = token_of(group)
+    assert maya.client.post(invite_path(group)).status_code == 200
+    tokens = (valid, token_of(group), "A" * 22)
+    client = anonymous_client()
+    with django_assert_num_queries(0):
+        pages = [client.get(f"/j/{token}") for token in tokens]
+    assert [page.status_code for page in pages] == [200, 200, 200]
+    assert pages[0].content == pages[1].content == pages[2].content
+    for token in tokens:
+        assert token not in pages[0].content.decode()
+
+
+def test_inv_11_the_page_has_the_public_page_headers():
+    response = anonymous_client().get(f"/j/{'b' * 22}")
+    assert response["Content-Security-Policy"] == page_csp()
+    assert response["X-Robots-Tag"] == "noindex, nofollow"
+    assert response["Referrer-Policy"] == "no-referrer"
+    assert response["Cache-Control"] == "public, max-age=60"
+
+
+@pytest.mark.parametrize("token", ["c" * 22, "short", "c" * 23, "c" * 300, "bad.token.with.dots.ok"])
+def test_inv_12_the_page_fits_its_policy_and_links_out_without_a_referrer(token):
+    import re
+
+    from django.contrib.staticfiles import finders
+
+    html = anonymous_client().get(f"/j/{token}").content.decode()
+    assert "<style" not in html
+    assert "<script" not in html
+    assert " style=" not in html
+    stylesheets = re.findall(r'<link rel="stylesheet" href="([^"]+)">', html)
+    assert stylesheets[0].startswith("https://fonts.googleapis.com/")
+    for href in stylesheets[1:]:
+        assert href.startswith("/static/shares/")
+        assert finders.find(href.removeprefix("/static/")), href
+    for src in re.findall(r'<img[^>]* src="([^"]+)"', html):
+        assert src.startswith("https://plandit.app/"), src
+    for link in re.findall(r'<a [^>]*href="https://[^"]*"[^>]*>', html):
+        rel = re.search(r'rel="([^"]*)"', link)
+        assert rel and "noreferrer" in rel.group(1).split(), link
+    report = re.search(r'<a href="(mailto:support@plandit\.app[^"]*)">Report this page</a>', html)
+    assert report, "no report link"
+    assert token not in report.group(1)
+    assert "body=" not in report.group(1)
+
+
+def test_inv_12_the_page_links_to_the_app_store():
+    html = anonymous_client().get(f"/j/{'d' * 22}").content.decode()
+    assert f'href="{APP_STORE_URL}"' in html
+
+
+@pytest.mark.parametrize("token", ["short", "e" * 23, "e" * 300, "bad.token.with.dots.ok"])
+def test_inv_13_a_malformed_token_gets_the_404_page_with_the_policy(token):
+    response = anonymous_client().get(f"/j/{token}")
+    assert response.status_code == 404
+    assert response["Content-Security-Policy"] == page_csp()
+    assert response["X-Robots-Tag"] == "noindex, nofollow"
+    assert "Plandit" in response.content.decode()
+
+
+@pytest.mark.parametrize("method", ["post", "put", "delete"])
+def test_inv_13_the_page_only_answers_get(method):
+    assert getattr(anonymous_client(), method)(f"/j/{'f' * 22}").status_code == 405
+
+
+def test_the_page_answers_head():
+    assert anonymous_client().head(f"/j/{'g' * 22}").status_code == 200
+
+
+def test_the_page_works_with_any_signed_in_state(group, maya):
+    """ISO-1's last row: anyone, signed in or not, deleted or not, gets the same page."""
+    pages = [c.get(f"/j/{token_of(group)}") for c in (anonymous_client(), deleted_client(), maya.client)]
+    assert [p.status_code for p in pages] == [200, 200, 200]
+    assert pages[0].content == pages[1].content == pages[2].content
