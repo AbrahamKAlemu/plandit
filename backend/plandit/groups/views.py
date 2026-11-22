@@ -276,7 +276,9 @@ def _saved_response(group: GroupPlan, version: int):
 
 def _conflict_response(group: GroupPlan, base: int):
     """409: the plan as stored, the members, and each logged edit after `base` with its author's
-    name as of now (MF-C, N-12): a member who left or deleted their account shows as null."""
+    name as of now (MF-C, N-12): a member who left or deleted their account shows as null.
+    `editsFrom` is the first listed edit's version (null for none). The log keeps the latest
+    EDIT_LOG_KEPT edits, so above `base + 1` it tells the app the list is missing the first ones."""
     members = _members(group)
     names = {member.id: member.display_name for member in members}
     edits = [
@@ -295,6 +297,7 @@ def _conflict_response(group: GroupPlan, base: int):
         "plan": group.data,
         "members": [_member_json(group, member) for member in members],
         "edits": edits,
+        "editsFrom": edits[0]["version"] if edits else None,
     }
     return _with_cache_headers(Response(body, status=status.HTTP_409_CONFLICT), group)
 

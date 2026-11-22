@@ -808,8 +808,9 @@ def test_ver_3_a_put_from_an_old_version_is_409_with_the_plan_the_members_and_th
     assert response["ETag"] == '"4.2"'
     assert response["Cache-Control"] == "private, no-cache"
     body = response.json()
-    assert set(body) == {"version", "membersVersion", "plan", "members", "edits"}
+    assert set(body) == {"version", "membersVersion", "plan", "members", "edits", "editsFrom"}
     assert (body["version"], body["membersVersion"], body["plan"]) == (4, 2, before[0])
+    assert body["editsFrom"] == 4
     assert [m["name"] for m in body["members"]] == ["Maya", "Jordan"]
     stop_ids = GroupPlanEdit.objects.get().stop_ids
     maya_member = str(member_of(group, maya).id)
@@ -824,7 +825,7 @@ def test_ver_4_a_put_from_a_version_ahead_of_the_server_is_409_never_200(group, 
     before = row(group)
     response = put(jordan, group, base=4)
     assert response.status_code == 409
-    assert response.json()["edits"] == []
+    assert (response.json()["edits"], response.json()["editsFrom"]) == ([], None)
     assert row(group) == before
 
 
@@ -935,6 +936,19 @@ def test_ver_11_the_409_names_who_made_each_edit_since_the_base(maya, jordan):
         (2, "Maya", "remove", [s2]),
         (3, "Jordan", "setTime", [s1]),
     ]
+
+
+def test_a_409_says_where_its_edits_start_when_the_log_was_pruned_past_the_base(group, maya, jordan, monkeypatch):
+    """`editsFrom` above `baseVersion + 1` tells the app the list is missing the first edits."""
+    from plandit.groups import views
+
+    monkeypatch.setattr(views, "EDIT_LOG_KEPT", 3)
+    for _ in range(5):
+        assert put(maya, group).status_code == 200
+    body = put(jordan, group, base=3).json()
+    assert [edit["version"] for edit in body["edits"]] == [6, 7, 8]
+    assert (body["version"], body["editsFrom"]) == (8, 6)
+    assert put(jordan, group, base=6).json()["editsFrom"] == 7
 
 
 def test_the_log_keeps_the_latest_edits_only(group, maya, monkeypatch):
