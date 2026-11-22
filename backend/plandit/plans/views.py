@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from plandit.places.models import Place
 from plandit.saved.models import SavedPost
+from plandit.shares.views import _hold_owner
 
 from . import services
 from .models import DayPlan, PlanStop
@@ -63,14 +64,18 @@ class DayPlanViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         date = data.get("date") or timezone.localdate()
-        if DayPlan.objects.filter(owner=request.user, date=date).exists():
-            raise serializers.ValidationError({"date": "You already have a plan for this date."})
-        plan = DayPlan.objects.create(
-            owner=request.user,
-            date=date,
-            title=data.get("title") or "Today",
-            budget=data.get("budget", request.user.default_budget),
-        )
+        with transaction.atomic():
+            # The owner's profile first, as sharing a plan does: the new row's foreign key would
+            # otherwise wait for an account deletion's lock and then fail on the deleted profile.
+            _hold_owner(request.user)
+            if DayPlan.objects.filter(owner=request.user, date=date).exists():
+                raise serializers.ValidationError({"date": "You already have a plan for this date."})
+            plan = DayPlan.objects.create(
+                owner=request.user,
+                date=date,
+                title=data.get("title") or "Today",
+                budget=data.get("budget", request.user.default_budget),
+            )
         return self._full(plan, status.HTTP_201_CREATED)
 
     def partial_update(self, request, *args, **kwargs):
@@ -85,7 +90,10 @@ class DayPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def today(self, request):
-        return self._full(services.get_or_create_today(request.user))
+        with transaction.atomic():
+            _hold_owner(request.user)  # as in create: today's plan may be created here
+            plan = services.get_or_create_today(request.user)
+        return self._full(plan)
 
     @action(detail=True, methods=["post"])
     def stops(self, request, pk=None):

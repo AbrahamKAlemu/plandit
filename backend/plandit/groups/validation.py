@@ -1,13 +1,19 @@
 """What a group plan and an edit to it may be (brief GE-1, GE-6; LIM-2 to LIM-9 in the test plan).
 
 One member's malformed plan would stop every member's app from decoding the group (N-4), so the
-server checks the parts of the app's `DayPlan` encoding that decoding needs, plus the limits: the
-keys the Codable types decode with no default (ios/Plandit/Models/DayPlan.swift), ids in the one
-form Swift's UUID reads, and how deep the JSON nests. It doesn't check the values inside each stop
-or leg beyond that: the app owns that shape.
+server checks what the app's `DayPlan` decoding needs (ios/Plandit/Models/DayPlan.swift, Place.swift
+and Pricing.swift, read with a plain JSONDecoder), plus the limits: the keys its Codable types decode
+with no default, the type of every value they decode (dates are numbers), the enums' raw values,
+ids in the one form Swift's UUID reads, and how deep the JSON nests.
+
+It is as lenient as that decoding: optional values may be missing or null, keys the app doesn't
+read are kept, a whole number may be written 90.0, a leg's `mode` may be any text (the app reads one
+it doesn't know as walking), and a leg's stop ids needn't name a stop in the plan (the app never
+assumes they do).
 """
 
 import json
+import math
 import re
 import uuid
 from datetime import date, timedelta
@@ -39,6 +45,14 @@ _CANONICAL_UUID = re.compile(r"\A[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0
 # `sourcePostID`, `costItems`, `costIsCustom`; a leg's `cost`, `detail`, `isChosen`) aren't required.
 STOP_KEYS = ("id", "place", "start", "durationMinutes", "estimatedCost", "status")
 LEG_KEYS = ("id", "fromStopID", "toStopID", "mode", "minutes", "miles")
+# `Place` and `CostItem` use Swift's synthesized decoding: every key but a place's `hours` is needed.
+PLACE_KEYS = ("id", "name", "category", "neighborhood", "address", "latitude", "longitude")
+COST_ITEM_KEYS = ("id", "name", "amount")
+# The raw values of the app's `PlaceCategory` and `StopStatus`; any other value fails to decode.
+PLACE_CATEGORIES = ("food", "coffee", "activity", "outdoors", "culture", "nightlife", "shopping")
+STOP_STATUSES = ("done", "now", "upcoming")
+# Swift's Int is 64 bits.
+INT_MIN, INT_MAX = -(2**63), 2**63 - 1
 
 STOPS_LIMIT = f"A group plan has at most {MAX_STOPS} stops."
 DAY_RANGE = "Use a day from today to a year from now."
@@ -51,8 +65,15 @@ def _listed(keys) -> str:
     return f"{', '.join(quoted[:-1])} and {quoted[-1]}"
 
 
+def _one_of(values) -> str:
+    quoted = [f"`{value}`" for value in values]
+    return f"one of {', '.join(quoted[:-1])} or {quoted[-1]}"
+
+
 STOP_NEEDS = f"Every stop needs {_listed(STOP_KEYS)}."
 LEG_NEEDS = f"Every leg needs {_listed(LEG_KEYS)}."
+PLACE_NEEDS = f"Every place needs {_listed(PLACE_KEYS)}."
+COST_ITEM_NEEDS = f"Every cost item needs {_listed(COST_ITEM_KEYS)}."
 
 
 class PlanTooLarge(Exception):
@@ -86,6 +107,76 @@ def is_number(value) -> bool:
 
 def is_whole_number(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def is_double(value) -> bool:
+    """A number Swift's Double decodes: finite, and not so large it overflows."""
+    if not is_number(value):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def is_int(value) -> bool:
+    """A number Swift's Int decodes: a whole number in 64 bits, written 90 or 90.0."""
+    if is_whole_number(value):
+        return INT_MIN <= value <= INT_MAX
+    return isinstance(value, float) and value.is_integer() and INT_MIN <= value < 2.0**63
+
+
+def _is_text(value) -> bool:
+    return isinstance(value, str)
+
+
+def _is_bool(value) -> bool:
+    return isinstance(value, bool)
+
+
+def _is_uuid(value) -> bool:
+    return parse_canonical_uuid(value) is not None
+
+
+def _is_one_of(values):
+    return lambda value: isinstance(value, str) and value in values
+
+
+# What each value must be, as (what the message calls it, the check). Values the app decodes with
+# `decode` are required; with `decodeIfPresent`, optional (missing and null pass).
+UUID_TEXT = ("a UUID in its 36-character form", _is_uuid)
+TEXT = ("text", _is_text)
+NUMBER = ("a number", is_double)
+WHOLE_NUMBER = ("a whole number", is_int)
+TRUE_OR_FALSE = ("true or false", _is_bool)
+PLACE_VALUES = {
+    "id": UUID_TEXT,
+    "name": TEXT,
+    "category": (_one_of(PLACE_CATEGORIES), _is_one_of(PLACE_CATEGORIES)),
+    "neighborhood": TEXT,
+    "address": TEXT,
+    "latitude": NUMBER,
+    "longitude": NUMBER,
+}
+PLACE_OPTIONAL_VALUES = {"hours": TEXT}
+# A stop's `id` and `place` are checked on their own.
+STOP_VALUES = {
+    "start": NUMBER,
+    "durationMinutes": WHOLE_NUMBER,
+    "estimatedCost": NUMBER,
+    "status": (_one_of(STOP_STATUSES), _is_one_of(STOP_STATUSES)),
+}
+STOP_OPTIONAL_VALUES = {"note": TEXT, "sourcePostID": UUID_TEXT, "costIsCustom": TRUE_OR_FALSE}
+LEG_VALUES = {
+    "id": UUID_TEXT,
+    "fromStopID": UUID_TEXT,
+    "toStopID": UUID_TEXT,
+    "mode": TEXT,
+    "minutes": WHOLE_NUMBER,
+    "miles": NUMBER,
+}
+LEG_OPTIONAL_VALUES = {"cost": NUMBER, "detail": TEXT, "isChosen": TRUE_OR_FALSE}
+COST_ITEM_VALUES = {"id": UUID_TEXT, "name": TEXT, "amount": NUMBER}
 
 
 def current_day() -> date:
@@ -129,7 +220,7 @@ def parse_plan(value) -> dict:
     if parse_canonical_uuid(value.get("id")) is None:
         raise invalid("`id` must be a UUID in its 36-character form.")
     for key in ("date", "budget"):
-        if not is_number(value.get(key)):
+        if not is_double(value.get(key)):
             raise invalid(f"`{key}` must be a number.")
     if not isinstance(value.get("title"), str):
         raise invalid("`title` must be text.")
@@ -153,8 +244,13 @@ def parse_plan(value) -> dict:
         if stop_id in seen:
             raise invalid("Stop ids must be unique.")
         seen.add(stop_id)
-    if "extras" in value and not isinstance(value["extras"], list):
-        raise invalid("`extras` must be a list.")
+    problem = (
+        next(filter(None, map(_stop_problem, stops)), None)
+        or next(filter(None, map(_leg_problem, legs)), None)
+        or _cost_items_problem(value.get("extras"), "`extras` must be a list.")
+    )
+    if problem is not None:
+        raise invalid(problem)
     try:
         size = len(json.dumps(value, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8"))
     except (TypeError, ValueError, RecursionError) as exc:
@@ -190,6 +286,49 @@ def parse_edit(body: dict) -> tuple[int, uuid.UUID, str, list[str]]:
 def _has_keys(item, keys) -> bool:
     """An object with each of `keys` set: a null fails Swift's `decode` just as a missing key does."""
     return isinstance(item, dict) and all(item.get(key) is not None for key in keys)
+
+
+def _values_problem(item: dict, thing: str, required: dict, optional: dict) -> str | None:
+    """The first value of `item` its Swift type can't decode. The required keys are known to be set."""
+    for key, (kind, check) in required.items():
+        if not check(item[key]):
+            return f"Every {thing}'s `{key}` must be {kind}."
+    for key, (kind, check) in optional.items():
+        if item.get(key) is not None and not check(item[key]):
+            return f"Every {thing}'s `{key}` must be {kind}."
+    return None
+
+
+def _stop_problem(stop: dict) -> str | None:
+    """A stop's place, values and cost items. Its keys and `id` are already checked."""
+    place = stop["place"]
+    if not _has_keys(place, PLACE_KEYS):
+        return PLACE_NEEDS
+    return (
+        _values_problem(place, "place", PLACE_VALUES, PLACE_OPTIONAL_VALUES)
+        or _values_problem(stop, "stop", STOP_VALUES, STOP_OPTIONAL_VALUES)
+        or _cost_items_problem(stop.get("costItems"), "Every stop's `costItems` must be a list.")
+    )
+
+
+def _leg_problem(leg: dict) -> str | None:
+    """A leg's values. Its keys are already checked."""
+    return _values_problem(leg, "leg", LEG_VALUES, LEG_OPTIONAL_VALUES)
+
+
+def _cost_items_problem(items, not_a_list: str) -> str | None:
+    """A day's `extras` or a stop's `costItems`: missing or null, or a list of `CostItem`s."""
+    if items is None:
+        return None
+    if not isinstance(items, list):
+        return not_a_list
+    for item in items:
+        if not _has_keys(item, COST_ITEM_KEYS):
+            return COST_ITEM_NEEDS
+        problem = _values_problem(item, "cost item", COST_ITEM_VALUES, {})
+        if problem is not None:
+            return problem
+    return None
 
 
 def _tree_problem(value) -> str | None:

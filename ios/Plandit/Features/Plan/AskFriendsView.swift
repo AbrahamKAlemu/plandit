@@ -181,7 +181,7 @@ private struct AskFriendsForm: View {
                 Spacer()
                 Text("\(picked.count) picked").font(.metadata).foregroundStyle(.inkMuted)
             }
-            Text("Pick 2 to 10. Friends see each place's name, area and cost, and star their favorites.")
+            Text("Pick 2 to 10. Friends see your first name and each place's name, area and cost, and star their favorites.")
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)

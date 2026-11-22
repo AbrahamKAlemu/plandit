@@ -47,7 +47,7 @@
   </ul>
 
   <section class="answer" aria-labelledby="answer-title">
-    <h2 id="answer-title">What works for you?</h2>
+    <h2 id="answer-title">{% if organizer_name %}{{ organizer_name }} wants to know what works for you{% else %}What works for you?{% endif %}</h2>
     {% if own %}<p class="own">You've answered: <strong>${{ own.budget }}</strong>, free <strong>{{ own_window }}</strong>. You can change it until the deadline.</p>{% endif %}
     <form id="answer" method="post" action="{% url 'plan-request-answer' slug %}">
       {% csrf_token %}
