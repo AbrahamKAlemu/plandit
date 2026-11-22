@@ -1373,3 +1373,106 @@ def test_the_page_works_with_any_signed_in_state(group, maya):
     pages = [c.get(f"/j/{token_of(group)}") for c in (anonymous_client(), deleted_client(), maya.client)]
     assert [p.status_code for p in pages] == [200, 200, 200]
     assert pages[0].content == pages[1].content == pages[2].content
+
+
+# --- Account deletion (brief GE-10; CAS-1, CAS-2, CAS-3, CAS-9) --------------------------------
+
+
+def delete_account(who: Person, settings, monkeypatch, with_supabase: bool):
+    """DELETE /api/me/, with Supabase answering 200, or without a service key (local data only)."""
+    import httpx
+
+    from tests.test_account_delete import FakeDelete
+
+    settings.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-for-tests" if with_supabase else ""
+    monkeypatch.setattr(httpx, "delete", FakeDelete(200))
+    return who.client.delete("/api/me/")
+
+
+with_and_without_supabase = pytest.mark.parametrize("with_supabase", [False, True], ids=["local-only", "with-supabase"])
+
+
+@with_and_without_supabase
+def test_cas_1_the_organizer_deleting_their_account_deletes_the_group(
+    group, maya, jordan, settings, monkeypatch, with_supabase
+):
+    assert put(jordan, group).status_code == 200
+    GroupRemoval.objects.create(group=group, profile_id=uuid.uuid4())
+
+    assert delete_account(maya, settings, monkeypatch, with_supabase).status_code == 204
+    assert not Profile.objects.filter(pk=maya.id).exists()
+    for model in (GroupPlan, GroupMember, GroupPlanEdit, GroupRemoval):
+        assert not model.objects.exists(), model
+    assert jordan.client.get(detail(group.id)).status_code == 404
+    assert jordan.client.get(BASE).json() == {"groups": []}
+
+
+@with_and_without_supabase
+def test_cas_2_a_member_deleting_their_account_leaves_the_group_and_its_plan(
+    group, maya, jordan, settings, monkeypatch, with_supabase
+):
+    """Only their membership goes; the ETag changes; their name is in no body (N-12)."""
+    assert put(jordan, group).status_code == 200
+    group.refresh_from_db()
+    plan, version, old_etag = group.data, group.version, etag(group)
+
+    assert delete_account(jordan, settings, monkeypatch, with_supabase).status_code == 204
+    group.refresh_from_db()
+    assert (group.data, group.version, group.members_version) == (plan, version, 3)
+    assert [m.display_name for m in group.members.all()] == ["Maya"]
+    response = maya.client.get(detail(group.id), HTTP_IF_NONE_MATCH=old_etag)
+    assert response.status_code == 200
+    assert "Jordan" not in response.content.decode()
+    conflict = put(maya, group, base=3)
+    assert conflict.status_code == 409
+    assert conflict.json()["edits"][0]["authorName"] is None
+    assert "Jordan" not in conflict.content.decode()
+    assert GroupPlanEdit.objects.count() == 1  # the edit stays; only who made it is forgotten
+
+
+@with_and_without_supabase
+def test_cas_9_deleting_an_account_that_organizes_one_group_and_is_in_another(
+    maya, jordan, settings, monkeypatch, with_supabase
+):
+    sam = person("Sam Rivera")
+    own = make_group(maya, jordan)
+    theirs = make_group(sam, maya, jordan)
+
+    assert delete_account(maya, settings, monkeypatch, with_supabase).status_code == 204
+    assert not GroupPlan.objects.filter(pk=own.pk).exists()
+    assert [m.display_name for m in theirs.members.order_by("joined_at")] == ["Sam", "Jordan"]
+    assert sam.client.get(detail(theirs.id)).status_code == 200
+
+
+def test_deleting_an_account_forgets_its_removals(group, maya, settings, monkeypatch):
+    """A removal keeps someone out of one group (MF-G); it's their data, so it goes with them."""
+    riley = person("Riley Park")
+    GroupMember.objects.create(group=group, profile=riley.profile, display_name="Riley")
+    assert maya.client.delete(member_path(group, member_of(group, riley))).status_code == 204
+    assert GroupRemoval.objects.filter(profile_id=riley.id).exists()
+
+    assert delete_account(riley, settings, monkeypatch, with_supabase=True).status_code == 204
+    assert not GroupRemoval.objects.exists()
+    assert group.members.count() == 2
+
+
+def test_cas_3_a_deleted_accounts_token_is_401_on_every_group_endpoint(group, jordan):
+    client = deleted_client()
+    token = token_of(group)
+    member_id = member_of(group, jordan).id
+    requests = [
+        client.get(BASE),
+        client.post(BASE, {"date": today().isoformat(), "plan": plan_json()}, format="json"),
+        client.get(detail(group.id)),
+        client.get(detail(group.id), HTTP_IF_NONE_MATCH=etag(group)),
+        client.put(detail(group.id), {"baseVersion": 3}, format="json"),
+        client.delete(detail(group.id)),
+        client.delete(member_path(group, member_id)),
+        client.post(invite_path(group)),
+        client.get(preview_path(token)),
+        client.post(join_path(token)),
+    ]
+    for response in requests:
+        assert response.status_code == 401, response.request
+        assert response.json() == {"detail": "Account deleted."}
+    assert row(group)[1:3] == (3, 2)
