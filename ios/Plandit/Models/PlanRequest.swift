@@ -222,6 +222,19 @@ extension PlanRequestDraft {
     }
 }
 
+extension PlanRequestDraft {
+    /// The answer deadline the form starts with. For today: the earlier of 2 hours from now and
+    /// the start of the time, so answers are in before it starts, but at least 30 minutes from now.
+    /// For a later day: 2 hours before the time starts, or 2 hours from now if that's later. Never
+    /// after the time ends.
+    static func defaultDeadline(now: Date, isToday: Bool, windowStart: Date, windowEnd: Date) -> Date {
+        let wanted = isToday
+            ? max(min(now.addingTimeInterval(2 * 3600), windowStart), now.addingTimeInterval(30 * 60))
+            : max(windowStart.addingTimeInterval(-2 * 3600), now.addingTimeInterval(2 * 3600))
+        return min(wanted, windowEnd)
+    }
+}
+
 extension PlanRequestLink {
     /// What the app keeps once the server made the link for `draft`.
     init(request: PlanRequest, draft: PlanRequestDraft, answersBy: Date) {

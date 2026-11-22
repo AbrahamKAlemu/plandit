@@ -102,7 +102,7 @@ struct PlanBuilderSheet: View {
         } label: {
             ListRow(icon: .users, title: "Ask friends what works",
                     detail: store.activeRequest() == nil
-                        ? "Send a link. Friends say when they're free, what they can spend and what they'd pick."
+                        ? "Send a link. Friends say when they're free, what they'll spend and their picks."
                         : "See their answers and build your plan.")
         }
         .buttonStyle(.plain)
@@ -324,6 +324,7 @@ struct Checkbox: View {
 
 /// The day the planner would build, so nothing about it is a surprise.
 struct PlanPreview: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let outcome: DayPlanner.Outcome
     let lockedCount: Int
     let spent: Double
@@ -358,7 +359,10 @@ struct PlanPreview: View {
                     ForEach(Array(outcome.stops.enumerated()), id: \.element.id) { index, stop in
                         HStack(spacing: Space.sm) {
                             StopBadge(number: lockedCount + index + 1, status: .upcoming, size: 24)
-                            Text(stop.place.name).font(.bodyText).foregroundStyle(.ink).lineLimit(1)
+                            // One line at standard sizes; at accessibility sizes the whole name shows.
+                            Text(stop.place.name).font(.bodyText).foregroundStyle(.ink)
+                                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
                             Spacer(minLength: Space.xs)
                             Text(stop.start.shortTime).font(.metadata).foregroundStyle(.inkMuted)
                         }

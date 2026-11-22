@@ -48,11 +48,19 @@ enum AskFriendsText {
         }
     }
 
+    /// Goes with the link in the share sheet.
     static func shareMessage(_ link: PlanRequestLink, now: Date) -> String {
-        "What works for you on \(day(link, now: now))? Answer here and I'll make the plan."
+        let day = day(link, now: now)
+        return "What works for you \(day == "today" ? "today" : "on \(day)")? Answer here and I'll make the plan."
     }
 
-    static func budget(_ plan: GroupInputs.Plan) -> String { "Budget: \(plan.budget.wholeDollarsText) each" }
+    /// The lowest budget, never whose it is.
+    static func budget(_ plan: GroupInputs.Plan) -> String {
+        "Budget: \(plan.budget.wholeDollarsText) each, the lowest anyone gave"
+    }
+
+    /// Next to the disabled "Build our plan" while times clash.
+    static let clashHint = "Leave out someone's times above to build."
 
     /// Above the preview of a plan for a later day.
     static func laterDay(_ link: PlanRequestLink, now: Date) -> String {
@@ -64,6 +72,7 @@ enum AskFriendsText {
 
 private struct AskFriendsForm: View {
     @Environment(PlanditStore.self) private var store
+    @Environment(SheetRouter.self) private var router
     /// Picked post ids, in the order they were picked: friends see them in this order.
     @State private var picked: [UUID] = []
     @State private var day = Calendar.current.startOfDay(for: AppClock.now)
@@ -143,6 +152,27 @@ private struct AskFriendsForm: View {
                 .font(.metadata)
                 .foregroundStyle(.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
+            if store.plannablePosts.count < PlanRequestDraft.minPlaces {
+                // The planner's own way to saving, as in its empty state.
+                VStack(alignment: .leading, spacing: Space.sm) {
+                    Text("You need at least 2 saved places to ask friends.")
+                        .font(.bodyText)
+                        .foregroundStyle(.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("ask-needs-places")
+                    Button {
+                        router.isPlanning = false
+                        router.show(.saved)
+                    } label: {
+                        HStack(spacing: Space.xs) {
+                            Icon(.bookmark, size: 18)
+                            Text("Go to Saved")
+                        }
+                    }
+                    .buttonStyle(.secondary)
+                }
+                .padding(.vertical, Space.xs)
+            }
             ForEach(store.plannablePosts) { post in
                 PickRow(post: post, isPicked: picked.contains(post.id), isLocked: false, idPrefix: "ask-pick") { toggle(post.id) }
                 Hairline()
@@ -261,12 +291,8 @@ private struct AskFriendsForm: View {
         }
     }
 
-    /// GI-1: for a plan today, 2 hours from now. For a later day, 2 hours before the time starts
-    /// (or 2 hours from now, if that's later). Never after the time ends.
     private var defaultDeadline: Date {
-        let inTwoHours = AppClock.now.addingTimeInterval(2 * 3600)
-        let wanted = isToday ? inTwoHours : max(windowStart.addingTimeInterval(-2 * 3600), inTwoHours)
-        return min(wanted, windowEnd)
+        PlanRequestDraft.defaultDeadline(now: AppClock.now, isToday: isToday, windowStart: windowStart, windowEnd: windowEnd)
     }
 
     private func toggle(_ id: UUID) {
@@ -295,6 +321,7 @@ private struct AskFriendsForm: View {
 
 private struct FriendsAnswersView: View {
     @Environment(PlanditStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(SheetRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
     /// The organizer's own budget and times (GI-5); nil until they change them.
@@ -385,6 +412,16 @@ private struct FriendsAnswersView: View {
             if !isBuilt {
                 VStack(spacing: 0) {
                     Hairline()
+                    if case .clash? = result, !needsLink {
+                        Text(AskFriendsText.clashHint)
+                            .font(.metadata)
+                            .foregroundStyle(.inkMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, Space.lg)
+                            .padding(.top, Space.sm)
+                            .accessibilityIdentifier("build-clash-hint")
+                    }
                     Button {
                         Task { await build(plan, onlyShare: needsLink) }
                     } label: {
@@ -432,7 +469,11 @@ private struct FriendsAnswersView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("request-status")
             if details?.status != .built {
-                HStack(spacing: Space.sm) {
+                // Side by side, or one above the other at accessibility sizes.
+                let buttons = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: Space.sm))
+                    : AnyLayout(HStackLayout(spacing: Space.sm))
+                buttons {
                     Button {
                         UIPasteboard.general.url = link.url
                         didCopyLink = true
@@ -483,6 +524,7 @@ private struct FriendsAnswersView: View {
                         ForEach(Array(details.answers.enumerated()), id: \.element.id) { index, answer in
                             if index > 0 { Hairline() }
                             answerRow(answer, canRemove: canRemove)
+                                .padding(.vertical, Space.xs)
                         }
                     }
                     .planditCard(padding: Space.sm)
@@ -732,7 +774,7 @@ private struct FriendsAnswersView: View {
     // MARK: - Footer
 
     private func footer(_ link: PlanRequestLink, _ details: PlanRequest?) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Space.sm) {
             if details?.status == .open {
                 Button(role: .destructive) {
                     errorText = nil

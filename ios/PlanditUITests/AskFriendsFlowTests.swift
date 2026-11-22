@@ -48,7 +48,8 @@ final class AskFriendsFlowTests: XCTestCase {
         entry.tap()
     }
 
-    /// GI-1: four saved places today, noon to 8 PM by default, then the link.
+    /// GI-1: four saved places today, noon to 8 PM by default, then the link. At 11 AM answers are
+    /// due when the time starts, at noon: sooner than 2 hours from now.
     @MainActor private func makeLink(_ app: XCUIApplication) {
         XCTAssertTrue(app.navigationBars["Ask friends what works"].waitForExistence(timeout: 3))
         let create = app.buttons["ask-create"]
@@ -71,7 +72,7 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Friends' answers"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["request-link-url"].label, "Link: https://plandit.app/g/req123abcd")
         XCTAssertTrue(app.buttons["request-send-link"].exists)
-        XCTAssertEqual(text(app.staticTexts["request-status"]), "Friends can answer until 1:00 PM.")
+        XCTAssertEqual(text(app.staticTexts["request-status"]), "Friends can answer until 12:00 PM.")
     }
 
     /// The label with the narrow space iOS puts before AM and PM made a plain one.
@@ -100,7 +101,7 @@ final class AskFriendsFlowTests: XCTestCase {
         let inputs = element("group-inputs", in: app)
         scrollTo(inputs, in: app)
         XCTAssertTrue(text(inputs).contains("Everyone's free 1:00 PM to 5:00 PM."), text(inputs))
-        XCTAssertTrue(text(inputs).contains("Budget: $20 each"), text(inputs))
+        XCTAssertTrue(text(inputs).contains("Budget: $20 each, the lowest anyone gave"), text(inputs))
         XCTAssertFalse(inputs.label.contains("Maya"))
         XCTAssertTrue(element("preview-stop-1", in: app).waitForExistence(timeout: 2))
 
@@ -144,6 +145,7 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertEqual(clash.label, "These times don't overlap by an hour: Maya and Jordan.")
         let build = app.buttons["build-our-plan"]
         XCTAssertFalse(build.isEnabled)
+        XCTAssertEqual(app.staticTexts["build-clash-hint"].label, "Leave out someone's times above to build.")
         XCTAssertFalse(element("preview-stop-1", in: app).exists)
 
         let leaveOut = app.switches["leave-out-Maya"]
@@ -158,6 +160,7 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertTrue(text(inputs).contains("Budget: $20 each"), "Maya's budget still counts: \(text(inputs))")
         XCTAssertEqual(app.switches["leave-out-Maya"].value as? String, "1", "she can be put back")
         XCTAssertFalse(element("group-clash", in: app).exists)
+        XCTAssertFalse(app.staticTexts["build-clash-hint"].exists)
 
         XCTAssertTrue(build.isEnabled)
         build.tap()
