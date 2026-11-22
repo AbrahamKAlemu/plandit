@@ -18,7 +18,10 @@ def parse(value: str) -> datetime:
 
 
 def test_event_is_stored(auth_client, user_id):
-    response = post(auth_client, {"name": "place_saved", "occurred_at": "2026-11-07T15:04:05Z"})
+    # Inside the 7-day window, so the clamp leaves it alone.
+    yesterday = (timezone.now() - timedelta(days=1)).replace(microsecond=0)
+    sent = yesterday.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    response = post(auth_client, {"name": "place_saved", "occurred_at": sent})
     assert response.status_code == 201
     body = response.json()
     assert body["name"] == "place_saved"
@@ -26,6 +29,7 @@ def test_event_is_stored(auth_client, user_id):
     event = ActivityEvent.objects.get()
     assert event.profile_id == user_id
     assert event.name == "place_saved"
+    assert event.occurred_at == yesterday
     assert parse(body["occurred_at"]) == event.occurred_at
 
 
