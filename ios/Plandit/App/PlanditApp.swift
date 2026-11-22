@@ -178,12 +178,19 @@ private struct PlanditRoot: View {
     let appearance: AppearanceSettings
     let router: SheetRouter
     @Environment(\.scenePhase) private var scenePhase
+    /// Group plan messages, shown above the tab bar.
+    @State private var messages = GroupMessages()
 
     var body: some View {
         RootView()
             .environment(store)
             .environment(appearance)
             .environment(router)
+            .environment(groups)
+            .environment(messages)
+            .onChange(of: groups.map(ObjectIdentifier.init), initial: true) {
+                if let groups { messages.listen(to: groups) }
+            }
             .tint(Color.emeraldDeep)
             .preferredColorScheme(appearance.mode.colorScheme)
             .accessibilityIdentifier("appearance-\(appearance.mode.rawValue)")

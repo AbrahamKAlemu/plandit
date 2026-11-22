@@ -7,6 +7,10 @@ struct RootView: View {
     @Environment(PlanditStore.self) private var store
     @Environment(AppearanceSettings.self) private var appearance
     @Environment(SheetRouter.self) private var router
+    @Environment(GroupPlanStore.self) private var groups: GroupPlanStore?
+    @Environment(GroupMessages.self) private var messages: GroupMessages?
+    /// Your own plan or the group plan picked in Today: what the map shows and frames.
+    @TodayContext private var today
     @State private var detent = SheetDetent.launchDetent
     @State private var camera: MapCameraPosition = .camera(Manhattan.overviewCamera)
     @State private var mapSelection: UUID?
@@ -34,6 +38,8 @@ struct RootView: View {
                 }
                 .environment(store)
                 .environment(router)
+                .environment(groups)
+                .environment(messages)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .presentationDetents(SheetDetent.all, selection: $detent)
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -56,7 +62,10 @@ struct RootView: View {
             if detent == SheetDetent.peek { detent = .medium }
         }
         .onChange(of: sheetColumns) { frameMap(animated: false) }
-        .onChange(of: store.today.stops.count) {
+        .onChange(of: today.plan.stops.count) {
+            if tab == .today { frameMap() }
+        }
+        .onChange(of: today.choice) {
             if tab == .today { frameMap() }
         }
         .onChange(of: store.visited.count) {
@@ -97,7 +106,7 @@ struct RootView: View {
             return
         }
         switch tab {
-        case .today where store.stop(id: id) != nil && router.todayPath.last != id:
+        case .today where today.stop(id: id) != nil && router.todayPath.last != id:
             router.todayPath = [id]
         case .saved where store.post(id: id) != nil && router.savedPath.last != id:
             router.savedPath = [id]
@@ -125,7 +134,7 @@ struct RootView: View {
             coordinates = [focused]
         } else {
             switch tab {
-            case .today: coordinates = store.today.stops.map(\.place.coordinate)
+            case .today: coordinates = today.plan.stops.map(\.place.coordinate)
             case .saved: coordinates = store.saved.filter(\.isMappable).compactMap { $0.place?.coordinate }
             case .profile: coordinates = Manhattan.profileFocus(visited: store.visited.map(\.coordinate))
             }
@@ -161,6 +170,8 @@ struct RootView: View {
 private struct SheetContainer: View {
     @Environment(SheetRouter.self) private var router
     @Environment(PlanditStore.self) private var store
+    @Environment(GroupPlanStore.self) private var groups: GroupPlanStore?
+    @TodayContext private var today
     /// While the keyboard is up the bars step aside and their space is given back, so a screen
     /// reaches down to the keyboard and a field's button (Search, Save) isn't hidden behind them.
     @State private var isKeyboardUp = false
@@ -186,7 +197,11 @@ private struct SheetContainer: View {
                 // The undo bar floats just above the tab bar.
                 if !isKeyboardUp {
                     VStack(spacing: Space.xs) {
-                        UndoBar()
+                        GroupMessageBar()
+                        // A group plan has no Undo (G3b-2).
+                        if !isGroupOnScreen {
+                            UndoBar()
+                        }
                         PlanditTabBar(selection: $router.tab, onPlan: { router.startPlanning() })
                     }
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barsHeight = $0 }
@@ -204,6 +219,23 @@ private struct SheetContainer: View {
             .sheet(isPresented: $router.isPlanning) {
                 PlanBuilderSheet()
             }
+            // The group plan on screen is polled for everyone else's changes; no other is.
+            .onChange(of: polledGroup, initial: true) { old, new in
+                if let old, old != new { groups?.hide(old) }
+                if let new { groups?.show(new) }
+            }
+            // A group plan asked for from outside Today (a join link).
+            .onChange(of: router.groupPlanToOpen, initial: true) {
+                router.openRequestedGroupPlan()
+            }
+    }
+
+    private var isGroupOnScreen: Bool {
+        router.tab == .today && today.isGroup
+    }
+
+    private var polledGroup: UUID? {
+        isGroupOnScreen ? today.group?.id : nil
     }
 
     private var stacks: some View {

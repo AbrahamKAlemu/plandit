@@ -5,6 +5,9 @@ import SwiftUI
 struct TodaySheet: View {
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
+    /// Your own plan, or the group plan picked in the switcher.
+    @TodayContext private var today
+    @State private var membersShown: StopRef?
     @State private var isAddingLink = false
     @State private var isShowingBudget = false
     @State private var isEditingPlan = false
@@ -15,10 +18,15 @@ struct TodaySheet: View {
     @State private var suggestionsUsed = 0
 
     var body: some View {
-        let plan = store.today
+        let plan = today.plan
+        let group = today.group
+        let controls = today.controls
         VStack(spacing: 0) {
             SheetHeader(title: "Today", subtitle: plan.date.longDay) {
-                if !plan.stops.isEmpty {
+                if let group {
+                    GroupMembersButton(group: group) { membersShown = StopRef(id: group.id) }
+                        .transition(.opacity)
+                } else if !plan.stops.isEmpty && controls.sendPlan {
                     Button { isSendingPlan = true } label: {
                         CircleIconLabel(icon: .share)
                     }
@@ -28,7 +36,29 @@ struct TodaySheet: View {
                 }
             }
 
-            if plan.stops.isEmpty {
+            let options = today.options
+            if options.count > 1 || group != nil {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    if options.count > 1 {
+                        TodaySwitcher(options: options, selection: today.choice) { choice in
+                            withAnimation(.snappy(duration: 0.3)) { today.select(choice) }
+                        }
+                    }
+                    if let group {
+                        GroupStatusLine(group: group)
+                    }
+                }
+                .padding(.horizontal, Space.lg)
+                .padding(.bottom, Space.xs)
+                .hiddenWhenSheetCollapsed()
+            }
+
+            if let group, plan.stops.isEmpty {
+                GroupEmptyToday(group: group)
+                    .hiddenWhenSheetCollapsed()
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .transition(.opacity)
+            } else if plan.stops.isEmpty {
                 Group {
                     if store.suggestions.isEmpty {
                         // Sized to the space above the tab bar rather than scrolled, so the next step is
@@ -61,24 +91,24 @@ struct TodaySheet: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Space.lg) {
-                        PlanSummary(plan: plan) { isShowingBudget = true }
+                        PlanSummary(plan: plan, isGroup: group != nil, showBudget: controls.budgetAndExtras ? { isShowingBudget = true } : nil)
 
                         // One clock for the card and the Directions button: no directions to a stop the card says you missed.
                         TimelineView(.everyMinute) { _ in
                             let overdue = plan.overdueStops(now: AppClock.now)
                             VStack(alignment: .leading, spacing: Space.lg) {
                                 if !overdue.isEmpty {
-                                    CatchUpCard(plan: plan, overdue: overdue, now: AppClock.now)
+                                    CatchUpCard(plan: plan, overdue: overdue, now: AppClock.now, canEdit: controls.editing)
                                         .transition(.opacity)
                                 } else if plan.isComplete {
                                     DayCompleteCard(plan: plan)
                                         .transition(.scale(scale: 0.96).combined(with: .opacity))
                                 } else if let next = plan.nextStop {
                                     Button {
-                                        next.place.openDirections(by: store.travelMode(into: next.id))
+                                        next.place.openDirections(by: today.travelMode(into: next.id))
                                     } label: {
                                         HStack(spacing: Space.xs) {
-                                            Icon(store.travelMode(into: next.id).icon, size: 18)
+                                            Icon(today.travelMode(into: next.id).icon, size: 18)
                                             // One line at standard sizes; at accessibility sizes the place name wraps
                                             // instead of being cut off.
                                             Text("Directions to \(next.place.name)")
@@ -93,7 +123,7 @@ struct TodaySheet: View {
                             }
                         }
 
-                        if plan.stops.count > plan.firstMovableIndex {
+                        if plan.stops.count > plan.firstMovableIndex && controls.editing {
                             HStack {
                                 SectionTitle("Stops")
                                 Spacer()
@@ -111,16 +141,22 @@ struct TodaySheet: View {
                         }
                         PlanTimeline(plan: plan)
 
-                        Button { isSendingPlan = true } label: {
-                            HStack(spacing: Space.xs) {
-                                Icon(.share, size: 18)
-                                Text("Share plan with friends")
+                        if controls.sendPlan {
+                            Button { isSendingPlan = true } label: {
+                                HStack(spacing: Space.xs) {
+                                    Icon(.share, size: 18)
+                                    Text("Share plan with friends")
+                                }
                             }
+                            .buttonStyle(.secondary)
+                            .accessibilityIdentifier("send-plan")
                         }
-                        .buttonStyle(.secondary)
-                        .accessibilityIdentifier("send-plan")
 
-                        if let summary = store.answerSummary {
+                        if controls.startGroup {
+                            StartGroupButton()
+                        }
+
+                        if controls.shareAnswers, let summary = store.answerSummary {
                             AnswerSummaryButton(summary: summary) { isShowingAnswers = true }
                                 .transition(.opacity)
                         }
@@ -147,6 +183,7 @@ struct TodaySheet: View {
         .sheet(isPresented: $isEditingPlan) { EditPlanSheet() }
         .sheet(isPresented: $isSendingPlan) { SendPlanSheet() }
         .sheet(isPresented: $isShowingAnswers) { ShareAnswersSheet() }
+        .sheet(item: $membersShown) { GroupMembersSheet(groupID: $0.id) }
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
                 // Same landing as from Saved: watch the new post get mapped.
@@ -305,7 +342,10 @@ private struct AnswerSummaryButton: View {
 
 private struct PlanSummary: View {
     let plan: DayPlan
-    let showBudget: () -> Void
+    /// A group plan: its stops came from everyone's saves, and its budget isn't edited here.
+    var isGroup = false
+    /// Nil when the budget can't be changed (a group plan).
+    let showBudget: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
@@ -349,12 +389,17 @@ private struct PlanSummary: View {
         SummaryMetric(icon: .clock, value: plan.stops.first?.start.shortTime ?? "–", caption: endCaption, isStacked: isStacked)
             .accessibilityIdentifier("time-metric")
         divider(isStacked: isStacked)
-        Button(action: showBudget) {
-            SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true, isStacked: isStacked)
+        if let showBudget {
+            Button(action: showBudget) {
+                SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, showsChevron: true, isStacked: isStacked)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows where the money goes and lets you change it")
+            .accessibilityIdentifier("budget-metric")
+        } else {
+            SummaryMetric(icon: .wallet, value: plan.totalCost.wholeDollarsText, caption: budgetCaption, isStacked: isStacked)
+                .accessibilityIdentifier("budget-metric-fixed")
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Shows where the money goes and lets you change it")
-        .accessibilityIdentifier("budget-metric")
         if let travel = TodaySummaryText.travel(plan) {
             divider(isStacked: isStacked)
             SummaryMetric(icon: travel.icon, value: travel.value, caption: travel.caption,
@@ -369,7 +414,7 @@ private struct PlanSummary: View {
 
     private var stopsLine: String {
         let stops = plan.stops.count == 1 ? "1 stop" : "\(plan.stops.count) stops"
-        return plan.savedPostCount > 0 ? "\(stops) · \(plan.savedPostCount) from your saved posts" : stops
+        return plan.savedPostCount > 0 && !isGroup ? "\(stops) · \(plan.savedPostCount) from your saved posts" : stops
     }
 
     private var endCaption: String {
@@ -512,7 +557,9 @@ private struct CatchUpCard: View {
     let plan: DayPlan
     let overdue: [PlanStop]
     let now: Date
-    @Environment(PlanditStore.self) private var store
+    /// False for a group plan that can't be changed: the card only says what happened.
+    var canEdit = true
+    @TodayContext private var today
 
     var body: some View {
         card(overdue, now: now)
@@ -542,18 +589,20 @@ private struct CatchUpCard: View {
                     }
                 }
             }
-            HStack(spacing: Space.sm) {
-                Button(onlyUnderway ? "Done here" : (overdue.count == 1 ? "Mark it done" : "Mark them done")) {
-                    withAnimation(.snappy) { store.markOverdueDone() }
-                }
-                .buttonStyle(.secondary)
-                .accessibilityIdentifier("catchup-done")
-                if isToday {
-                    Button(onlyUnderway ? "Still here" : "Start from now") {
-                        withAnimation(.snappy) { store.startRestFromNow() }
+            if canEdit {
+                HStack(spacing: Space.sm) {
+                    Button(onlyUnderway ? "Done here" : (overdue.count == 1 ? "Mark it done" : "Mark them done")) {
+                        withAnimation(.snappy) { today.markOverdueDone() }
                     }
                     .buttonStyle(.secondary)
-                    .accessibilityIdentifier("catchup-later")
+                    .accessibilityIdentifier("catchup-done")
+                    if isToday {
+                        Button(onlyUnderway ? "Still here" : "Start from now") {
+                            withAnimation(.snappy) { today.startRestFromNow() }
+                        }
+                        .buttonStyle(.secondary)
+                        .accessibilityIdentifier("catchup-later")
+                    }
                 }
             }
         }
