@@ -9,6 +9,9 @@ final class AskFriendsFlowTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// How long the app may take to show the map after launch.
+    static let launchTimeout: TimeInterval = 15
+
     @MainActor private func launch(clash: Bool = false, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-planStart", "11:00", "-clock", "11:00",
@@ -40,7 +43,8 @@ final class AskFriendsFlowTests: XCTestCase {
 
     @MainActor private func openAskFriends(_ app: XCUIApplication) {
         let plus = app.buttons["plan-button"]
-        XCTAssertTrue(plus.waitForExistence(timeout: 5))
+        // Right after launch: a busy simulator can take several seconds to show the map.
+        XCTAssertTrue(plus.waitForExistence(timeout: Self.launchTimeout))
         plus.tap()
         XCTAssertTrue(app.navigationBars["Plan a day"].waitForExistence(timeout: 3))
         let entry = app.buttons["ask-friends"]
