@@ -24,7 +24,6 @@ import re
 from contextlib import contextmanager
 
 from django.conf import settings
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, connection, transaction
 from django.db.models import Count, F
 from django.utils.cache import get_conditional_response
@@ -34,7 +33,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from plandit.core.models import Profile
-from plandit.core.public_forms import FIRST_NAME_MAX_LENGTH, clean_first_name
+from plandit.core.public_forms import first_name_of
 from plandit.core.retention import purge_expired
 
 from .models import (
@@ -91,13 +90,7 @@ def etag(group: GroupPlan) -> str:
 def display_name(profile: Profile) -> str:
     """The first word of the profile's name, checked like a friend's first name on the public pages,
     or "Friend" (N-10). It's all other members see of each other."""
-    words = (profile.name or "").split()
-    if not words:
-        return FALLBACK_NAME
-    try:
-        return clean_first_name(words[0][:FIRST_NAME_MAX_LENGTH])
-    except DjangoValidationError:
-        return FALLBACK_NAME
+    return first_name_of(profile.name) or FALLBACK_NAME
 
 
 def try_again_on_lock_timeout(view_method):
@@ -234,8 +227,9 @@ def _detail_response(request, group: GroupPlan, caller: GroupMember, *, status_c
 def _purge_quietly() -> None:
     """Expire old group plans and friends' input on an organizer's create (GS-5). Never on a poll
     (N-7), and a failure here never fails the create. Not inside one transaction: each rule commits
-    on its own (the group rule in its own transaction), so the purge never holds one table's row
-    locks while it waits for another's, which account deletion takes in another order."""
+    on its own (the request and group rules each in their own transaction), so the purge never
+    holds one table's row locks while it waits for another's, which account deletion takes in
+    another order."""
     try:
         purge_expired()
     except DatabaseError:

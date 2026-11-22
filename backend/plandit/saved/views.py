@@ -3,6 +3,8 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from plandit.shares.views import _hold_owner
+
 from .extraction import run_extraction
 from .models import ExtractionStatus, SavedPost, SourcePlatform
 from .serializers import SavedPostCreateSerializer, SavedPostSerializer
@@ -35,6 +37,9 @@ class SavedPostViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
+                # The owner's profile first, as sharing a plan does: the new row's foreign key would
+                # otherwise wait for an account deletion's lock and then fail on the deleted profile.
+                _hold_owner(request.user)
                 post = SavedPost.objects.create(
                     owner=request.user,
                     url=url,

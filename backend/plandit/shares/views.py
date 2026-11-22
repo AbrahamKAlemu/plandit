@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -69,8 +70,7 @@ class SharedPlanListView(APIView):
         plan_id = data.pop("planId")
         request_slug = data.pop("request", None)
         with transaction.atomic():
-            if request_slug is not None:
-                _hold_owner(request.user)
+            _hold_owner(request.user)
             # update_or_create locks the link's row, as answering does, so an answer can't be saved
             # against the old stops while this replaces them.
             shared, created = SharedPlan.objects.update_or_create(
@@ -87,14 +87,18 @@ class SharedPlanListView(APIView):
 
 
 def _hold_owner(owner) -> None:
-    """Take the owner's profile's key-share lock before any other row. A new plan's link checks its
-    owner when the transaction commits, which takes this same lock; taken only then, it would wait
-    for an account deletion that holds the profile and is itself waiting for the request this share
-    has locked, and Postgres would end one of them as a deadlock."""
+    """Take the owner's profile's key-share lock before any other row, with or without `request`. A
+    new plan's link checks its owner when the transaction commits, which takes this same lock; taken
+    only then, it would wait for an account deletion that holds the profile and is itself waiting
+    for the request this share has locked, and Postgres would end one of them as a deadlock. Without
+    `request`, the deletion didn't wait for the share at all, and the share's commit then failed on
+    the deleted profile (a 500). An account deleted meanwhile is 401, as it is on the next request."""
     table = connection.ops.quote_name(Profile._meta.db_table)
     column = connection.ops.quote_name(Profile._meta.pk.column)
     with connection.cursor() as cursor:
         cursor.execute(f"SELECT 1 FROM {table} WHERE {column} = %s FOR KEY SHARE", [owner.pk])
+        if cursor.fetchone() is None:
+            raise AuthenticationFailed("Account deleted.")
 
 
 def _mark_request_built(owner, slug, shared) -> None:
