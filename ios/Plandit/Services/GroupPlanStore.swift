@@ -447,11 +447,18 @@ final class GroupPlanStore {
                 // Stored just now on `base`: the server's plan is exactly the one sent.
                 let fresh = sent != nil && !head.mayHaveLanded && saved.version == base + 1
                 if !fresh {
-                    // Stored earlier (MF-B): fetch the server's plan before letting the edit go, so it
-                    // doesn't flicker away, and never add it twice.
+                    // Stored earlier (MF-B): the edit stays on screen until a fetch brings the server's
+                    // plan with it, and is never added twice. A refresh can join a GET already out,
+                    // which may be older: a second one at once, then with backoff until one brings it.
                     update(id) { $0.absorb(version: saved.version, membersVersion: saved.membersVersion, plan: nil, members: saved.members, etag: etag) }
                     updatePending(id, head.editId) { $0.sending = false }
-                    for _ in 0..<2 where (record(id)?.version ?? .max) < saved.version {
+                    var tries = 0
+                    while (record(id)?.version ?? .max) < saved.version {
+                        tries += 1
+                        if tries > 2 {
+                            do { try await sleep(Self.retryDelay(failures: tries - 2)) } catch { return }
+                        }
+                        guard !Task.isCancelled, !isClosed, !readOnly.contains(id), index(id) != nil else { return }
                         await refresh(id)
                     }
                     guard !isClosed, index(id) != nil else { return }

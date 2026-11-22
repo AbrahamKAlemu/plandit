@@ -446,6 +446,35 @@ import XCTest
         XCTAssertEqual(version, 2, "no second version")
     }
 
+    /// RB-8, MF-B: an edit stored earlier (its answer lost) stays on screen until a fetch brings the
+    /// server's plan with it, however many fetches fail first; it isn't sent again.
+    func testRB8_AnEditStoredEarlierStaysShownUntilAFetchBringsIt() async throws {
+        let (store, id) = await joinedGroup()
+        await server.script(.put, .lostAfterSaving)
+        store.apply(addEdit(SampleData.littleIsland), to: id)
+        await eventually("the retry waits") { self.clock.sleeping == 1 }
+        let fetches = await server.count(.fetch)
+        await server.script(.fetch, .network)
+        await server.script(.fetch, .network)
+
+        clock.advance(by: .seconds(60))
+        await eventually("the retry's 200, then two fetches with no answer") { await self.server.count(.fetch) == fetches + 2 }
+        await settle()
+
+        XCTAssertEqual(try shown(store, id).stops.filter { $0.place.name == SampleData.littleIsland.name }.count, 1, "still shown")
+        XCTAssertEqual(store.group(id)?.version, 1)
+        await eventually("waiting to fetch again") { self.clock.sleeping == 1 }
+        clock.advance(by: .seconds(60))
+        await eventually("the server's plan") { store.group(id)?.version == 2 }
+        await waitUntilSent(store, id)
+
+        let stored = try await requirePlan(id)
+        XCTAssertEqual(store.group(id)?.plan, stored)
+        XCTAssertEqual(stored.stops.filter { $0.place.name == SampleData.littleIsland.name }.count, 1)
+        let puts = await server.count(.put)
+        XCTAssertEqual(puts, 2, "not sent again")
+    }
+
     /// RB-8, MF-B: the server took the edit but the answer was lost, then someone else changed that
     /// stop. The server's list of edits says it was stored, so there's no message.
     func testRB8_ALandedEditIsNotReportedAsNotMadeWhenTheStopChangedSince() async throws {
