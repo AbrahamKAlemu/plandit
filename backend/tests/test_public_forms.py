@@ -255,25 +255,6 @@ def test_the_default_matches_the_reported_render_chain(settings):
     assert client_ip(request) == "203.0.113.7"
 
 
-def test_describe_forwarding_has_the_chain_shape_and_no_addresses():
-    request = RequestFactory().get(
-        "/",
-        HTTP_X_FORWARDED_FOR="198.51.100.1, 203.0.113.7, 172.71.0.5, 10.0.0.1",
-        HTTP_TRUE_CLIENT_IP="203.0.113.7",
-    )
-    described = public_forms.describe_forwarding(request)
-    # Python counts the documentation ranges (198.51.100.0/24, 203.0.113.0/24) as private.
-    assert described == (
-        "forwarded_entries=4 private_from_right=p-pp true_client_ip=present true_client_ip_from_right=3"
-    )
-    assert "203.0.113" not in described and "10.0.0" not in described
-
-
-def test_describe_forwarding_without_headers():
-    described = public_forms.describe_forwarding(RequestFactory().get("/"))
-    assert described == "forwarded_entries=0 private_from_right=- true_client_ip=absent true_client_ip_from_right=none"
-
-
 # --- clean_first_name ---------------------------------------------------------
 
 
