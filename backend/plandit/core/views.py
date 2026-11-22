@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 from plandit.groups.models import GroupMember, GroupPlan, GroupRemoval
 from plandit.plans.models import GroupRequest
 from plandit.shares.models import SharedPlan
+from plandit.shares.views import _hold_owner
 
 from . import apple_signin, supabase_admin
 from .metrics import DEFAULT_DAYS, MAX_DAYS, MIN_DAYS, compute_metrics, iso_utc
@@ -336,6 +337,9 @@ class EventsView(APIView):
         name = serializer.validated_data["name"]
         occurred_at = serializer.validated_data["occurred_at"]
         with transaction.atomic():
+            # The profile first, as sharing a plan does: the new row's foreign key would otherwise
+            # wait for an account deletion's lock and then fail on the deleted profile.
+            _hold_owner(request.user)
             ActivityEvent.objects.create(profile=request.user, name=name, occurred_at=occurred_at)
             if name == ActivityEventName.PLAN_BUILT:
                 _activate(request.user, timezone.now())

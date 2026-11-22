@@ -21,7 +21,7 @@ from django.db import DatabaseError
 
 from plandit.core import retention
 from plandit.core import views as core_views
-from plandit.core.models import AppSnapshot, Profile
+from plandit.core.models import ActivityEvent, AppSnapshot, Profile
 from plandit.plans.models import REQUEST_RETENTION_DAYS, GroupAnswer, GroupRequest
 from plandit.shares.models import SharedPlan
 from tests.test_group_plan_races import delete_account_later, first_holds_until_second_waits, second_device, warm
@@ -143,6 +143,7 @@ def test_a_share_with_request_that_waited_for_the_accounts_deletion_is_401(maya,
 # Each write's request from the second device, and the table its new row goes in.
 ADDS_A_ROW = {
     "plan-request": (lambda who: create(who.client, request_payload()), GroupRequest),
+    "event": (lambda who: who.client.post("/api/me/events/", {"name": "plan_built"}, format="json"), ActivityEvent),
 }
 
 
