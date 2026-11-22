@@ -193,13 +193,16 @@ def _hour_minute(moment) -> str:
 def request_page(request, slug):
     """GET /g/<slug>: the page friends open. No sign-in. While the request takes answers, its
     places and the form (brief GI-2); once its plan is shared, a redirect to that plan's page
-    (GI-7); otherwise the closed message (GI-3)."""
+    (GI-7), except for a browser whose answer is still on the request, which gets the plan's link
+    and "Take back my answer"; otherwise the closed message (GI-3)."""
     group = GroupRequest.objects.select_related("shared_plan").filter(slug=slug).first()
     if group is None:
         return not_found_page(request)
     if group.status == GroupRequest.Status.BUILT and group.shared_plan_id:
-        redirect = HttpResponseRedirect(reverse("shared-plan", args=[group.shared_plan.slug]))
-        return with_page_headers(redirect, takes_answers=True)
+        plan_path = reverse("shared-plan", args=[group.shared_plan.slug])
+        if _has_own_answer(request, group):
+            return _built_page(request, group, plan_path)
+        return with_page_headers(HttpResponseRedirect(plan_path), takes_answers=True)
     if not takes_answers(group):
         return _closed_page(request, group)
     purge_expired()
@@ -333,14 +336,29 @@ def _open_page(request, group, *, form=None, error="", invalid="", status=200):
 def _closed_page(request, group, *, status=200):
     """The closed message (brief GI-3), with "Take back my answer" for a browser that answered.
     Never cached: it changes when the plan is shared, and it may carry a form."""
-    own = group.answers.filter(responder=_existing_responder(request, group.slug)).exists()
     response = render(
         request,
         "plans/request_closed.html",
-        {"slug": group.slug, "page_url": request_url(request, group.slug), "own": own},
+        {"slug": group.slug, "page_url": request_url(request, group.slug), "own": _has_own_answer(request, group)},
         status=status,
     )
     return with_page_headers(response, takes_answers=True)
+
+
+def _built_page(request, group, plan_path):
+    """For a browser whose answer is on a built request: the plan's link, and "Take back my
+    answer", which a redirect would leave no way to reach. Never cached, like every /g/ page; once
+    the answer is taken back, this browser is redirected to the plan like everyone else."""
+    response = render(
+        request,
+        "plans/request_built.html",
+        {"slug": group.slug, "page_url": request_url(request, group.slug), "plan_path": plan_path},
+    )
+    return with_page_headers(response, takes_answers=True)
+
+
+def _has_own_answer(request, group) -> bool:
+    return group.answers.filter(responder=_existing_responder(request, group.slug)).exists()
 
 
 def _request_path(slug) -> str:

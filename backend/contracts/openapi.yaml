@@ -407,8 +407,9 @@ paths:
         While the request takes answers (open and before `answersBy`): the day, the range, the
         deadline, how many have answered (never anyone's answer), the places with a checkbox each,
         and the form, with no JavaScript. Once built and its plan still shared: a redirect to that
-        plan's page. Otherwise "This plan isn't taking answers any more", with "Take back my
-        answer" for a browser that answered. Every response is `Cache-Control: private, no-store`
+        plan's page, except for a browser whose answer is still on the request, which gets "The
+        plan is ready" with the plan's link and "Take back my answer". Otherwise "This plan isn't
+        taking answers any more", with "Take back my answer" for a browser that answered. Every response is `Cache-Control: private, no-store`
         and `Referrer-Policy: same-origin`, with the same Content Security Policy as /p/.
       security: []
       parameters:
@@ -418,9 +419,9 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: HTML page, with the form or closed
+          description: HTML page, with the form, closed, or built for a browser that answered
         "302":
-          description: Built; Location is /p/{plan slug}
+          description: Built, for a browser with no answer on it; Location is /p/{plan slug}
         "404":
           description: HTML page saying the plan isn't shared anymore
   /g/{slug}/answer:

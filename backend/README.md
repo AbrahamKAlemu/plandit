@@ -166,7 +166,7 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | GET | `/p/<slug>` | the public page (HTML, no sign-in, `noindex`, Open Graph tags for link previews). Link host is `SHARE_BASE_URL` when set (`https://plandit.app` once the site forwards `/p/` here), else this API's own host. Plans shared with `answers: true` also show who's in (count and up to 3 first names; never who can't make it), "I'd swap this" on stops with ids, and the answer form; those pages are `private, no-store` |
 | POST | `/p/<slug>/answer` | the page's form (CSRF token, `name`, `status` = `in`\|`out`, `swap` = stop ids, `swap_to_<stopId>` = alternate id). Upserts this browser's answer by its `pa` cookie (path `/p/<slug>`; only the hash is stored; set again on every answer to last until the answers are deleted, at least 30 days) and answers `303` to the page; `400` or `429` show the page again with the reason. 20 answers per address per hour on each link, 50 per link. `404` unless shared with `answers: true` |
 | POST | `/p/<slug>/answer/delete` | takes back this browser's own answer, `303` to the page. Works on any link that exists, even after it stops taking answers; `404` only for a missing link. Not rate limited |
-| GET | `/g/<slug>` | friends' input page (HTML, no sign-in, `noindex`, `private, no-store`). While open and before `answersBy`: the day, range and deadline, how many answered (never anyone's answer), the places with costs and a checkbox each, and the form (no JavaScript). Once built and its plan still shared: `302` to `/p/<plan slug>`. Otherwise "This plan isn't taking answers any more" |
+| GET | `/g/<slug>` | friends' input page (HTML, no sign-in, `noindex`, `private, no-store`). While open and before `answersBy`: the day, range and deadline, how many answered (never anyone's answer), the places with costs and a checkbox each, and the form (no JavaScript). Once built and its plan still shared: `302` to `/p/<plan slug>`, except for a browser whose answer is still on the request, which gets a page with the plan's link and "Take back my answer". Otherwise "This plan isn't taking answers any more" |
 | POST | `/g/<slug>/answer` | the page's form (CSRF token, `name`, `budget` = 0 to 150, `free_from`/`free_until` = `HH:MM` inside the range, `star` = up to 3 place ids). Upserts this browser's answer by its `pa` cookie (path `/g/<slug>`) and answers `303` to the page; `400` or `429` show the page again with the reason; `410` the closed page. Same limits as `/p/`: 20 per address per hour on each link, 50 per link |
 | POST | `/g/<slug>/answer/delete` | takes back this browser's own answer, `303` to the page. Works on any request that exists, even once closed; `404` only for a missing link. Not rate limited |
 
@@ -198,7 +198,8 @@ The organizer picks 2 to 10 saved places, a day, a time range and a deadline, an
 included), when they're free inside the range, and up to 3 starred places. The page shows each
 friend only how many have answered. The organizer reads every answer through
 `/api/plan-requests/<slug>/`, builds the plan on the phone, and shares it with `request=<slug>`;
-the request is then `built` and its link redirects to the plan's `/p/` page.
+the request is then `built` and its link redirects to the plan's `/p/` page. A friend whose
+answer is still on it gets the plan's link and "Take back my answer" instead.
 
 The answer form has the same protections as `/p/`'s, from the same helpers: Django's CSRF token,
 20 answers an hour from one address on each link, 50 per link, the first-name check and the `pa`

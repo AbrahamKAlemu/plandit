@@ -886,11 +886,17 @@ def test_a_change_after_the_deadline_is_refused(browser, group):
 # --- GI-7: once built, the link opens the plan ----------------------------------------------
 
 
-def test_a_built_request_redirects_to_its_plans_page(browser, group, profile):
+def built(group, profile):
+    """The request marked built straight in the database, with a plan shared for it."""
     from plandit.shares.models import SharedPlan
 
     shared = SharedPlan.objects.create(owner=profile, plan_id=uuid.uuid4(), data={})
     GroupRequest.objects.filter(pk=group.pk).update(status="built", shared_plan=shared)
+    return shared
+
+
+def test_a_built_request_redirects_to_its_plans_page(browser, group, profile):
+    shared = built(group, profile)
 
     response = request_page(browser, group.slug)
     assert response.status_code == 302
@@ -898,6 +904,55 @@ def test_a_built_request_redirects_to_its_plans_page(browser, group, profile):
     assert response["Cache-Control"] == "private, no-store"
     assert response["X-Robots-Tag"] == "noindex, nofollow"
     assert friend_answer(browser, group.slug).status_code == 410
+
+
+def test_once_built_a_friend_who_answered_gets_the_plans_link_and_can_take_back_their_answer(browser, group, profile):
+    friend_answer(browser, group.slug, name="Maya")
+    shared = built(group, profile)
+
+    page = request_page(browser, group.slug)
+    assert page.status_code == 200
+    body = html(page)
+    assert "The plan is ready" in body
+    assert re.search(rf'<a class="cta" href="/p/{shared.slug}">See the plan</a>', body)
+    assert "Only the person who sent this link sees your answer." in body
+    assert re.findall(r'<form[^>]*action="([^"]+)"', body) == [f"/g/{group.slug}/answer/delete"]
+    assert "Take back my answer" in body
+    assert 'name="budget"' not in body and "Maya" not in body
+    assert f"%2Fg%2F{group.slug}" in body  # the report link names this page
+    assert page["Cache-Control"] == "private, no-store"
+    assert page["X-Robots-Tag"] == "noindex, nofollow"
+    assert page["Referrer-Policy"] == "same-origin"
+    assert page["Content-Security-Policy"] == PUBLIC_PAGE_CSP
+
+    taken_back = take_back_request(browser, group.slug)
+    assert (taken_back.status_code, taken_back["Location"]) == (303, f"/g/{group.slug}")
+    assert not GroupAnswer.objects.exists()
+    after = request_page(browser, group.slug)
+    assert (after.status_code, after["Location"]) == (302, f"/p/{shared.slug}")
+
+
+def test_once_built_everyone_without_an_answer_on_it_goes_straight_to_the_plan(browser, group, profile):
+    friend_answer(browser, group.slug, name="Maya")
+    add_answer(group, name="Zelda")
+    elsewhere = new_browser()
+    friend_answer(elsewhere, make_request(profile).slug, name="Sam")  # answered another link only
+    forger = Client()
+    forger.cookies["pa"] = "x" * 43
+    shared = built(group, profile)
+
+    for client in (new_browser(), elsewhere, forger):
+        response = request_page(client, group.slug)
+        assert (response.status_code, response["Location"]) == (302, f"/p/{shared.slug}")
+        assert response["Cache-Control"] == "private, no-store"
+    assert request_page(browser, group.slug).status_code == 200
+
+
+def test_once_built_with_its_plan_no_longer_shared_an_answer_gets_the_closed_page(browser, group):
+    friend_answer(browser, group.slug, name="Maya")
+    built_and_no_longer_shared(group)
+    body = html(request_page(browser, group.slug))
+    assert CLOSED in body and "Take back my answer" in body and "See the plan" not in body
 
 
 # --- Missing links and methods ---------------------------------------------------------------
@@ -975,11 +1030,13 @@ def test_the_pages_are_never_cached(browser, group):
         assert response["Content-Security-Policy"] == PUBLIC_PAGE_CSP
 
 
-@pytest.mark.parametrize("state", ["open", "closed"])
-def test_the_page_fits_its_policy_and_needs_no_javascript(browser, group, state):
+@pytest.mark.parametrize("state", ["open", "closed", "built"])
+def test_the_page_fits_its_policy_and_needs_no_javascript(browser, group, profile, state):
     friend_answer(browser, group.slug)
     if state == "closed":
         past_deadline(group)
+    elif state == "built":
+        built(group, profile)
     body = html(request_page(browser, group.slug))
     assert "<script" not in body and "<style" not in body and " style=" not in body
     assert not re.search(r"<[^>]+\son[a-z]+=", body)  # no inline event handlers
@@ -1011,10 +1068,13 @@ def test_every_request_page_has_a_report_link(browser, group, found):
         assert f"%2Fg%2F{slug}" in link.group(1)
 
 
-@pytest.mark.parametrize("state", ["open", "closed"])
-def test_links_off_the_page_send_no_referrer(browser, group, state):
+@pytest.mark.parametrize("state", ["open", "closed", "built"])
+def test_links_off_the_page_send_no_referrer(browser, group, profile, state):
     if state == "closed":
         past_deadline(group)
+    elif state == "built":
+        friend_answer(browser, group.slug)
+        built(group, profile)
     body = html(request_page(browser, group.slug))
     links = re.findall(r'<a [^>]*href="https://[^"]*"[^>]*>', body)
     assert len(links) >= 2  # brand, "Make your own plan"
