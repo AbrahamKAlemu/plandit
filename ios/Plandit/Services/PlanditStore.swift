@@ -54,6 +54,9 @@ final class PlanditStore {
     @ObservationIgnored var requestClient: (any PlanRequesting)?
     /// `planRequest` with friends' answers, as last fetched. Memory only: answers are never saved on the phone.
     private(set) var fetchedRequest: PlanRequest?
+    /// The answers couldn't be read and none were read before (after a relaunch, say): there's
+    /// nothing to plan from until they are.
+    private(set) var requestFetchFailed = false
     /// The link and time the last refresh that counts went out, as for shared plans' answers.
     @ObservationIgnored private var requestAsked: (slug: String, at: Date)?
     /// Goes up with each change made here (a new link, a removed answer, closing, building), so a
@@ -1234,13 +1237,15 @@ final class PlanditStore {
         requestChanges += 1
         planRequest = PlanRequestLink(request: created, draft: draft, answersBy: answersBy)
         fetchedRequest = created
+        requestFetchFailed = false
         requestAsked = (created.slug, Date())
         persist()
     }
 
-    /// Reads the link's answers, at most every `requestRefreshInterval` unless forced. Failures are
-    /// quiet: what was shown stays, and the next appearance tries again. A link the server no
-    /// longer has (deleted on another phone, or cleaned up) is forgotten.
+    /// Reads the link's answers, at most every `requestRefreshInterval` unless forced. A failure
+    /// keeps what was shown, and the next appearance tries again; with nothing read yet it sets
+    /// `requestFetchFailed`. A link the server no longer has (deleted on another phone, or cleaned
+    /// up) is forgotten.
     func refreshPlanRequest(now: Date = Date(), force: Bool = false) async {
         guard let link = planRequest, let requestClient else { return }
         if !force, let asked = requestAsked, asked.slug == link.slug,
@@ -1253,11 +1258,13 @@ final class PlanditStore {
             fetched = try await requestClient.fetch(slug: link.slug)
         } catch {
             if requestAsked?.slug == link.slug, requestAsked?.at == now { requestAsked = previous }
+            if planRequest?.slug == link.slug, requestDetails == nil { requestFetchFailed = true }
             return
         }
         // A new link, a removed answer, closing or building while the request was out: what it
         // read may be from before that.
         guard planRequest?.slug == link.slug, requestChanges == changes else { return }
+        requestFetchFailed = false
         guard let fetched else {
             fetchedRequest = nil
             planRequest = nil
@@ -1294,6 +1301,7 @@ final class PlanditStore {
         planRequest = nil
         fetchedRequest = nil
         requestAsked = nil
+        requestFetchFailed = false
         persist()
     }
 
@@ -1304,11 +1312,13 @@ final class PlanditStore {
                            from: link.start ?? ClockTime(12), until: link.end ?? ClockTime(20), stars: [])
     }
 
-    /// Everyone's inputs together (`GroupInputs.combine`), over the link's places still saved.
+    /// Everyone's inputs together (`GroupInputs.combine`), over the link's places still saved. Nil
+    /// until the answers have been read: a plan from the organizer's inputs alone would leave
+    /// friends out.
     func groupInputs(organizer: GroupInputs.Person, leftOut: Set<GroupMember>) -> GroupInputs.Result? {
-        guard let link = planRequest else { return nil }
+        guard let link = planRequest, let details = requestDetails else { return nil }
         let places = link.placeIDs.filter { post(id: $0)?.isMappable == true }
-        return GroupInputs.combine(answers: requestDetails?.answers ?? [], organizer: organizer, places: places, leftOut: leftOut)
+        return GroupInputs.combine(answers: details.answers, organizer: organizer, places: places, leftOut: leftOut)
     }
 
     /// What "Build our plan" would put in Today, without changing anything. Nil when the link
@@ -1363,7 +1373,7 @@ final class PlanditStore {
     /// replaced it, so the link never gets a plan that wasn't built from the answers.
     var groupPlanAwaitsLink: Bool {
         guard let link = planRequest, let builtID = link.builtPlanID, builtID == today.id,
-              let stopIDs = link.builtStopIDs, requestDetails?.status != .built else { return false }
+              let stopIDs = link.builtStopIDs, let details = requestDetails, details.status != .built else { return false }
         return Set(stopIDs) == Set(today.stops.map(\.id))
     }
 

@@ -464,6 +464,20 @@ private struct FriendsAnswersView: View {
                     }
                     .planditCard(padding: Space.sm)
                 }
+            } else if store.requestFetchFailed {
+                // Nothing to plan from until the answers are read: Build stays off.
+                VStack(alignment: .leading, spacing: Space.sm) {
+                    Text("Couldn't get the answers. Check your connection and try again.")
+                        .font(.metadata)
+                        .foregroundStyle(Color.error)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("request-fetch-error")
+                    Button("Try again") {
+                        Task { await store.refreshPlanRequest(force: true) }
+                    }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("request-fetch-retry")
+                }
             } else {
                 HStack(spacing: Space.xs) {
                     ProgressView().controlSize(.small)
