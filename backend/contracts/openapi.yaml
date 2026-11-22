@@ -143,13 +143,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/SharedPlanLink"
         "200":
-          description: The plan's existing link; its page now shows this version
+          description: >-
+            The plan's existing link; its page now shows this version. Friends' answers stay; swaps
+            for stops no longer in the plan are dropped, and a picked alternate no longer offered
+            becomes `null`
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SharedPlanLink"
         "400":
-          description: No stops, more than 30, a text too long, or more trips than gaps between stops
+          description: >-
+            No stops, more than 30, a text too long, more trips than gaps between stops, or a bad
+            optional field: `answers` not a boolean, `answers: true` without `date`, `date` not
+            YYYY-MM-DD or over a year ahead, an id that isn't a UUID or repeats, more than 2
+            alternates, or alternates on a stop without an id
   /api/shares/{slug}/:
     delete:
       operationId: stopSharingPlan
@@ -161,13 +168,55 @@ paths:
           schema: { type: string }
       responses:
         "204":
-          description: Taken down
+          description: Taken down, with every friend's answer on it
         "404":
           description: No such link of yours
+  /api/shares/{slug}/answers/:
+    get:
+      operationId: listShareAnswers
+      summary: Friends' answers on your shared plan, oldest first (group plans, mode 1)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Every answer, including those who can't make it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareAnswers"
+        "404":
+          description: No such link of yours
+  /api/shares/{slug}/answers/{answerId}/:
+    delete:
+      operationId: removeShareAnswer
+      summary: Remove a friend's answer; it's gone from the page at once
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: answerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Removed
+        "404":
+          description: No such answer on a link of yours
   /p/{slug}:
     get:
       operationId: sharedPlanPage
       summary: The public HTML page for a shared plan (no sign-in)
+      description: >-
+        Plans shared with `answers: true` (and a `date` less than 30 days past) also show how many
+        friends are in with up to 3 of their first names, "I'd swap this" on each stop with an id,
+        and the answer form. Those pages are `Cache-Control: private, no-store` and
+        `Referrer-Policy: same-origin`, and set Django's `csrftoken` cookie; other pages stay
+        `public, max-age=60` and `no-referrer`. Every page has the same Content Security Policy.
       security: []
       parameters:
         - name: slug
@@ -179,6 +228,80 @@ paths:
           description: HTML page
         "404":
           description: HTML page saying the plan isn't shared anymore
+  /p/{slug}/answer:
+    post:
+      operationId: answerSharedPlan
+      summary: A friend's answer, from the page's form (no sign-in)
+      description: >-
+        Needs Django's CSRF token from the page. Matched to the browser by the `pa` cookie (Path
+        /p/{slug}, HttpOnly, Secure, SameSite=Lax, 30 days; only its SHA-256 is stored), so the
+        same browser changes its answer. 20 answers per address per hour across links, and 50
+        answers per link.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrfmiddlewaretoken, name, status]
+              properties:
+                csrfmiddlewaretoken: { type: string }
+                name:
+                  type: string
+                  description: First name, 1 to 30 letters, spaces, hyphens and apostrophes
+                status: { type: string, enum: [in, out], description: "The button pressed" }
+                swap:
+                  type: array
+                  items: { type: string }
+                  description: Ids of the stops ticked "I'd swap this"; ids not in the plan are ignored
+                swap_to_{stopId}:
+                  type: string
+                  description: >-
+                    The alternate picked for that stop; an id the organizer didn't offer for it is
+                    stored as no pick
+      responses:
+        "303":
+          description: Saved; back to /p/{slug}
+        "400":
+          description: The page again, with the reason (bad first name, or neither button)
+        "403":
+          description: Missing or wrong CSRF token, or a cross-site origin
+        "404":
+          description: "No such link, or it wasn't shared with `answers: true`"
+        "429":
+          description: The page again, saying to try later (address limit or the link's 50 answers)
+  /p/{slug}/answer/delete:
+    post:
+      operationId: takeBackSharedPlanAnswer
+      summary: The browser takes back its own answer (no sign-in)
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrfmiddlewaretoken]
+              properties:
+                csrfmiddlewaretoken: { type: string }
+      responses:
+        "303":
+          description: Removed if this browser had one; back to /p/{slug}
+        "403":
+          description: Missing or wrong CSRF token
+        "404":
+          description: "No such link, or it wasn't shared with `answers: true`"
   /v1/place-resolutions:
     post:
       operationId: createPlaceResolution
@@ -224,6 +347,19 @@ components:
         timeText: { type: string, maxLength: 60, examples: ["11:00 AM – 6:15 PM"] }
         note: { type: string, maxLength: 280 }
         costText: { type: string, maxLength: 160, examples: ["About $42 per person"] }
+        answers:
+          type: boolean
+          default: false
+          description: >-
+            Group plans, mode 1: show the answer form on the page. Needs `date`. Without it, the page
+            looks as it always has and answer posts get 404
+        date:
+          type: string
+          format: date
+          description: >-
+            The plan's day (YYYY-MM-DD), at most 366 days ahead. Needed with `answers: true`;
+            friends' answers are deleted 30 days after it
+          examples: ["2026-11-22"]
         stops:
           type: array
           minItems: 1
@@ -232,6 +368,12 @@ components:
             type: object
             required: [name, timeText]
             properties:
+              id:
+                type: string
+                format: uuid
+                description: >-
+                  The app's stop id, unique in the plan, kept exactly as sent (any case). Stops
+                  without one have no "I'd swap this"
               name: { type: string, maxLength: 120 }
               place: { type: string, maxLength: 120, examples: ["Food · Chelsea"] }
               address: { type: string, maxLength: 200 }
@@ -240,6 +382,21 @@ components:
               costText: { type: string, maxLength: 40 }
               latitude: { type: [number, "null"] }
               longitude: { type: [number, "null"] }
+              alternates:
+                type: array
+                maxItems: 2
+                description: >-
+                  Places the organizer saved that friends may pick instead of this stop ("<name>
+                  instead"). Needs the stop's `id`; ids unique in the stop
+                items:
+                  type: object
+                  required: [id, name]
+                  properties:
+                    id: { type: string, format: uuid, description: "Kept exactly as sent" }
+                    name: { type: string, maxLength: 120, examples: ["Prince Street Pizza"] }
+                    neighborhood: { type: string, maxLength: 80, examples: ["Nolita"] }
+                    kind: { type: string, maxLength: 40, examples: ["Food"] }
+                    costText: { type: string, maxLength: 40, examples: ["$6", "Free"] }
         legs:
           type: array
           description: The trip after each stop but the last, in order
@@ -254,6 +411,33 @@ components:
       properties:
         slug: { type: string, examples: ["k7Qx2aB9cD"] }
         url: { type: string, format: uri, examples: ["https://plandit.app/p/k7Qx2aB9cD"] }
+    ShareAnswers:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareAnswer"
+    ShareAnswer:
+      type: object
+      description: >-
+        A friend's answer. Deleted 30 days after the plan's `date`, when you stop sharing, or when
+        you remove it
+      required: [id, name, status, swaps, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 30, examples: ["Maya"] }
+        status: { type: string, enum: [in, out], description: "in = I'm in, out = Can't make it" }
+        swaps:
+          type: object
+          description: >-
+            Stop id → the alternate id they picked, or null for "I'd swap this" with no pick. Ids
+            exactly as the app sent them
+          additionalProperties: { type: [string, "null"] }
+          examples: [{ "0A1B2C3D-4E5F-4A6B-8C7D-8E9F0A1B2C3D": "33333333-4444-4555-8666-777777777777" }]
+        createdAt: { type: string, format: date-time, examples: ["2026-11-21T18:04:05Z"] }
+        updatedAt: { type: string, format: date-time }
     Detail:
       type: object
       required: [detail]
@@ -345,6 +529,8 @@ components:
               links_saved,
               waitlist_signups,
               anonymous_sessions,
+              links_with_answers,
+              answers_per_link,
             ]
           properties:
             signups: { type: integer }
@@ -358,6 +544,12 @@ components:
             links_saved: { type: integer }
             waitlist_signups: { type: integer }
             anonymous_sessions: { type: integer }
+            links_with_answers:
+              type: integer
+              description: Shared plans with at least one friend's answer kept now (answers expire)
+            answers_per_link:
+              type: number
+              description: Average answers per link in `links_with_answers`, one decimal; 0 when none
         daily:
           type: array
           description: Exactly `days` entries, oldest to newest, ending today, zero-filled
