@@ -5,6 +5,8 @@ import Foundation
 ///
 /// - A caption that names a date (found on the phone with `NSDataDetector`) is over once the latest
 ///   such day has ended. A date with no year is the next one on or after the day it was saved.
+/// - A bare "11/15" only counts as a date on a temporary save; elsewhere it's as likely a rating.
+///   "10/10", "9/10" and "24/7" are never dates.
 /// - A caption or tag with a temporary word ("pop-up", "this weekend"…) and no date is suggested for
 ///   14 days after it was saved.
 enum SaveFreshness {
@@ -48,9 +50,12 @@ enum SaveFreshness {
         if let cached = cache[key] { return cached }
         let text = ([post.caption ?? ""] + post.tags).joined(separator: "\n")
         let lowered = text.lowercased()
+        let isTemporary = temporaryWords.contains { lowered.contains($0) }
         let facts = Facts(
-            lastDay: post.caption.flatMap { lastDay(in: $0, savedAt: post.savedAt, calendar: calendar) },
-            isTemporary: temporaryWords.contains { lowered.contains($0) }
+            lastDay: post.caption.flatMap {
+                lastDay(in: $0, savedAt: post.savedAt, calendar: calendar, allowsBareNumericDates: isTemporary)
+            },
+            isTemporary: isTemporary
         )
         if cache.count > 2_000 { cache.removeAll() }
         cache[key] = facts
@@ -61,10 +66,11 @@ enum SaveFreshness {
 
     private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
 
-    /// The latest day named in `text`. Only real dates count: "Nov 15", "December 1, 2026", "12/5".
-    /// Times ("9 PM"), weekdays and words like "this weekend" or "tomorrow" don't: the detector reads
-    /// those against today, not against when the post was made.
-    static func lastDay(in text: String, savedAt: Date, calendar: Calendar) -> Date? {
+    /// The latest day named in `text`. Only real dates count: "Nov 15", "December 1, 2026", and "12/5"
+    /// when `allowsBareNumericDates` (a temporary save). Times ("9 PM"), weekdays and words like
+    /// "this weekend" or "tomorrow" don't: the detector reads those against today, not against when
+    /// the post was made. Ratings ("10/10", "9/10") and "24/7" never do.
+    static func lastDay(in text: String, savedAt: Date, calendar: Calendar, allowsBareNumericDates: Bool) -> Date? {
         guard let detector else { return nil }
         let string = text as NSString
         let savedDay = calendar.startOfDay(for: savedAt)
@@ -72,7 +78,7 @@ enum SaveFreshness {
         for match in detector.matches(in: text, range: NSRange(location: 0, length: string.length)) {
             guard let detected = match.date else { continue }
             let matched = string.substring(with: match.range)
-            guard namesADay(matched) else { continue }
+            guard namesADay(matched, allowsBareNumericDates: allowsBareNumericDates) else { continue }
 
             // The detector reads the date in the phone's time zone.
             var detectorCalendar = calendar
@@ -103,10 +109,17 @@ enum SaveFreshness {
         return latest
     }
 
-    private static func namesADay(_ text: String) -> Bool {
+    private static func namesADay(_ text: String, allowsBareNumericDates: Bool) -> Bool {
         let lowered = text.lowercased()
         guard lowered.contains(where: \.isNumber) else { return false }
-        return lowered.firstMatch(of: monthName) != nil || lowered.firstMatch(of: numericDate) != nil
+        if lowered.firstMatch(of: monthName) != nil { return true }
+        guard let numeric = lowered.firstMatch(of: numericDate) else { return false }
+        // "12/10/2026" is a date anywhere.
+        if hasYear(text) { return true }
+        // "10/10", "9/10", "24/7": a score or "always open", not a day.
+        if numeric.2 == "10" || (numeric.1 == "24" && numeric.2 == "7") { return false }
+        // A bare "12/5" only on a temporary save.
+        return allowsBareNumericDates
     }
 
     private static func hasYear(_ text: String) -> Bool {
@@ -117,7 +130,7 @@ enum SaveFreshness {
 
     /// "Nov 15", "December 1", "15th of March".
     private static let monthName = #/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*\d|\d(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/#
-    private static let numericDate = #/\b\d{1,2}/\d{1,2}\b/#
+    private static let numericDate = #/\b(\d{1,2})/(\d{1,2})\b/#
 
     /// "Nov 15–17", "November 15 to 17": the day after the dash, if the date is such a range.
     private static func rangeEnd(in text: String) -> Int? {

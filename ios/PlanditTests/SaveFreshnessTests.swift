@@ -80,6 +80,10 @@ final class SaveFreshnessTests: XCTestCase {
     @MainActor func testDateWithAYearIsTakenAsWritten() {
         XCTAssertTrue(isOver(post("Pop-up March 3, 2026 only", savedAt: day(11, 1)), on: day(11, 21)))
         XCTAssertFalse(isOver(post("Market on 12/5/2026", savedAt: day(11, 1)), on: day(11, 21)))
+        // With a year, even a day ending in /10 is a date: December 10, 2026.
+        let market = post("Market on 12/10/2026", savedAt: day(11, 1))
+        XCTAssertFalse(isOver(market, on: day(12, 10, hour: 20)))
+        XCTAssertTrue(isOver(market, on: day(12, 11, hour: 1)))
     }
 
     @MainActor func testResultFollowsTheCaption() {
@@ -87,5 +91,39 @@ final class SaveFreshnessTests: XCTestCase {
         XCTAssertTrue(isOver(edited, on: day(11, 21)))
         edited.caption = "Pop-up until Dec 1"
         XCTAssertFalse(isOver(edited, on: day(11, 21)), "the cache is per post and caption")
+    }
+
+    // MARK: - Numbers that look like dates
+
+    @MainActor func testRatingsAreNotDates() {
+        // Read as October 10 or September 10, these would stop a favorite being suggested.
+        for caption in ["best pizza 10/10", "Best birria in Queens 10/10", "Rated 9/10", "Rated 9/10, would go again"] {
+            XCTAssertFalse(isOver(post(caption, savedAt: day(8, 1)), on: day(11, 21)), caption)
+            XCTAssertNil(SaveFreshness.facts(for: post(caption, savedAt: day(8, 1)), calendar: Self.calendar).lastDay, caption)
+        }
+    }
+
+    @MainActor func testOpenAllHoursIsNotADate() {
+        XCTAssertFalse(isOver(post("Diner, open 24/7", savedAt: day(6, 1)), on: day(11, 21)))
+    }
+
+    @MainActor func testNumericDateCountsForATemporarySave() {
+        // Saved November 10 about November 15: over once the 15th ends, well before the 14-day rule.
+        let popUp = post("Pop-up 11/15", savedAt: day(11, 10))
+        XCTAssertFalse(isOver(popUp, on: day(11, 15, hour: 20)))
+        XCTAssertTrue(isOver(popUp, on: day(11, 17)))
+    }
+
+    @MainActor func testNumericDateWithoutATemporaryWordDoesNotCount() {
+        let market = post("Night market 11/15", savedAt: day(11, 10))
+        XCTAssertFalse(isOver(market, on: day(11, 21)))
+        XCTAssertFalse(isOver(market, on: day(3, 1, year: 2027)))
+    }
+
+    @MainActor func testRatingOnATemporarySaveFallsBackToFourteenDays() {
+        // 10/10 isn't a date even here, so the 14-day rule decides.
+        let popUp = post("Pop-up bakery, 10/10", savedAt: day(11, 1))
+        XCTAssertFalse(isOver(popUp, on: day(11, 14)))
+        XCTAssertTrue(isOver(popUp, on: day(11, 16)))
     }
 }
