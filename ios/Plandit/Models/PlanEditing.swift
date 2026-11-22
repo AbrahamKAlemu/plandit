@@ -64,7 +64,8 @@ extension DayPlan {
     }
 
     /// `firstSlot`: the place goes in as the first stop still ahead, and starts no earlier than this.
-    private func trialInsert(
+    /// Also how a group plan's add is timed where it lands (`PlanEdit`).
+    func trialInsert(
         _ candidate: PlanCandidate, at position: Int, travel: TravelPreference,
         now: Date, calendar: Calendar, alreadyLate: Set<UUID>, firstSlot: Date? = nil
     ) -> Insertion {
@@ -177,11 +178,12 @@ extension DayPlan {
         return plan
     }
 
-    /// Stops from `first` on, one after another: the first no earlier than `slot`, each when the one
-    /// before it ends and you get there; evening spots wait for 8 PM.
-    private mutating func retimeAhead(from first: Int, slot: Date, calendar: Calendar) {
-        guard first < stops.count else { return }
-        for index in first..<stops.count {
+    /// Stops from `first` on (through `last`, or to the end), one after another: the first no earlier
+    /// than `slot`, each when the one before it ends and you get there; evening spots wait for 8 PM.
+    mutating func retimeAhead(from first: Int, through last: Int? = nil, slot: Date, calendar: Calendar) {
+        let last = min(last ?? stops.count - 1, stops.count - 1)
+        guard first <= last else { return }
+        for index in first...last {
             var start = index == first ? slot : .distantPast
             if index > 0 {
                 let previous = stops[index - 1]

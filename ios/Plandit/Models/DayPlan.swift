@@ -2,7 +2,7 @@ import CoreLocation
 import Foundation
 
 /// One Plandit day: an ordered set of stops with the travel between them.
-struct DayPlan: Identifiable, Codable {
+struct DayPlan: Identifiable, Codable, Equatable {
     var id = UUID()
     var date: Date
     var title: String
