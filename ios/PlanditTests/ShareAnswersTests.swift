@@ -358,6 +358,80 @@ import XCTest
         XCTAssertEqual(sharing.mostAtOnce, 1)
     }
 
+    func testStopSharingQueuedBehindShareAgainLeavesThePageDown() async throws {
+        // GV-10: Share plan is out on a slow server and Stop sharing waits behind it.
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        let share = Task { try await store.shareToday(showPrices: true, note: "New") }
+        try await waitUntilHolding(sharing)
+        let stopping = Task { try await store.stopSharing() }
+        try await Task.sleep(for: .milliseconds(50))
+        sharing.release()
+        _ = try await share.value
+        try await stopping.value
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(sharing.applied, ["publish", "publish", "unpublish"], "nothing goes out after Stop sharing")
+        XCTAssertNil(store.todayLink)
+    }
+
+    func testAnEditWhileStopSharingIsOutSendsNothingAfterIt() async throws {
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        let stopping = Task { try await store.stopSharing() }
+        try await waitUntilHolding(sharing)
+        store.removeStop(stop(named: "Joe's Pizza", in: store).id)
+        sharing.release()
+        try await stopping.value
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(sharing.applied, ["publish", "unpublish"])
+    }
+
+    func testAnEditWhileShareFailsStillGoesOutWithTheLink() async throws {
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        let share = Task { try await store.shareToday(showPrices: true, note: "New") }
+        try await waitUntilHolding(sharing)
+        store.removeStop(stop(named: "Joe's Pizza", in: store).id)
+        share.cancel() // the app sees Share plan fail
+        sharing.release()
+        _ = try? await share.value
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(sharing.published.last?.stops.count, store.today.stops.count, "the change made meanwhile goes out")
+        XCTAssertNotNil(store.todayLink)
+    }
+
+    func testShareFailingWhileStopSharingWaitsLeavesNothingHeldOrSent() async throws {
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        let share = Task { try await store.shareToday(showPrices: true, note: "New") }
+        try await waitUntilHolding(sharing)
+        let stopping = Task { try await store.stopSharing() }
+        try await Task.sleep(for: .milliseconds(50))
+        store.removeStop(stop(named: "Joe's Pizza", in: store).id)
+        share.cancel() // Share plan fails
+        sharing.release()
+        _ = try? await share.value
+        try await stopping.value
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(sharing.applied.last, "unpublish", "the page stays down")
+        XCTAssertNil(store.todayLink)
+        let applied = sharing.applied.count
+        store.removeStop(stop(named: "Los Tacos No. 1", in: store).id)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(sharing.applied.count, applied, "no link: edits send nothing")
+
+        // Nothing is left holding updates: sharing again works, and so do edits after it.
+        try await store.shareToday(showPrices: true, note: "")
+        store.removeStop(stop(named: "Washington Square Park", in: store).id)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(sharing.published.last?.stops.map(\.name), store.today.stops.map(\.place.name))
+        XCTAssertEqual(sharing.mostAtOnce, 1)
+    }
+
     func testTheSwapUndoBarOnlyMentionsTheLinkWhenItUpdates() async throws {
         let unshared = makeStore()
         XCTAssertTrue(unshared.swap(stopID: stop(named: "The High Line", in: unshared).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
