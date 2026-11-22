@@ -86,9 +86,9 @@ active today (at most one write per 5 minutes). Tokens are verified locally; no 
 per request.
 
 Accounts (email + password, Sign in with Apple) sync the app's whole local store through
-`/api/me/snapshot/` and report `link_saved`, `place_saved` and `plan_built` through
-`/api/me/events/`. A **real user** is a non-anonymous profile with `activated_at` set, which
-happens on the first `plan_built` event or the first snapshot containing a plan with stops.
+`/api/me/snapshot/` and report `link_saved`, `place_saved`, `plan_built` and `suggestion_used`
+through `/api/me/events/`. A **real user** is a non-anonymous profile with `activated_at` set,
+which happens on the first `plan_built` event or the first snapshot containing a plan with stops.
 
 ## Deploy
 
@@ -137,7 +137,7 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | GET | `/api/me/stats/` | `plans_completed`, `neighborhoods_visited`, `miles_walked`, `average_spend`, `plans_under_budget`, `streak_weeks` |
 | GET | `/api/me/snapshot/` | the app's whole local store for this account: `{"version", "updated_at", "data"}`; `data` is the iOS `StoreSnapshot` exactly as sent (camelCase). `404` until the first PUT |
 | PUT | `/api/me/snapshot/` | `{"data": {...}}` → `{"version", "updated_at"}`; last writer wins, `version` starts at 1. `data` must be an object under 1,000,000 bytes (`413`). Mirrors `data.profile` into `/api/me/` and marks the account activated when a plan has stops |
-| POST | `/api/me/events/` | `{"name": "link_saved"\|"place_saved"\|"plan_built", "occurred_at"?}` → `201`. `occurred_at` is clamped to the last 7 days; `plan_built` activates the account. 120/min per user |
+| POST | `/api/me/events/` | `{"name": "link_saved"\|"place_saved"\|"plan_built"\|"suggestion_used", "occurred_at"?}` → `201`. `occurred_at` is clamped to the last 7 days; `plan_built` activates the account. 120/min per user |
 | GET | `/api/metrics/?days=30` | aggregate usage for the course staff; no JWT, key in the `X-Metrics-Key` header (preferred; `?key=` also works but lands in access logs, so rotate the key after the course). `totals` (signups, real users, actives, events, waitlist, anonymous sessions) plus a zero-filled `daily` series of `days` (1–365) entries in America/New_York. Counts only, never emails. `404` when `METRICS_API_KEY` is unset, `403` on a bad key, 30/min per IP |
 | GET | `/api/places/?q=&category=` | search the shared place catalog (max 100) |
 | GET | `/api/places/<id>/` | one place |
