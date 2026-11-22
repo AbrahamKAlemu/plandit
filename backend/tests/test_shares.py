@@ -200,6 +200,18 @@ def test_every_page_has_a_report_link(auth_client, api_client, found):
         assert f"%2Fp%2F{slug}" in link.group(1)
 
 
+@pytest.mark.parametrize("found", [True, False])
+def test_links_off_the_page_send_no_referrer(auth_client, api_client, found):
+    """The page's address is the invitation, so no link out of it carries it along."""
+    slug = share(auth_client, plan_payload()).json()["slug"] if found else "doesnotexist"
+    html = api_client.get(f"/p/{slug}").content.decode()
+    links = re.findall(r'<a [^>]*href="https://[^"]*"[^>]*>', html)
+    assert len(links) >= (5 if found else 1)  # brand, "Make your own plan", Open in Maps for each stop
+    for link in links:
+        rel = re.search(r'rel="([^"]*)"', link)
+        assert rel and "noreferrer" in rel.group(1).split(), link
+
+
 # --- Group plans, slice G1a: optional fields for answers on the page ------------------------
 
 STOP_ID = "6F1C2D3E-4A5B-4C6D-8E7F-901A2B3C4D5E"

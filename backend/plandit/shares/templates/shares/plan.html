@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="{% static 'shares/plan.css' %}">
 {% endblock %}
 {% block content %}
-  <a class="brand" href="https://plandit.app"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
+  <a class="brand" href="https://plandit.app" rel="noreferrer"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
 
   <section class="cover" aria-labelledby="plan-title">
     <div class="kicker">You're invited to a plan</div>
@@ -45,7 +45,7 @@
           {% if stop.address %}<div class="meta">{{ stop.address }}</div>{% endif %}
           <div class="row">
             {% if stop.costText %}<span>{{ stop.costText }}</span>{% endif %}
-            <a href="{{ stop.maps_url }}" rel="noopener">Open in Maps</a>
+            <a href="{{ stop.maps_url }}" rel="noopener noreferrer">Open in Maps</a>
           </div>
           {% if stop.id %}
           {# Part of the form under the stops (form="answer"). Ticking the box shows the alternates, in CSS. #}
