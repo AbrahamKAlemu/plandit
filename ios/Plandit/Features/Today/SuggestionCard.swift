@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// One suggested plan in the empty Today: where it is, the stops in order, one line of facts, and
-/// "Use this plan". Built from the existing card, badge and button styles only (SP-14).
+/// One suggested plan in the empty Today: where it is, the stops in order, one line of facts, then
+/// "Use this plan" and "Change it". Built from the existing card, badge and button styles only (SP-14).
 struct SuggestionCard: View {
     let suggestion: PlanSuggestion
     let index: Int
     let use: () -> Void
+    /// Opens the planner with this plan's places picked.
+    let change: () -> Void
     @Environment(\.accessibilityVoiceOverEnabled) private var isVoiceOverOn
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Stops listed by name; the rest are "+1 more".
     static let shownStops = 3
@@ -20,6 +23,7 @@ struct SuggestionCard: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(SuggestionText.spoken(suggestion))
                 .accessibilityAction(named: "Use this plan", use)
+                .accessibilityAction(named: "Change it", change)
                 .accessibilityIdentifier("suggestion-card-\(index)")
         } else {
             card
@@ -60,9 +64,22 @@ struct SuggestionCard: View {
                 }
             }
 
+            buttons
+        }
+    }
+
+    /// Side by side, or stacked at accessibility text sizes so neither label is cut off (SP-16).
+    private var buttons: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Space.xs))
+            : AnyLayout(HStackLayout(spacing: Space.xs))
+        return layout {
             Button("Use this plan", action: use)
                 .buttonStyle(.primary)
                 .accessibilityIdentifier("suggestion-use-\(index)")
+            Button("Change it", action: change)
+                .buttonStyle(.secondary)
+                .accessibilityIdentifier("suggestion-change-\(index)")
         }
     }
 
