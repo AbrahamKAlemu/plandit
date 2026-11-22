@@ -14,6 +14,7 @@ from django.core.cache import caches
 from django.db import connection
 from django.test import Client
 from django.utils import timezone
+from django.utils.html import escape
 
 from plandit.core import public_forms, retention
 from plandit.shares.models import ShareAnswer, SharedPlan
@@ -178,7 +179,7 @@ def test_the_page_itself_sets_no_answer_cookie(browser, slug):
         ("A" * 31, "Use 30 characters or fewer."),
         ("Maya2", "Use letters, spaces, hyphens and apostrophes only."),
         ("<b>Maya</b>", "Use letters, spaces, hyphens and apostrophes only."),
-        ("Blockedword", "Please use a different name."),
+        ("Blockedword", "That name can't be used here. Try another."),
     ],
 )
 def test_a_bad_name_shows_the_form_again_with_the_reason(browser, slug, monkeypatch, name, message):
@@ -187,7 +188,7 @@ def test_a_bad_name_shows_the_form_again_with_the_reason(browser, slug, monkeypa
 
     assert response.status_code == 400
     body = html(response)
-    assert message in body
+    assert escape(message) in body
     assert 'id="answer"' in body and "I'm in" in body
     assert "The Met" in body  # the whole page, not a bare error
     assert ShareAnswer.objects.count() == 0
@@ -207,7 +208,7 @@ def test_the_form_keeps_what_was_typed_when_it_comes_back(browser, slug):
 def test_an_answer_needs_one_of_the_two_buttons(browser, slug, status):
     response = answer(browser, slug, status=status)
     assert response.status_code == 400
-    assert "Choose “I&#x27;m in” or “Can&#x27;t make it”." in html(response)
+    assert escape('Choose "I\'m in" or "Can\'t make it".') in html(response)
     assert ShareAnswer.objects.count() == 0
 
 
@@ -238,6 +239,11 @@ def test_unknown_stop_ids_are_ignored(browser, slug):
 def test_a_pick_without_id_swap_this_ticked_is_ignored(browser, slug):
     browser.post(f"/p/{slug}/answer", {"name": "Maya", "status": "in", f"swap_to_{MET}": MOMA})
     assert ShareAnswer.objects.get().swaps == {}
+
+
+def test_the_name_field_says_who_sees_it(browser, slug):
+    body = html(page(browser, slug))
+    assert "If you're in, your first name shows on this page. If you can't make it, it isn't shown." in body
 
 
 def test_each_stop_offers_id_swap_this_and_the_organizers_alternates(browser, slug):
@@ -746,7 +752,9 @@ def test_the_51st_answer_on_a_link_is_refused(browser, slug):
 
     refused = answer(new_browser(), slug, name="Late")
     assert refused.status_code == 429
-    assert "Too many answers right now. Please try again later." in html(refused)
+    assert escape("This plan isn't taking more answers.") in html(refused)
+    assert "Too many answers right now" not in html(refused)
+    assert "pa" not in refused.cookies
     assert ShareAnswer.objects.count() == 50
     # Someone who already answered can still change their answer.
     assert answer(browser, slug, name="Maya", status="out").status_code == 303

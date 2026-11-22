@@ -77,7 +77,7 @@
       {% if error %}<p class="error" id="answer-error" role="alert">{{ error }}</p>{% endif %}
       <label class="field-label" for="answer-name">First name</label>
       <input id="answer-name" name="name" type="text" value="{{ form.name }}" maxlength="30" required autocomplete="given-name" autocapitalize="words" spellcheck="false" aria-describedby="answer-name-hint{% if error %} answer-error{% endif %}"{% if name_invalid %} aria-invalid="true"{% endif %}>
-      <p class="hint" id="answer-name-hint">If you're in, your first name shows on this page.</p>
+      <p class="hint" id="answer-name-hint">If you're in, your first name shows on this page. If you can't make it, it isn't shown.</p>
       <div class="buttons">
         <button type="submit" name="status" value="in" class="primary">I'm in</button>
         <button type="submit" name="status" value="out" class="secondary">Can't make it</button>

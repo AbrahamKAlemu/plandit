@@ -41,7 +41,8 @@ ANSWERS_PER_LINK = 50
 NAMES_SHOWN = 3
 
 TRY_LATER = "Too many answers right now. Please try again later."
-CHOOSE_A_BUTTON = "Choose “I'm in” or “Can't make it”."
+LINK_FULL = "This plan isn't taking more answers."
+CHOOSE_A_BUTTON = 'Choose "I\'m in" or "Can\'t make it".'
 
 
 def share_url(request, slug: str) -> str:
@@ -172,7 +173,7 @@ def answer_plan(request, slug):
             raise Http404
         answers = shared.answers.all()
         if not answers.filter(responder=responder).exists() and answers.count() >= ANSWERS_PER_LINK:
-            return _plan_page(request, shared, form=form, error=TRY_LATER, status=429)
+            return _plan_page(request, shared, form=form, error=LINK_FULL, status=429)
         ShareAnswer.objects.update_or_create(
             shared_plan=shared,
             responder=responder,

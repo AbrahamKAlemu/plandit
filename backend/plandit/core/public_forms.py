@@ -206,7 +206,7 @@ def clean_first_name(value) -> str:
     blocked = name_blocklist()
     words = _WORD_SEPARATORS.split(unicodedata.normalize("NFKC", name).casefold())
     if any(word in blocked for word in words):
-        raise ValidationError("Please use a different name.", code="blocked")
+        raise ValidationError("That name can't be used here. Try another.", code="blocked")
     return name
 
 

@@ -335,6 +335,7 @@ def test_blocked_words_match_whole_words_in_any_case(monkeypatch):
         with pytest.raises(ValidationError) as error:
             clean_first_name(name)
         assert error.value.code == "blocked", name
+        assert error.value.messages == ["That name can't be used here. Try another."]
     for name in ["Joanna", "Annie", "Hannah"]:
         assert clean_first_name(name) == name
 
