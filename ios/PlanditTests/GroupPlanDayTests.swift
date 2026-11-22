@@ -40,13 +40,9 @@ import XCTest
     }
 
     // P1
-    func testTheLaterDayLineSaysHowThePlanLooks() throws {
-        let link = PlanRequestLink(slug: "req1", url: URL(string: "https://plandit.app/g/req1")!, day: "2026-11-24",
-                                   windowStart: "12:00", windowEnd: "20:00", timeZone: "America/New_York",
-                                   answersBy: Date(), placeIDs: [], builtPlanID: nil)
-        let now = calendar("America/New_York").date(from: DateComponents(year: 2026, month: 11, day: 22, hour: 11))!
-        XCTAssertEqual(AskFriendsText.laterDay(link, now: now),
-                       "This is how the plan looks with the answers so far. You can build it on Tuesday, November 24.")
+    func testTheLaterDayLineSaysHowThePlanLooks() {
+        // Round 4: the date is only on the line next to Build.
+        XCTAssertEqual(AskFriendsText.laterDay, "This is how the plan looks with the answers so far.")
     }
 
     // R9
@@ -81,7 +77,29 @@ import XCTest
         XCTAssertNil(AskFriendsText.buildHint(link, clash: false, needsLink: true, now: now), "Try again needs no hint")
         let after = ny.date(from: DateComponents(year: 2026, month: 11, day: 25, hour: 0, minute: 5))!
         XCTAssertEqual(AskFriendsText.buildHint(link, clash: false, needsLink: false, now: after),
-                       "Tuesday, November 24 is over, so this plan can't be built. Ask about another day to start again.")
+                       "Tue, Nov 24 is over. Ask about another day to start again.")
+    }
+
+    // Round 4: the disabled Build button carries the same reason for VoiceOver, since at the largest
+    // sizes the line beside it is at the end of the list.
+    func testTheDisabledBuildButtonSaysWhy() {
+        let link = PlanRequestLink(slug: "req1", url: URL(string: "https://plandit.app/g/req1")!, day: "2026-11-24",
+                                   windowStart: "12:00", windowEnd: "20:00", timeZone: "America/New_York",
+                                   answersBy: Date(), placeIDs: [], builtPlanID: nil)
+        let ny = calendar("America/New_York")
+        let before = ny.date(from: DateComponents(year: 2026, month: 11, day: 22, hour: 11))!
+        let after = ny.date(from: DateComponents(year: 2026, month: 11, day: 25, hour: 0, minute: 5))!
+        XCTAssertEqual(AskFriendsText.buildButtonHint(link, clash: false, needsLink: false, now: before), "You can build it on Tue, Nov 24")
+        XCTAssertEqual(AskFriendsText.buildButtonHint(link, clash: true, needsLink: false, now: before), AskFriendsText.clashHint)
+        XCTAssertEqual(AskFriendsText.buildButtonHint(link, clash: false, needsLink: false, now: after),
+                       "Tue, Nov 24 is over. Ask about another day to start again.")
+        XCTAssertEqual(AskFriendsText.buildButtonHint(link, clash: false, needsLink: true, now: before),
+                       "Puts the plan in Today and on the link")
+        let now = Date()
+        let today = PlanRequestLink(slug: "req1", url: link.url, day: DayPlan.isoDay(now, calendar: .current), windowStart: "00:00",
+                                    windowEnd: "23:45", timeZone: TimeZone.current.identifier, answersBy: now, placeIDs: [], builtPlanID: nil)
+        XCTAssertEqual(AskFriendsText.buildButtonHint(today, clash: false, needsLink: false, now: now),
+                       "Puts the plan in Today and on the link")
     }
 
     // Round 3, R4: the answers screen stayed open past midnight, so Build says why instead of doing nothing.
@@ -101,7 +119,9 @@ import XCTest
         let before = store.today.stops.map(\.id)
         XCTAssertNil(store.buildGroupPlan(plan, now: afterMidnight))
         XCTAssertEqual(store.today.stops.map(\.id), before)
-        let over = "\(AskFriendsText.day(link, now: afterMidnight)) is over, so this plan can't be built. Ask about another day to start again."
+        var short = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day()
+        short.timeZone = link.calendar.timeZone
+        let over = "\(try XCTUnwrap(link.dayDate).formatted(short)) is over. Ask about another day to start again."
         XCTAssertEqual(AskFriendsText.notBuildable(link, now: afterMidnight), over)
         XCTAssertEqual(AskFriendsText.buildHint(link, clash: false, needsLink: false, now: afterMidnight), over)
     }

@@ -65,14 +65,17 @@ enum AskFriendsText {
     /// Why "Build our plan" can't build now, or nil when it can: the link's day has gone by (the
     /// screen stayed open past midnight, say), or it's still ahead: "You can build it on Tue, Nov 24".
     static func notBuildable(_ link: PlanRequestLink, now: Date) -> String? {
-        if link.isOver(now: now) {
-            return "\(day(link, now: now)) is over, so this plan can't be built. Ask about another day to start again."
-        }
+        if link.isOver(now: now) { return "\(shortDay(link)) is over. Ask about another day to start again." }
         guard day(link, now: now) != "today" else { return nil }
-        guard let date = link.dayDate else { return "You can build it on \(link.day)" }
+        return "You can build it on \(shortDay(link))"
+    }
+
+    /// "Tue, Nov 24", in the link's time zone.
+    private static func shortDay(_ link: PlanRequestLink) -> String {
+        guard let date = link.dayDate else { return link.day }
         var style = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day()
         style.timeZone = link.calendar.timeZone
-        return "You can build it on \(date.formatted(style))"
+        return date.formatted(style)
     }
 
     /// The line next to "Build our plan" while it's off: the clash, or the day. None for "Try again".
@@ -84,10 +87,18 @@ enum AskFriendsText {
     /// When the plan "Build our plan" made isn't Today's any more, so nothing went on the link.
     static let planChanged = "Today has a different plan now. Build our plan again."
 
-    /// Above the preview of a plan for a later day.
-    static func laterDay(_ link: PlanRequestLink, now: Date) -> String {
-        "This is how the plan looks with the answers so far. You can build it on \(day(link, now: now))."
+    static let buildButtonDefaultHint = "Puts the plan in Today and on the link"
+
+    /// VoiceOver's hint on "Build our plan": while it's off, the same reason as the line beside it,
+    /// which at the largest sizes is at the end of the list instead.
+    static func buildButtonHint(_ link: PlanRequestLink, clash: Bool, needsLink: Bool, now: Date) -> String {
+        buildHint(link, clash: clash, needsLink: needsLink, now: now) ?? buildButtonDefaultHint
     }
+
+    /// Above the preview of a plan for a later day.
+    /// The day itself is only on the line next to Build.
+    static let laterDay = "This is how the plan looks with the answers so far."
+
 }
 
 // MARK: - Making the link
@@ -462,7 +473,7 @@ private struct FriendsAnswersView: View {
                     }
                     .buttonStyle(.primary)
                     .disabled(isWorking || (!needsLink && (!canBuild || (outcome?.stops.isEmpty ?? true))))
-                    .accessibilityHint("Puts the plan in Today and on the link")
+                    .accessibilityHint(buildHint ?? AskFriendsText.buildButtonDefaultHint)
                     .accessibilityIdentifier("build-our-plan")
                     .padding(.horizontal, Space.lg)
                     .padding(.vertical, Space.sm)
@@ -744,7 +755,7 @@ private struct FriendsAnswersView: View {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         if !canBuild {
                             // A later day: the plan as it looks so far, on that day's hours (D1).
-                            Text(AskFriendsText.laterDay(link, now: AppClock.now))
+                            Text(AskFriendsText.laterDay)
                                 .font(.metadata)
                                 .foregroundStyle(.inkMuted)
                                 .fixedSize(horizontal: false, vertical: true)
