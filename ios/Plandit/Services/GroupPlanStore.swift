@@ -86,8 +86,11 @@ enum GroupPlanFailure: Error, Equatable {
 @Observable @MainActor
 final class GroupPlanStore {
     private(set) var groups: [GroupPlanState] = []
-    /// Messages for the person (the screens decide how to show them).
-    @ObservationIgnored var onMessage: ((GroupPlanMessage) -> Void)?
+    /// Messages for the person (the screens decide how to show them). Ones from before it's set
+    /// (queued edits sent at launch) wait for it, the latest few, and are delivered in order then.
+    @ObservationIgnored var onMessage: ((GroupPlanMessage) -> Void)? {
+        didSet { deliverWaitingMessages() }
+    }
     /// Where finished group days are filed.
     @ObservationIgnored weak var history: PlanditStore?
 
@@ -213,6 +216,8 @@ final class GroupPlanStore {
     static let pollInterval: Duration = .seconds(15)
     /// After this many 409s in a row an edit is dropped with a message (N-3).
     static let conflictsAllowed = 3
+    /// Messages kept while nothing listens; older ones are dropped.
+    private static let messagesKept = 3
 
     @ObservationIgnored private var records: [Record]
     @ObservationIgnored private let server: any GroupPlanServing
@@ -235,6 +240,8 @@ final class GroupPlanStore {
     /// Left, ended or dropped in this session: a list that crossed it doesn't bring it back.
     @ObservationIgnored private var forgotten: Set<UUID> = []
     @ObservationIgnored private var conflicts: [UUID: Conflict] = [:]
+    /// Said before `onMessage` was set, oldest first.
+    @ObservationIgnored private var waitingMessages: [GroupPlanMessage] = []
 
     init(userID: String, server: any GroupPlanServing, directory: URL = SnapshotStore.directory, calendar: Calendar = .current,
          now: @escaping () -> Date = { Date() }, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
@@ -717,6 +724,7 @@ final class GroupPlanStore {
         listing?.cancel()
         listing = nil
         stopPolling()
+        waitingMessages = []
         onMessage = nil
         history = nil
     }
@@ -849,7 +857,19 @@ final class GroupPlanStore {
 
     private func emit(_ id: UUID, _ kind: GroupPlanMessage.Kind) {
         guard !isClosed else { return }
-        onMessage?(GroupPlanMessage(groupID: id, kind: kind, text: Self.text(for: kind)))
+        let message = GroupPlanMessage(groupID: id, kind: kind, text: Self.text(for: kind))
+        guard let onMessage else {
+            waitingMessages.append(message)
+            waitingMessages.removeFirst(max(0, waitingMessages.count - Self.messagesKept))
+            return
+        }
+        onMessage(message)
+    }
+
+    private func deliverWaitingMessages() {
+        while !isClosed, let onMessage, !waitingMessages.isEmpty {
+            onMessage(waitingMessages.removeFirst())
+        }
     }
 
     private static func failure(_ error: Error) -> GroupPlanFailure {

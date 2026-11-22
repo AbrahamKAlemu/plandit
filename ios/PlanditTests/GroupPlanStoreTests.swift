@@ -75,15 +75,20 @@ import XCTest
         return DayPlan(date: at(9, day: date), title: "Uptown to the Village", budget: 60, stops: stops, legs: legs)
     }
 
-    private func makeStore(userID: String = "user-1", in folder: URL? = nil) -> GroupPlanStore {
+    /// `listening: false` is the app at launch: no screen has set `onMessage` yet.
+    private func makeStore(userID: String = "user-1", in folder: URL? = nil, listening: Bool = true) -> GroupPlanStore {
         let clock = clock!
         let store = GroupPlanStore(
             userID: userID, server: server, directory: folder ?? directory, calendar: calendar,
             now: { [unowned self] in self.now }, sleep: { try await clock.sleep($0) },
-            onMessage: { [unowned self] in self.messages.append($0) }
+            onMessage: listening ? { [unowned self] in self.messages.append($0) } : nil
         )
         stores.append(store)
         return store
+    }
+
+    private func listen(to store: GroupPlanStore) {
+        store.onMessage = { [unowned self] in self.messages.append($0) }
     }
 
     /// Maya's group with Jordan and you; the store has fetched it at version 1.
@@ -1012,6 +1017,58 @@ import XCTest
         let version = await server.info(id)?.version
         XCTAssertEqual(version, 2, "already applied, not again")
         XCTAssertEqual(relaunched.group(id)?.plan?.stops.filter { $0.place.name == SampleData.littleIsland.name }.count, 1)
+    }
+
+    private static let dayOverDetail = "This plan's day is over, so it can't be changed."
+
+    /// Edits waiting in the cache that the server refuses as the app opens, before any screen
+    /// listens: first a stop too big to save (413), then `removals` stops removed on a day that's
+    /// over (400). Returns the relaunched store once it has sent them all.
+    private func messagesAtLaunch(removals: Int) async throws -> (GroupPlanStore, UUID) {
+        let (first, id) = await joinedGroup()
+        await server.script(.put, .network)
+        first.apply(addEdit(SampleData.littleIsland, note: String(repeating: "x", count: 70_000)), to: id)
+        for _ in 0..<removals { first.apply(try removeEdit(first, id, 1), to: id) }
+        await eventually("offline, waiting to retry") { self.clock.sleeping == 1 }
+        first.close()
+        await server.setDayOver(id)
+
+        let relaunched = makeStore(listening: false)
+        await waitUntilSent(relaunched, id)
+        XCTAssertTrue(messages.isEmpty, "nobody is listening yet")
+        return (relaunched, id)
+    }
+
+    /// OFF-2: messages from before a screen listens (edits refused as the app opens) wait for it,
+    /// and come in order.
+    func testOFF2_MessagesFromBeforeAScreenListensWaitForItInOrder() async throws {
+        let (store, id) = try await messagesAtLaunch(removals: 1)
+
+        listen(to: store)
+
+        XCTAssertEqual(messages.map(\.kind), [.planTooLarge(FakeGroupPlanServer.tooLargeDetail), .editRefused(Self.dayOverDetail)])
+        XCTAssertEqual(messages.map(\.groupID), [id, id])
+        listen(to: store)
+        XCTAssertEqual(messages.count, 2, "each once")
+    }
+
+    /// Only the latest 3 wait; older ones are dropped.
+    func testOFF2_OnlyTheLatestThreeMessagesWait() async throws {
+        let (store, _) = try await messagesAtLaunch(removals: 3)
+
+        listen(to: store)
+
+        XCTAssertEqual(messages.map(\.kind), Array(repeating: .editRefused(Self.dayOverDetail), count: 3), "the oldest, too big, dropped")
+    }
+
+    /// REM-4: closing (sign-out) drops the messages waiting; none reach a screen afterwards.
+    func testREM4_ClosingDropsTheMessagesWaiting() async throws {
+        let (store, _) = try await messagesAtLaunch(removals: 1)
+
+        store.close()
+        listen(to: store)
+
+        XCTAssertTrue(messages.isEmpty)
     }
 
     /// OFF-4: a corrupt cache file starts empty, then the list fills it, with no crash.
