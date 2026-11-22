@@ -230,6 +230,16 @@ private struct SheetContainer: View {
             .onChange(of: router.groupPlanToOpen, initial: true) {
                 router.openRequestedGroupPlan()
             }
+            // The group plan picked in Today has gone (ended, left, removed): back to your own
+            // plan, so Today's edits go there again.
+            .onChange(of: pickedGroupIsGone) { _, gone in
+                if gone { router.todayChoice = .mine }
+            }
+    }
+
+    private var pickedGroupIsGone: Bool {
+        guard let groups, let id = router.todayChoice?.groupID else { return false }
+        return groups.group(id) == nil
     }
 
     private var isGroupOnScreen: Bool {

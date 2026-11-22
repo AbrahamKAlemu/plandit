@@ -10,6 +10,16 @@ struct TodayPlanContext {
     let messages: GroupMessages?
     var now: Date = AppClock.now
     var calendar: Calendar = .current
+    /// Set by `pinned()`: the plan this context edits, whatever the switcher says later.
+    var pin: TodayChoice?
+
+    /// This context, kept on the plan shown now: for a sheet or a stop's screen, which must keep
+    /// editing the plan it was opened on.
+    func pinned() -> TodayPlanContext {
+        var copy = self
+        copy.pin = choice
+        return copy
+    }
 
     // MARK: - What's shown
 
@@ -23,24 +33,27 @@ struct TodayPlanContext {
     var options: [GroupToday.Option] { GroupToday.options(groups: offered) }
 
     var choice: TodayChoice {
-        GroupToday.resolve(router.todayChoice, groups: offered, ownPlanHasStops: !store.today.stops.isEmpty)
+        pin ?? GroupToday.resolve(router.todayChoice, groups: offered, ownPlanHasStops: !store.today.stops.isEmpty)
     }
 
-    /// The group plan on screen; nil for your own plan.
+    /// The group plan on screen; nil for your own plan, or for a pinned group plan that has gone.
     var group: GroupPlanState? {
         guard let id = choice.groupID else { return nil }
-        return offered.first { $0.id == id }
+        return groups?.group(id)
     }
 
-    var isGroup: Bool { group != nil }
+    var isGroup: Bool { choice.groupID != nil }
 
-    /// What the timeline shows. A group plan not fetched yet shows as an empty day.
+    /// What the timeline shows. A group plan not fetched yet, or gone, shows as an empty day.
     var plan: DayPlan {
-        guard let group else { return store.today }
-        return group.plan ?? DayPlan(date: now, title: "", budget: 0, stops: [], legs: [])
+        guard isGroup else { return store.today }
+        return group?.plan ?? DayPlan(date: now, title: "", budget: 0, stops: [], legs: [])
     }
 
-    var controls: GroupToday.Controls { GroupToday.controls(for: group, groupsAvailable: groups != nil) }
+    var controls: GroupToday.Controls {
+        if isGroup, group == nil { return GroupToday.goneControls }
+        return GroupToday.controls(for: group, groupsAvailable: groups != nil)
+    }
 
     var canEdit: Bool { controls.editing }
 
@@ -148,7 +161,7 @@ struct TodayPlanContext {
     /// Returns the new stop's id, or nil when it wasn't added.
     @discardableResult
     func add(_ post: SavedPost) -> UUID? {
-        guard let id = group?.id else { return store.addToToday(post.id) }
+        guard let id = choice.groupID else { return store.addToToday(post.id) }
         guard canEdit, !contains(post), let candidate = PlanCandidate(post: post) else { return nil }
         return apply(.add(candidate), to: id).contains(.queued) ? candidate.id : nil
     }
@@ -169,11 +182,21 @@ struct TodayPlanContext {
     // MARK: - Routing
 
     private func perform(_ action: GroupToday.Action, mine: () -> Void) {
-        guard let id = choice.groupID else {
+        guard let id = target.groupID else {
             mine()
             return
         }
         apply(action, to: id)
+    }
+
+    /// Where an edit goes: the plan this context was pinned to, or else the group plan picked in
+    /// the switcher, even one that has just gone. An edit meant for a group plan is refused then,
+    /// with the reason, and never lands on your own plan (whose stop ids a group made with "Edit
+    /// with friends" shares).
+    private var target: TodayChoice {
+        if let pin { return pin }
+        if groups != nil, let picked = router.todayChoice?.groupID { return .group(picked) }
+        return choice
     }
 
     /// Makes the action's edits on the group plan, and says so when one couldn't be made.
@@ -206,8 +229,27 @@ struct TodayContext: DynamicProperty {
     @Environment(SheetRouter.self) private var router
     @Environment(GroupPlanStore.self) private var groups: GroupPlanStore?
     @Environment(GroupMessages.self) private var messages: GroupMessages?
+    /// The plan a pinned view opened on, kept for as long as the view is on screen.
+    @State private var pin = Pin()
+    private let isPinned: Bool
+
+    /// `pinned`: for a sheet or a stop's screen, which keeps editing the plan it opened on even if
+    /// that group goes away or Today switches meanwhile. Today itself follows the switcher.
+    init(pinned: Bool = false) {
+        isPinned = pinned
+    }
 
     var wrappedValue: TodayPlanContext {
-        TodayPlanContext(store: store, groups: groups, router: router, messages: messages)
+        let context = TodayPlanContext(store: store, groups: groups, router: router, messages: messages)
+        guard isPinned else { return context }
+        // Not observed: noting the choice once doesn't redraw anything.
+        if pin.choice == nil { pin.choice = context.choice }
+        var pinned = context
+        pinned.pin = pin.choice
+        return pinned
+    }
+
+    private final class Pin {
+        var choice: TodayChoice?
     }
 }

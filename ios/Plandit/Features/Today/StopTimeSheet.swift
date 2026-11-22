@@ -4,7 +4,8 @@ import SwiftUI
 /// Shows what moves before saving, and warns when a place would be closed.
 struct StopTimeSheet: View {
     let stopID: UUID
-    @TodayContext private var today
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
     @Environment(\.dismiss) private var dismiss
     @State private var start = Date()
     @State private var minutes = 60

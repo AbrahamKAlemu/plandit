@@ -5,7 +5,8 @@ import SwiftUI
 /// In a group plan, Save sends each move and removal as an edit against the plan as the sheet opened,
 /// so a stop someone else adds meanwhile stays.
 struct EditPlanSheet: View {
-    @TodayContext private var today
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
     @Environment(\.dismiss) private var dismiss
     @State private var order: [UUID] = []
     @State private var didLoad = false

@@ -34,10 +34,14 @@ import XCTest
 
     /// Maya's plan for today: the sample day with its own stop ids, every stop still ahead.
     private func mayasGroup() async -> UUID {
+        await group(by: "Maya", others: ["Jordan"])
+    }
+
+    private func group(by organizer: String, others: [String] = []) async -> UUID {
         var plan = SampleData.dayPlan.withFreshStopIDs()
         plan.id = UUID()
         for index in plan.stops.indices { plan.stops[index].status = .upcoming }
-        let id = await server.seedGroup(plan: plan, date: today, organizer: "Maya", others: ["Jordan"])
+        let id = await server.seedGroup(plan: plan, date: today, organizer: organizer, others: others)
         await groups.refreshList()
         XCTAssertNotNil(groups.group(id)?.plan)
         return id
@@ -169,6 +173,55 @@ import XCTest
         let id = try XCTUnwrap(groups.groups.first?.id)
         XCTAssertEqual(router.todayChoice, .group(id))
         XCTAssertEqual(store.today, ownBefore)
+    }
+
+    // MARK: - Sheets keep the plan they opened on
+
+    /// The review's probe: Edit plan opened on a group made with "Edit with friends" (so its stops
+    /// have your plan's ids), the group ends before Save. Nothing changes, your plan least of all.
+    func testASaveForAGroupThatHasGoneLeavesYourPlanAlone() async throws {
+        let context = context()
+        _ = try await context.startGroup().get()
+        let id = try XCTUnwrap(router.todayChoice?.groupID)
+        let sheet = context.pinned()
+        let base = sheet.plan
+        XCTAssertTrue(sheet.isGroup)
+        let order = Array(base.stops[base.firstMovableIndex...].map(\.id).dropLast())
+        let ownBefore = store.today
+        _ = try await server.end(id)
+        await groups.refresh(id)
+        XCTAssertNil(groups.group(id))
+
+        sheet.reorder(order, from: base)
+
+        XCTAssertEqual(store.today.stops.count, ownBefore.stops.count, "your own plan keeps its stops")
+        XCTAssertEqual(store.today, ownBefore)
+        XCTAssertFalse(store.canUndo)
+        XCTAssertEqual(messages.current?.text, GroupPlanStore.text(for: .groupGone))
+        XCTAssertFalse(sheet.canEdit)
+        XCTAssertTrue(sheet.plan.stops.isEmpty, "the sheet shows nothing to change")
+
+        // Today itself, in the moment before it goes back to your plan: still not your plan.
+        context.reorder(order, from: base)
+        XCTAssertEqual(store.today, ownBefore)
+    }
+
+    /// A sheet keeps editing the plan it opened on when Today switches meanwhile (a group joined by
+    /// link while it's open).
+    func testASheetKeepsEditingThePlanItOpenedOn() async throws {
+        let maya = await mayasGroup()
+        let jordan = await group(by: "Jordan")
+        let context = context()
+        context.select(.group(maya))
+        let sheet = context.pinned()
+        let stop = try XCTUnwrap(sheet.plan.stops.last?.id)
+
+        router.todayChoice = .group(jordan)
+        sheet.remove(stop)
+
+        XCTAssertNil(groups.group(maya)?.plan?.stop(id: stop), "gone from Maya's plan")
+        XCTAssertEqual(groups.group(jordan)?.plan?.stops.count, SampleData.dayPlan.stops.count, "Jordan's plan untouched")
+        XCTAssertEqual(context.choice, .group(jordan), "Today itself follows the switch")
     }
 
     /// "Edit with friends" tapped twice before the first tap is done: one group plan, one create.

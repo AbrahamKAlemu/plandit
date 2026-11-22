@@ -129,6 +129,10 @@ enum GroupToday {
                         sendPlan: false, editing: group.plan != nil && !group.isDayOver && !group.isReadOnly, startGroup: false)
     }
 
+    /// A group plan that went away while a sheet was open on it: nothing left to change.
+    static let goneControls = Controls(undo: false, budgetAndExtras: false, title: false, shareAnswers: false, suggestions: false,
+                                       askFriends: false, sendPlan: false, editing: false, startGroup: false)
+
     /// Why a group plan can't be changed, shown above it.
     static func lockedLine(_ group: GroupPlanState) -> String? {
         if group.isDayOver { return dayOverLine }

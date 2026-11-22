@@ -3,7 +3,8 @@ import SwiftUI
 struct StopDetailView: View {
     let stopID: UUID
     @Environment(PlanditStore.self) private var store
-    @TodayContext private var today
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
     @Environment(\.dismiss) private var dismiss
     @State private var isEditingCost = false
     @State private var isEditingTime = false
@@ -137,7 +138,8 @@ struct StopDetailView: View {
 /// and the Undo bar covers what it did to the stops around it.
 private struct StatusPicker: View {
     let stop: PlanStop
-    @TodayContext private var today
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {

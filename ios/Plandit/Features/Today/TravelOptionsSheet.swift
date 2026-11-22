@@ -4,7 +4,8 @@ import SwiftUI
 /// when you'd arrive. Picking one moves the rest of the day to match.
 struct TravelOptionsSheet: View {
     let legID: UUID
-    @TodayContext private var today
+    /// Keeps editing the plan it opened on.
+    @TodayContext(pinned: true) private var today
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
 
