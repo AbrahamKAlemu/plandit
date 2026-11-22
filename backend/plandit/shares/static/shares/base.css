@@ -1,0 +1,26 @@
+/* Every public Plandit page (shares/base.html). A file, not a <style> block, so the pages'
+   Content Security Policy can allow styles from 'self' only (plandit.core.public_forms). */
+:root {
+  --green: #19c879; --green-dark: #087a4b; --lime: #d9ff52; --ink: #0b0d0c;
+  --paper: #fbfaf6; --cream: #f4f1e9; --muted: #626761; --line: rgba(11,13,12,.12);
+  --on-dark: #f4f1e9; --on-dark-muted: rgba(244,241,233,.68);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; color: var(--on-dark); font: 400 16px/1.5 "Manrope", system-ui, sans-serif;
+  background: radial-gradient(120% 60% at 50% -10%, rgba(25,200,121,.35), transparent 60%), var(--ink);
+}
+a { color: inherit; }
+.page { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: -.03em; text-decoration: none; font-size: 18px; }
+.brand img { border-radius: 9px; }
+.brand span span { color: var(--green); }
+.cta {
+  display: block; text-align: center; text-decoration: none; font-weight: 800; color: var(--ink);
+  background: var(--lime); border-radius: 999px; padding: 15px 20px; margin-top: 12px;
+}
+.cta:focus-visible, a:focus-visible { outline: 3px solid var(--lime); outline-offset: 3px; }
+footer { margin-top: 36px; text-align: center; color: var(--on-dark-muted); font-size: 14px; }
+footer .brand { justify-content: center; color: var(--on-dark); margin-bottom: 6px; }
+footer .report { margin: 16px 0 0; }

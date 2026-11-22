@@ -1,11 +1,11 @@
 {% extends "shares/base.html" %}
+{% load static %}
 {% block title %}Plan not found · Plandit{% endblock %}
-{% block style %}
-    h1 { margin: 40px 0 8px; font-size: 32px; letter-spacing: -.03em; }
-    p { color: var(--on-dark-muted); }
+{% block stylesheets %}
+  <link rel="stylesheet" href="{% static 'shares/not_found.css' %}">
 {% endblock %}
 {% block content %}
-  <a class="brand" href="https://plandit.app"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
+  <a class="brand" href="https://plandit.app" rel="noreferrer"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
   <h1>This plan isn't shared anymore</h1>
   <p>The person who shared it may have stopped sharing, or the link is mistyped. Ask them to send it again.</p>
 {% endblock %}

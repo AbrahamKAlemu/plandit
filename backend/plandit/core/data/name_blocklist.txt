@@ -1,0 +1,62 @@
+# Words refused in a friend's first name on public pages (plandit.core.public_forms.clean_first_name).
+# Whole words, any case: an entry blocks "Maya X" and "X-Maya" but never a longer word that contains
+# it. Keep it short: slurs and obvious abuse only. Leave out words that are also real names (Dick,
+# Fanny, Gay, Willy), since a friend's real name must never be refused. One word per line, lower case.
+
+# Racial and ethnic slurs
+beaner
+beaners
+chink
+chinks
+coon
+coons
+gook
+gooks
+kike
+kikes
+nigga
+niggas
+nigger
+niggers
+paki
+pakis
+raghead
+spic
+spics
+towelhead
+wetback
+wetbacks
+
+# Slurs about sexuality, gender and disability
+dyke
+dykes
+fag
+faggot
+faggots
+fags
+retard
+retarded
+retards
+trannies
+tranny
+
+# Obvious abuse
+bitch
+bitches
+cock
+cunt
+cunts
+fuck
+fucker
+fucking
+hitler
+motherfucker
+nazi
+pussy
+rape
+rapist
+shit
+slut
+twat
+wanker
+whore

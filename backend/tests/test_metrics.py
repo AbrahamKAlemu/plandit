@@ -8,6 +8,9 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from plandit.core.models import ActivityDay, ActivityEvent, Profile
 from plandit.core.views import MetricsView
+from plandit.groups.models import GroupMember, GroupPlan
+from plandit.plans.models import GroupAnswer, GroupRequest
+from plandit.shares.models import ShareAnswer, SharedPlan
 from plandit.waitlist.models import WaitlistSignup
 
 pytestmark = pytest.mark.django_db
@@ -101,6 +104,7 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
             "plans_built": 0,
             "places_saved": 0,
             "links_saved": 0,
+            "suggestions_used": 0,
         }
     assert body["product"] == "Plandit"
     assert body["timezone"] == "America/New_York"
@@ -116,8 +120,17 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
         "plans_built": 0,
         "places_saved": 0,
         "links_saved": 0,
+        "suggestions_used": 0,
         "waitlist_signups": 0,
         "anonymous_sessions": 0,
+        "links_with_answers": 0,
+        "answers_per_link": 0.0,
+        "plan_requests": 0,
+        "plan_requests_built": 0,
+        "group_plans": 0,
+        "group_plans_with_friends": 0,
+        "group_plan_edits": 0,
+        "edits_per_group_plan": 0.0,
     }
 
 
@@ -150,6 +163,8 @@ def test_totals_and_daily_counts(api_client, metrics_key):
     ActivityEvent.objects.create(profile=b, name="link_saved", occurred_at=now - timedelta(days=40))
     ActivityEvent.objects.create(profile=anon, name="plan_built", occurred_at=now)
     ActivityEvent.objects.create(profile=anon, name="link_saved", occurred_at=now)
+    ActivityEvent.objects.create(profile=a, name="suggestion_used", occurred_at=yesterday_ts)
+    ActivityEvent.objects.create(profile=anon, name="suggestion_used", occurred_at=now)
 
     WaitlistSignup.objects.create(email="w1@example.com")
     WaitlistSignup.objects.create(email="w2@example.com")
@@ -165,8 +180,17 @@ def test_totals_and_daily_counts(api_client, metrics_key):
         "plans_built": 2,
         "places_saved": 1,
         "links_saved": 2,
+        "suggestions_used": 1,
         "waitlist_signups": 2,
         "anonymous_sessions": 2,
+        "links_with_answers": 0,
+        "answers_per_link": 0.0,
+        "plan_requests": 0,
+        "plan_requests_built": 0,
+        "group_plans": 0,
+        "group_plans_with_friends": 0,
+        "group_plan_edits": 0,
+        "edits_per_group_plan": 0.0,
     }
 
     by_date = {row["date"]: row for row in body["daily"]}
@@ -183,6 +207,8 @@ def test_totals_and_daily_counts(api_client, metrics_key):
     assert by_date[day(yesterday_ts)]["plans_built"] == 1
     assert by_date[day(now)]["places_saved"] == 1
     assert by_date[day(ten_days_ago_ts)]["links_saved"] == 1
+    assert by_date[day(yesterday_ts)]["suggestions_used"] == 1
+    assert sum(row["suggestions_used"] for row in body["daily"]) == 1  # the anonymous one is excluded
     assert sum(row["signups"] for row in body["daily"]) == 3
     assert sum(row["links_saved"] for row in body["daily"]) == 1  # the 40-day-old one is outside the window
     assert sum(row["plans_built"] for row in body["daily"]) == 2  # the anonymous plan is excluded
@@ -249,9 +275,101 @@ def test_late_evening_local_time_lands_in_yesterdays_bucket(api_client, metrics_
         "plans_built": 1,
         "places_saved": 0,
         "links_saved": 1,
+        "suggestions_used": 0,
     }
     assert by_date[today.isoformat()]["signups"] == 0
     assert by_date[today.isoformat()]["plans_built"] == 0
     assert by_date[today.isoformat()]["links_saved"] == 0
     assert body["totals"]["signups"] == 1
     assert body["totals"]["plans_built"] == 1
+
+
+def add_answers(link, names):
+    for name in names:
+        ShareAnswer.objects.create(
+            shared_plan=link, responder=uuid.uuid4().hex * 2, name=name, status="in", plan_date=timezone.localdate()
+        )
+
+
+def test_answer_counts_without_names(api_client, metrics_key):
+    """Group plans: links with at least one friend's answer, and answers per such link."""
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    links = [SharedPlan.objects.create(owner=owner, plan_id=uuid.uuid4(), data={}) for _ in range(3)]
+    add_answers(links[0], ["Quentinia", "Zebulon", "Marisol"])
+    add_answers(links[1], ["Leopoldine"])
+    anonymous_link = SharedPlan.objects.create(owner=make_profile(is_anonymous=True), plan_id=uuid.uuid4(), data={})
+    add_answers(anonymous_link, ["Bartholomew"])
+
+    body = get(api_client).json()
+    assert body["totals"]["links_with_answers"] == 2
+    assert body["totals"]["answers_per_link"] == 2.0
+    text = json.dumps(body)
+    for name in ("Quentinia", "Zebulon", "Marisol", "Leopoldine", "Bartholomew"):
+        assert name not in text
+
+
+def make_plan_request(owner, status="open") -> GroupRequest:
+    return GroupRequest.objects.create(
+        owner=owner,
+        places=[],
+        day=timezone.localdate() + timedelta(days=1),
+        window_start=time(12),
+        window_end=time(20),
+        time_zone="America/New_York",
+        answers_by=timezone.now() + timedelta(hours=2),
+        status=status,
+    )
+
+
+def test_friends_input_link_counts_without_names(api_client, metrics_key):
+    """Group plans, mode 2: how many friends' input links there are and how many got built."""
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    make_plan_request(owner)
+    make_plan_request(owner, status="closed")
+    built = make_plan_request(owner, status="built")
+    make_plan_request(owner, status="built")
+    make_plan_request(make_profile(is_anonymous=True), status="built")
+    GroupAnswer.objects.create(
+        request=built,
+        responder=uuid.uuid4().hex * 2,
+        name="Quentinia",
+        budget=137,
+        free_from=time(13),
+        free_until=time(18),
+    )
+
+    body = get(api_client).json()
+    assert (body["totals"]["plan_requests"], body["totals"]["plan_requests_built"]) == (4, 2)
+    text = json.dumps(body)
+    assert "Quentinia" not in text and "137" not in text
+
+
+def make_group_plan(owner, *members, version=1) -> GroupPlan:
+    group = GroupPlan.objects.create(
+        owner=owner, plan_id=uuid.uuid4(), date=timezone.localdate() + timedelta(days=1), data={}, version=version
+    )
+    for profile in (owner, *members):
+        GroupMember.objects.create(group=group, profile=profile, display_name="Bartholomew")
+    return group
+
+
+def test_met_1_group_plan_counts_without_names(api_client, metrics_key):
+    """Group plans, mode 3: how many there are, how many have friends in them, and how many edits
+    were made (each edit adds one to `version`). Counts only (brief "Analytics", GS-7)."""
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    friend = make_profile(email="f@columbia.edu", signed_up_at=timezone.now())
+    other = make_profile(email="x@columbia.edu", signed_up_at=timezone.now())
+    make_group_plan(owner, friend, version=5)  # 4 edits
+    make_group_plan(owner, friend, other, version=2)  # 1 edit
+    make_group_plan(other)  # nobody joined yet, no edits
+    make_group_plan(make_profile(is_anonymous=True), friend, version=9)  # not counted
+
+    totals = get(api_client).json()["totals"]
+    assert (
+        totals["group_plans"],
+        totals["group_plans_with_friends"],
+        totals["group_plan_edits"],
+        totals["edits_per_group_plan"],
+    ) == (3, 2, 5, 1.7)
+    text = json.dumps(get(api_client).json())
+    assert "Bartholomew" not in text and "columbia.edu" not in text

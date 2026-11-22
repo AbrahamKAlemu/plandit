@@ -143,13 +143,22 @@ paths:
               schema:
                 $ref: "#/components/schemas/SharedPlanLink"
         "200":
-          description: The plan's existing link; its page now shows this version
+          description: >-
+            The plan's existing link; its page now shows this version. Friends' answers stay; swaps
+            for stops no longer in the plan are dropped, and a picked alternate no longer offered
+            becomes `null`
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SharedPlanLink"
         "400":
-          description: No stops, more than 30, a text too long, or more trips than gaps between stops
+          description: >-
+            No stops, more than 30, a text too long, more trips than gaps between stops, or a bad
+            optional field: `answers` not a boolean, `answers: true` without `date`, `date` not
+            YYYY-MM-DD or over a year ahead, an id that isn't a UUID or repeats, more than 2
+            alternates, or alternates on a stop without an id. Or a `request` that isn't a slug, or
+            isn't one of your friends' input links (`{"request": ["No such request."]}`, the same
+            for one that doesn't exist); nothing is saved then, not even an update to the link
   /api/shares/{slug}/:
     delete:
       operationId: stopSharingPlan
@@ -161,13 +170,143 @@ paths:
           schema: { type: string }
       responses:
         "204":
-          description: Taken down
+          description: Taken down, with every friend's answer on it
         "404":
           description: No such link of yours
+  /api/shares/{slug}/answers/:
+    get:
+      operationId: listShareAnswers
+      summary: Friends' answers on your shared plan, oldest first (group plans, mode 1)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Every answer, including those who can't make it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareAnswers"
+        "404":
+          description: No such link of yours
+  /api/shares/{slug}/answers/{answerId}/:
+    delete:
+      operationId: removeShareAnswer
+      summary: Remove a friend's answer; it's gone from the page at once
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: answerId
+          in: path
+          required: true
+          description: The answer's id, in either case (Swift sends UUIDs in upper case)
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Removed
+        "404":
+          description: No such answer on a link of yours, or not a UUID
+  /api/plan-requests/:
+    post:
+      operationId: createPlanRequest
+      summary: Create a friends' input link (group plans, mode 2, "Ask friends what works")
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanRequestCreate"
+      responses:
+        "201":
+          description: Created, with no answers yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanRequest"
+        "400":
+          description: >-
+            Fewer than 2 or more than 10 places, a place twice (ids in any case), a day before today
+            or over 14 days ahead in `timeZone`, a range under 1 hour (or crossing midnight), a
+            time not written HH:MM, an unknown time zone, or `answersBy` without a UTC offset, past,
+            or after the end of the range on the day
+  /api/plan-requests/{slug}/:
+    get:
+      operationId: getPlanRequest
+      summary: Your request with every friend's answer, oldest first
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanRequest"
+        "404":
+          description: No such request of yours
+    delete:
+      operationId: deletePlanRequest
+      summary: Delete the request and every answer; its link stops working
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: No such request of yours
+  /api/plan-requests/{slug}/close/:
+    post:
+      operationId: closePlanRequest
+      summary: Stop taking answers before the deadline (also at the path without the last slash)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Closed, or already closed; a built request stays built
+        "404":
+          description: No such request of yours
+  /api/plan-requests/{slug}/answers/{answerId}/:
+    delete:
+      operationId: removePlanRequestAnswer
+      summary: Remove a friend's answer
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: answerId
+          in: path
+          required: true
+          description: The answer's id, in either case
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Removed
+        "404":
+          description: No such answer on a request of yours, or not a UUID
   /p/{slug}:
     get:
       operationId: sharedPlanPage
       summary: The public HTML page for a shared plan (no sign-in)
+      description: >-
+        Plans shared with `answers: true` (and a `date` less than 30 days past) also show how many
+        friends are in with up to 3 of their first names, "I'd swap this" on each stop with an id,
+        and the answer form. Those pages are `Cache-Control: private, no-store` and
+        `Referrer-Policy: same-origin`, and set Django's `csrftoken` cookie; other pages stay
+        `public, max-age=60` and `no-referrer`. Every page has the same Content Security Policy.
       security: []
       parameters:
         - name: slug
@@ -179,6 +318,204 @@ paths:
           description: HTML page
         "404":
           description: HTML page saying the plan isn't shared anymore
+  /p/{slug}/answer:
+    post:
+      operationId: answerSharedPlan
+      summary: A friend's answer, from the page's form (no sign-in)
+      description: >-
+        Needs Django's CSRF token from the page. Matched to the browser by the `pa` cookie (Path
+        /p/{slug}, HttpOnly, Secure, SameSite=Lax; only its SHA-256 is stored), so the same browser
+        changes its answer. Every saved answer sets the cookie again to last until the answers are
+        deleted (30 days after the plan's date), and never less than 30 days. 20 answers per
+        address per hour on each link, and 50 answers per link.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrfmiddlewaretoken, name, status]
+              properties:
+                csrfmiddlewaretoken: { type: string }
+                name:
+                  type: string
+                  description: First name, 1 to 30 letters, spaces, hyphens and apostrophes
+                status: { type: string, enum: [in, out], description: "The button pressed" }
+                swap:
+                  type: array
+                  items: { type: string }
+                  description: Ids of the stops ticked "I'd swap this"; ids not in the plan are ignored
+                swap_to_{stopId}:
+                  type: string
+                  description: >-
+                    The alternate picked for that stop; an id the organizer didn't offer for it is
+                    stored as no pick
+      responses:
+        "303":
+          description: Saved; back to /p/{slug}
+        "400":
+          description: The page again, with the reason (bad first name, or neither button)
+        "403":
+          description: Missing or wrong CSRF token, or a cross-site origin
+        "404":
+          description: "No such link, or it wasn't shared with `answers: true`"
+        "429":
+          description: >-
+            The page again with the reason: "try again later" for the address's hourly limit, or
+            that the plan isn't taking more answers once the link has 50
+  /p/{slug}/answer/delete:
+    post:
+      operationId: takeBackSharedPlanAnswer
+      summary: The browser takes back its own answer (no sign-in)
+      description: >-
+        Works on any link that exists, even after it stops taking answers (shared again with
+        `answers: false`, or its date long past): only this browser's own answer is removed. Not
+        rate limited.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrfmiddlewaretoken]
+              properties:
+                csrfmiddlewaretoken: { type: string }
+      responses:
+        "303":
+          description: Removed if this browser had one; back to /p/{slug}
+        "403":
+          description: Missing or wrong CSRF token
+        "404":
+          description: No such link
+  /g/{slug}:
+    get:
+      operationId: planRequestPage
+      summary: The public HTML page for a friends' input link (no sign-in)
+      description: >-
+        While the request takes answers (open and before `answersBy`): the day, the range, the
+        deadline, how many have answered (never anyone's answer), the places with a checkbox each,
+        and the form, with no JavaScript. Once built and its plan still shared: a redirect to that
+        plan's page, except for a browser whose answer is still on the request, which gets "The
+        plan is ready" with the plan's link and "Take back my answer". Otherwise "This plan isn't
+        taking answers any more", with "Take back my answer" for a browser that answered. Every response is `Cache-Control: private, no-store`
+        and `Referrer-Policy: same-origin`, with the same Content Security Policy as /p/.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: HTML page, with the form, closed, or built for a browser that answered
+        "302":
+          description: Built, for a browser with no answer on it; Location is /p/{plan slug}
+        "404":
+          description: HTML page saying the plan isn't shared anymore
+  /g/{slug}/answer:
+    post:
+      operationId: answerPlanRequest
+      summary: A friend's answer, from the page's form (no sign-in)
+      description: >-
+        Needs Django's CSRF token from the page. Matched to the browser by the `pa` cookie (Path
+        /g/{slug}, HttpOnly, Secure, SameSite=Lax; only its SHA-256 is stored), so the same browser
+        changes its answer until the deadline. Every saved answer sets the cookie again to last
+        until the answers are deleted (30 days after the request's day), never less than 30 days.
+        20 answers per address per hour on each link, and 50 answers per link.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrfmiddlewaretoken, name, budget, free_from, free_until]
+              properties:
+                csrfmiddlewaretoken: { type: string }
+                name:
+                  type: string
+                  description: First name, 1 to 30 letters, spaces, hyphens and apostrophes
+                budget:
+                  type: string
+                  description: >-
+                    Whole dollars, 0 to 150 in steps of 5, from a select with no choice made until
+                    the friend picks one. A deliberate change from the architecture's range slider,
+                    which can't show its value without JavaScript
+                free_from:
+                  type: string
+                  description: HH:MM (seconds, if sent, are dropped), from the request's start
+                free_until:
+                  type: string
+                  description: HH:MM, after free_from and no later than the request's end
+                star:
+                  type: array
+                  maxItems: 3
+                  items: { type: string }
+                  description: >-
+                    Ids of the starred places, in any case; stored in the request's own spelling and
+                    order. Ids that aren't the request's places are ignored
+      responses:
+        "303":
+          description: Saved; back to /g/{slug}
+        "400":
+          description: >-
+            The page again with the reason: a bad first name, a budget off 0 to 150, times outside
+            the range or "until" not after "from", or more than 3 stars
+        "403":
+          description: Missing or wrong CSRF token, or a cross-site origin
+        "404":
+          description: No such link
+        "410":
+          description: The closed page; past the deadline, closed by the organizer, or built
+        "429":
+          description: >-
+            The page again with the reason: "try again later" for the address's hourly limit, or
+            that the plan isn't taking more answers once the link has 50
+  /g/{slug}/answer/delete:
+    post:
+      operationId: takeBackPlanRequestAnswer
+      summary: The browser takes back its own answer (no sign-in)
+      description: >-
+        Works on any request that exists, even once it stops taking answers. Not rate limited.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrfmiddlewaretoken]
+              properties:
+                csrfmiddlewaretoken: { type: string }
+      responses:
+        "303":
+          description: Removed if this browser had one; back to /g/{slug}
+        "403":
+          description: Missing or wrong CSRF token
+        "404":
+          description: No such link
   /v1/place-resolutions:
     post:
       operationId: createPlaceResolution
@@ -224,6 +561,28 @@ components:
         timeText: { type: string, maxLength: 60, examples: ["11:00 AM – 6:15 PM"] }
         note: { type: string, maxLength: 280 }
         costText: { type: string, maxLength: 160, examples: ["About $42 per person"] }
+        answers:
+          type: boolean
+          default: false
+          description: >-
+            Group plans, mode 1: show the answer form on the page. Needs `date`. Without it, the page
+            looks as it always has and answer posts get 404
+        date:
+          type: string
+          format: date
+          description: >-
+            The plan's day (YYYY-MM-DD), at most 366 days ahead. Needed with `answers: true`;
+            friends' answers are deleted 30 days after it
+          examples: ["2026-11-22"]
+        request:
+          type: string
+          maxLength: 10
+          description: >-
+            Group plans, mode 2: the slug of your friends' input link this plan was built from. It
+            isn't stored with the plan. It marks the request `built` (also when it was closed) and
+            its /g/ link then redirects to this plan's page. Sharing another plan with the same
+            slug points the link at that one
+          examples: ["Hq3vW8sLpZ"]
         stops:
           type: array
           minItems: 1
@@ -232,6 +591,12 @@ components:
             type: object
             required: [name, timeText]
             properties:
+              id:
+                type: string
+                format: uuid
+                description: >-
+                  The app's stop id, unique in the plan, kept exactly as sent (any case). Stops
+                  without one have no "I'd swap this"
               name: { type: string, maxLength: 120 }
               place: { type: string, maxLength: 120, examples: ["Food · Chelsea"] }
               address: { type: string, maxLength: 200 }
@@ -240,6 +605,21 @@ components:
               costText: { type: string, maxLength: 40 }
               latitude: { type: [number, "null"] }
               longitude: { type: [number, "null"] }
+              alternates:
+                type: array
+                maxItems: 2
+                description: >-
+                  Places the organizer saved that friends may pick instead of this stop ("<name>
+                  instead"). Needs the stop's `id`; ids unique in the stop
+                items:
+                  type: object
+                  required: [id, name]
+                  properties:
+                    id: { type: string, format: uuid, description: "Kept exactly as sent" }
+                    name: { type: string, maxLength: 120, examples: ["Prince Street Pizza"] }
+                    neighborhood: { type: string, maxLength: 80, examples: ["Nolita"] }
+                    kind: { type: string, maxLength: 40, examples: ["Food"] }
+                    costText: { type: string, maxLength: 40, examples: ["$6", "Free"] }
         legs:
           type: array
           description: The trip after each stop but the last, in order
@@ -254,6 +634,120 @@ components:
       properties:
         slug: { type: string, examples: ["k7Qx2aB9cD"] }
         url: { type: string, format: uri, examples: ["https://plandit.app/p/k7Qx2aB9cD"] }
+    ShareAnswers:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareAnswer"
+    ShareAnswer:
+      type: object
+      description: >-
+        A friend's answer. Deleted 30 days after the plan's `date`, when you stop sharing, or when
+        you remove it
+      required: [id, name, status, swaps, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 30, examples: ["Maya"] }
+        status: { type: string, enum: [in, out], description: "in = I'm in, out = Can't make it" }
+        swaps:
+          type: object
+          description: >-
+            Stop id → the alternate id they picked, or null for "I'd swap this" with no pick. Ids
+            exactly as the app sent them
+          additionalProperties: { type: [string, "null"] }
+          examples: [{ "0A1B2C3D-4E5F-4A6B-8C7D-8E9F0A1B2C3D": "33333333-4444-4555-8666-777777777777" }]
+        createdAt: { type: string, format: date-time, examples: ["2026-11-21T18:04:05Z"] }
+        updatedAt: { type: string, format: date-time }
+    PlanRequestPlace:
+      type: object
+      description: One of the organizer's saved places, as the plan page shows it
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid, description: "Kept exactly as sent; unique in the request, in any case" }
+        name: { type: string, maxLength: 120, examples: ["Los Tacos No. 1"] }
+        neighborhood: { type: string, maxLength: 80, examples: ["Chelsea"] }
+        kind: { type: string, maxLength: 40, examples: ["Food"] }
+        costText: { type: string, maxLength: 40, examples: ["$6", "Free"] }
+    PlanRequestCreate:
+      type: object
+      required: [places, day, windowStart, windowEnd, timeZone, answersBy]
+      properties:
+        places:
+          type: array
+          minItems: 2
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/PlanRequestPlace"
+        day:
+          type: string
+          format: date
+          description: Today to 14 days ahead, in `timeZone`
+          examples: ["2026-11-22"]
+        windowStart: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$", examples: ["12:00"] }
+        windowEnd:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: At least 1 hour after windowStart, on the same day
+          examples: ["20:00"]
+        timeZone: { type: string, maxLength: 64, description: "IANA name", examples: ["America/New_York"] }
+        answersBy:
+          type: string
+          format: date-time
+          description: With Z or a UTC offset; after now and no later than the end of the range on the day
+          examples: ["2026-11-22T02:00:00Z"]
+    PlanRequest:
+      type: object
+      required:
+        [slug, url, status, places, day, windowStart, windowEnd, timeZone, answersBy, planSlug, createdAt, answers]
+      properties:
+        slug: { type: string, examples: ["Hq3vW8sLpZ"] }
+        url: { type: string, format: uri, examples: ["https://plandit.app/g/Hq3vW8sLpZ"] }
+        status:
+          type: string
+          enum: [open, closed, built]
+          description: >-
+            open while friends can answer; built once a plan was shared with this slug; closed
+            otherwise (by you, or by the deadline)
+        places:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanRequestPlace"
+        day: { type: string, format: date }
+        windowStart: { type: string, examples: ["12:00"] }
+        windowEnd: { type: string, examples: ["20:00"] }
+        timeZone: { type: string }
+        answersBy: { type: string, format: date-time, description: "In UTC" }
+        planSlug:
+          type: [string, "null"]
+          description: The built plan's /p/ slug; null until built, and again if you stop sharing it
+        createdAt: { type: string, format: date-time }
+        answers:
+          type: array
+          description: Oldest first
+          items:
+            $ref: "#/components/schemas/PlanRequestAnswer"
+    PlanRequestAnswer:
+      type: object
+      description: >-
+        A friend's answer. Deleted 30 days after the request's day, with the request, or when you
+        remove it
+      required: [id, name, budget, freeFrom, freeUntil, stars, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 30, examples: ["Maya"] }
+        budget: { type: integer, minimum: 0, maximum: 150, description: "Dollars for the day, train included" }
+        freeFrom: { type: string, examples: ["13:00"] }
+        freeUntil: { type: string, examples: ["18:00"] }
+        stars:
+          type: array
+          maxItems: 3
+          items: { type: string }
+          description: Ids of the places they starred, as the request has them
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     Detail:
       type: object
       required: [detail]
@@ -298,7 +792,7 @@ components:
               $ref: "#/components/schemas/StoreSnapshot"
     EventName:
       type: string
-      enum: [link_saved, place_saved, plan_built]
+      enum: [link_saved, place_saved, plan_built, suggestion_used]
     EventRequest:
       type: object
       required: [name]
@@ -343,8 +837,13 @@ components:
               plans_built,
               places_saved,
               links_saved,
+              suggestions_used,
               waitlist_signups,
               anonymous_sessions,
+              links_with_answers,
+              answers_per_link,
+              plan_requests,
+              plan_requests_built,
             ]
           properties:
             signups: { type: integer }
@@ -356,8 +855,21 @@ components:
             plans_built: { type: integer }
             places_saved: { type: integer }
             links_saved: { type: integer }
+            suggestions_used: { type: integer }
             waitlist_signups: { type: integer }
             anonymous_sessions: { type: integer }
+            links_with_answers:
+              type: integer
+              description: Shared plans with at least one friend's answer kept now (answers expire)
+            answers_per_link:
+              type: number
+              description: Average answers per link in `links_with_answers`, one decimal; 0 when none
+            plan_requests:
+              type: integer
+              description: Friends' input links kept now (deleted 30 days after their day)
+            plan_requests_built:
+              type: integer
+              description: Of `plan_requests`, those built into a plan
         daily:
           type: array
           description: Exactly `days` entries, oldest to newest, ending today, zero-filled
@@ -365,7 +877,8 @@ components:
             $ref: "#/components/schemas/DailyMetrics"
     DailyMetrics:
       type: object
-      required: [date, signups, new_real_users, active_users, plans_built, places_saved, links_saved]
+      required:
+        [date, signups, new_real_users, active_users, plans_built, places_saved, links_saved, suggestions_used]
       properties:
         date: { type: string, format: date }
         signups: { type: integer }
@@ -374,6 +887,7 @@ components:
         plans_built: { type: integer }
         places_saved: { type: integer }
         links_saved: { type: integer }
+        suggestions_used: { type: integer }
     ResolutionRequest:
       type: object
       required: [requestId, platform, evidence]

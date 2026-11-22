@@ -1,0 +1,20 @@
+{% extends "shares/base.html" %}
+{% load static %}
+{% block title %}You're invited to plan together{% endblock %}
+{% block stylesheets %}
+  <link rel="stylesheet" href="{% static 'shares/not_found.css' %}">
+{% endblock %}
+{% block content %}
+  {# The same page for every token (INV-10): nothing here may depend on the link or the group. #}
+  {# The labels are the app's own: the Saved tab, "Paste a link" in an empty Saved, and its "+". #}
+  <a class="brand" href="https://plandit.app" rel="noreferrer"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
+  <h1>You're invited to plan together</h1>
+  <p>A friend wants to plan a day with you in Plandit. Everyone in the group can change the stops, and you'll all see the same plan. Before you join, Plandit shows you whose plan it is and the day. You can leave any time.</p>
+  <ol class="steps">
+    <li>Get Plandit free on the App Store and sign in with email or Apple.
+      <a class="cta" href="{{ app_store_url }}" rel="noreferrer">Get Plandit free on the App Store</a></li>
+    <li>Come back to the link your friend sent and copy it.</li>
+    <li>In Plandit, open Saved and tap Paste a link (or + if you already have saves), then paste it.</li>
+  </ol>
+  <p>Already have Plandit? Start at step 2.</p>
+{% endblock %}

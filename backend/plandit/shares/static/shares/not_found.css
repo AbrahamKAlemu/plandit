@@ -1,0 +1,7 @@
+/* The page for a link that isn't shared anymore (shares/not_found.html). */
+h1 { margin: 40px 0 8px; font-size: 32px; letter-spacing: -.03em; }
+p { color: var(--on-dark-muted); }
+/* The numbered steps on the group plan invite page (groups/join.html). */
+.steps { margin: 16px 0; padding-left: 1.4em; color: var(--on-dark-muted); }
+.steps li { margin: 12px 0; padding-left: 4px; }
+.steps li::marker { color: var(--on-dark); font-weight: 800; }

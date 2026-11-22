@@ -4,15 +4,29 @@ Aggregate usage metrics for GET /api/metrics/ (the professor's endpoint).
 Everything is counted in the database, grouped by local day in the project time zone. The
 payload holds counts only: no ids, emails or names. Anonymous profiles (old TestFlight builds)
 are excluded from every number except `anonymous_sessions`.
+
+Friends' answers on shared plans (group plans) are counted, never read: how many links have any,
+and how many each such link has on average (brief "Analytics", GS-7). Answers are deleted 30 days
+after the plan's date, so these describe the answers kept now, not all time.
+
+Friends' input links (mode 2) are counted the same way: how many there are, and how many were
+built into a plan. Their answers aren't read at all. Requests are deleted 30 days after their day.
+
+Group plans that members edit together (mode 3) are counted too: how many there are, how many have
+at least one friend in them, and how many edits were made (each adds one to the plan's version).
+Never the plans, the members or their names. They're deleted 30 days after their date.
 """
 
 from datetime import UTC, date, datetime, time, timedelta
 
 from django.conf import settings
-from django.db.models import Count
+from django.db.models import Count, F, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
+from plandit.groups.models import GroupPlan
+from plandit.plans.models import GroupRequest
+from plandit.shares.models import ShareAnswer
 from plandit.waitlist.models import WaitlistSignup
 
 from .models import ActivityDay, ActivityEvent, ActivityEventName, Profile
@@ -31,6 +45,7 @@ EVENT_TOTAL_KEYS = {
     ActivityEventName.PLAN_BUILT: "plans_built",
     ActivityEventName.PLACE_SAVED: "places_saved",
     ActivityEventName.LINK_SAVED: "links_saved",
+    ActivityEventName.SUGGESTION_USED: "suggestions_used",
 }
 
 
@@ -45,6 +60,37 @@ def _local_midnight(day: date):
 def _active_users_between(first: date, last: date) -> int:
     rows = ActivityDay.objects.filter(date__gte=first, date__lte=last, profile__is_anonymous=False)
     return rows.aggregate(n=Count("profile", distinct=True))["n"]
+
+
+def _answer_totals() -> dict:
+    counts = ShareAnswer.objects.filter(shared_plan__owner__is_anonymous=False).aggregate(
+        answers=Count("id"), links=Count("shared_plan", distinct=True)
+    )
+    links = counts["links"]
+    return {
+        "links_with_answers": links,
+        "answers_per_link": round(counts["answers"] / links, 1) if links else 0.0,
+    }
+
+
+def _request_totals() -> dict:
+    requests = GroupRequest.objects.filter(owner__is_anonymous=False)
+    return {
+        "plan_requests": requests.count(),
+        "plan_requests_built": requests.filter(status=GroupRequest.Status.BUILT).count(),
+    }
+
+
+def _group_plan_totals() -> dict:
+    groups = GroupPlan.objects.filter(owner__is_anonymous=False)
+    counts = groups.aggregate(groups=Count("id"), edits=Sum(F("version") - 1))
+    total, edits = counts["groups"], counts["edits"] or 0
+    return {
+        "group_plans": total,
+        "group_plans_with_friends": groups.annotate(people=Count("members")).filter(people__gte=2).count(),
+        "group_plan_edits": edits,
+        "edits_per_group_plan": round(edits / total, 1) if total else 0.0,
+    }
 
 
 def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
@@ -75,6 +121,9 @@ def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
         **event_totals,
         "waitlist_signups": WaitlistSignup.objects.count(),
         "anonymous_sessions": Profile.objects.filter(is_anonymous=True).count(),
+        **_answer_totals(),
+        **_request_totals(),
+        **_group_plan_totals(),
     }
 
     daily = {
@@ -86,6 +135,7 @@ def compute_metrics(days: int = DEFAULT_DAYS) -> dict:
             "plans_built": 0,
             "places_saved": 0,
             "links_saved": 0,
+            "suggestions_used": 0,
         }
         for offset in range(days)
     }

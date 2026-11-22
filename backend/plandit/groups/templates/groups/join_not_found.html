@@ -1,0 +1,11 @@
+{% extends "shares/base.html" %}
+{% load static %}
+{% block title %}Invite not found · Plandit{% endblock %}
+{% block stylesheets %}
+  <link rel="stylesheet" href="{% static 'shares/not_found.css' %}">
+{% endblock %}
+{% block content %}
+  <a class="brand" href="https://plandit.app" rel="noreferrer"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>
+  <h1>This invite link doesn't work</h1>
+  <p>It may be mistyped or cut off. Ask the friend who sent it to send it again.</p>
+{% endblock %}

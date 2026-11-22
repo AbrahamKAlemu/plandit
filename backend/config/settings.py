@@ -59,11 +59,14 @@ INSTALLED_APPS = [
     "plandit.plans",
     "plandit.waitlist",
     "plandit.shares",
+    "plandit.groups",
     "resolution",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Only views decorated with a policy get a header (public_forms.public_page_csp); SECURE_CSP is unset.
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -170,6 +173,12 @@ if DEBUG:
 # --- Shared plan links: plandit.app/p/<slug> once the site forwards /p/ to this API; blank = this host ---
 
 SHARE_BASE_URL = env("SHARE_BASE_URL", "")
+# Friends' input links (plandit.app/g/<slug>) have their own setting, also blank = this host, so /p/
+# can move to the site before it forwards /g/ and /static/plans/ here.
+REQUEST_BASE_URL = env("REQUEST_BASE_URL", "")
+# Group plan invites (plandit.app/j/<token>) too, blank = this host, so they can move on their own once
+# the site forwards /j/ and /static/shares/ here.
+INVITE_BASE_URL = env("INVITE_BASE_URL", "")
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "https://plandit.app,https://www.plandit.app")
 CORS_ALLOW_ALL_ORIGINS = DEBUG
@@ -177,7 +186,17 @@ CORS_URLS_REGEX = r"^/api/.*$"
 
 # --- Behind a TLS-terminating proxy in every deployed environment ---
 
-if not DEBUG:
+# The proxy also passes the client's address in X-Forwarded-For. plandit.core.public_forms.client_ip
+# reads that header only when this is on; without a proxy in front, anyone could set it.
+BEHIND_TRUSTED_PROXY = not DEBUG
+# How many X-Forwarded-For entries, counted from the right, our own proxies added, the client's
+# address included: plandit.core.public_forms.client_ip uses the entry this far from the right.
+# Entries further left are whatever the client sent. Public reports of Render's chain show
+# "<client-sent>, <client>, <Cloudflare edge>, <Render internal>", so the default is 3. Not yet
+# measured on our service: the shared plan page logs the chain's shape (describe_forwarding), and
+# no form may rely on client_ip until that log confirms this value (group plans, slice G1a).
+TRUSTED_PROXY_HOPS = int(env("TRUSTED_PROXY_HOPS", "3"))
+if BEHIND_TRUSTED_PROXY:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
@@ -196,7 +215,16 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "plandit-development-social-evidence",
-    }
+    },
+    # Rate limits on the public forms (plandit.core.public_forms.rate_limited). In the database so
+    # every gunicorn worker counts together and the counts survive a restart or a sleep; the table
+    # is made by shares/0002 with row level security on. MAX_ENTRIES is raised from 300 because
+    # culling a full table deletes live counts, not only expired ones.
+    "throttle": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "plandit_throttle_cache",
+        "OPTIONS": {"MAX_ENTRIES": 10000},
+    },
 }
 
 # --- I18N / static ------------------------------------------------------------

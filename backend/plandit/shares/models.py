@@ -1,4 +1,5 @@
 import secrets
+import uuid
 
 from django.db import models
 
@@ -32,3 +33,39 @@ class SharedPlan(models.Model):
 
     def __str__(self) -> str:
         return f"{self.slug}: {self.data.get('title', '')}"
+
+
+# Brief GS-5: friends' answers are deleted this many days after the plan's date (or with the link).
+ANSWER_RETENTION_DAYS = 30
+
+
+class ShareAnswer(models.Model):
+    """A friend's answer on a shared plan's page (group plans, mode 1): "I'm in" or "Can't make it",
+    a first name, and the stops they'd swap. No account: the same browser is recognized by its `pa`
+    cookie, of which only the hash is stored (plandit.core.public_forms.responder_token).
+
+    Only the organizer sees every answer (GET /api/shares/<slug>/answers/). The page shows how many
+    are in and up to 3 of their first names, never who can't make it. Answers go with the link
+    (CASCADE, brief GV-10) and 30 days after the plan's date (`plan_date`, brief GS-5)."""
+
+    class Status(models.TextChoices):
+        IN = "in"
+        OUT = "out"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    shared_plan = models.ForeignKey(SharedPlan, on_delete=models.CASCADE, related_name="answers")
+    responder = models.CharField(max_length=64, help_text="SHA-256 hex of the browser's cookie token.")
+    name = models.CharField(max_length=30, help_text="First name, checked by clean_first_name.")
+    status = models.CharField(max_length=3, choices=Status.choices)
+    swaps = models.JSONField(
+        default=dict, blank=True, help_text="{stop id: alternate id or null}, ids from the shared plan."
+    )
+    plan_date = models.DateField(db_index=True, help_text="The plan's day (SharedPlan.data['date']), for expiry.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["shared_plan", "responder"], name="one_answer_per_browser")]
+
+    def __str__(self) -> str:
+        return f"{self.shared_plan_id}: {self.status}"

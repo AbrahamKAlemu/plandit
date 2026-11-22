@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import connection, transaction
+from django.db.models import F, Q
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.exceptions import (
@@ -18,6 +19,10 @@ from rest_framework.exceptions import (
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+
+from plandit.groups.models import GroupMember, GroupPlan, GroupRemoval
+from plandit.plans.models import GroupRequest
+from plandit.shares.models import SharedPlan
 
 from . import apple_signin, supabase_admin
 from .metrics import DEFAULT_DAYS, MAX_DAYS, MIN_DAYS, compute_metrics, iso_utc
@@ -87,7 +92,7 @@ class MeView(APIView):
         if not supabase_admin.is_configured():
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is not configured; deleting only Plandit data for %s", profile.id)
             with transaction.atomic():
-                self._lock(profile.pk).delete()
+                self._delete(self._lock(profile.pk))
                 self._revoke_apple_tokens_after_commit(profile.id, apple_code)
             return Response(status=status.HTTP_204_NO_CONTENT)
         try:
@@ -102,9 +107,26 @@ class MeView(APIView):
             # Same row lock as PATCH, so a concurrent PATCH either finishes first or sees no row.
             locked = self._lock(profile.pk)
             DeletedAccount.objects.get_or_create(id=profile.pk)
-            locked.delete()
+            self._delete(locked)
             self._revoke_apple_tokens_after_commit(profile.id, apple_code)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _delete(locked: Profile) -> None:
+        """Delete the locked profile, which cascades to all of its data. Its shared plans, then its
+        friends' input links, are locked first: a friend's answer is saved with the plan's or the
+        request's row locked (plandit.shares.views, plandit.plans.request_views), so the cascade
+        waits for it and deletes it too, instead of missing it and failing at commit. The profile,
+        then plans, then requests: the order sharing a built plan takes them in. That share holds
+        the profile's key-share lock from its start, so the profile's lock here waits for the whole
+        share to commit, and then this sees its new plan.
+
+        Group plans come last (`_lock_group_plans`): every group write locks its group first, so the
+        cascade waits for it instead of failing at commit (MF-E)."""
+        list(SharedPlan.objects.select_for_update().filter(owner=locked).order_by("pk").values_list("pk", flat=True))
+        list(GroupRequest.objects.select_for_update().filter(owner=locked).order_by("pk").values_list("pk", flat=True))
+        _lock_group_plans(locked)
+        locked.delete()
 
     @staticmethod
     def _lock(pk) -> Profile:
@@ -152,6 +174,27 @@ class MeView(APIView):
             logger.warning("Apple token revocation failed for %s: unexpected %s", profile_id, type(exc).__name__)
             return
         logger.info("Apple %s revoked for %s", revoked, profile_id)
+
+
+def _lock_group_plans(locked: Profile) -> None:
+    """Before deleting an account: lock every group plan it organizes or is in, by primary key,
+    the lock each group write takes first (plandit.groups.views). Its own groups then go with the
+    profile (CASCADE, brief GE-10); in the others its membership goes, and `members_version` goes
+    up so the members' ETag changes. The organizer's removals of this profile go too (MF-G).
+
+    A join or create holds the joiner's profile's key-share lock from its start, so the profile's
+    lock taken before this waits for it to commit, and then this sees the new membership."""
+    member_of = GroupMember.objects.filter(profile=locked).values("group_id")
+    locked_groups = list(
+        GroupPlan.objects.select_for_update()
+        .filter(Q(owner=locked) | Q(pk__in=member_of))
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    GroupPlan.objects.filter(pk__in=locked_groups).exclude(owner=locked).update(
+        members_version=F("members_version") + 1, updated_at=timezone.now()
+    )
+    GroupRemoval.objects.filter(profile_id=locked.pk).delete()
 
 
 class StatsView(APIView):
