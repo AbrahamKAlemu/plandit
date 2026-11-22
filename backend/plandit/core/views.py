@@ -332,7 +332,8 @@ class EventsView(APIView):
 
 
 class MetricsView(APIView):
-    """GET /api/metrics/?days=30 for the course staff. Secret key instead of a JWT; counts only."""
+    """GET /api/metrics/?days=30 for the course staff. Counts only. Public unless METRICS_PUBLIC is
+    off; then it needs the METRICS_API_KEY secret instead of a JWT."""
 
     authentication_classes: list = []
     permission_classes = [permissions.AllowAny]
@@ -340,12 +341,13 @@ class MetricsView(APIView):
     throttle_scope = "metrics"
 
     def get(self, request):
-        expected = settings.METRICS_API_KEY
-        if not expected:
-            raise NotFound()
-        provided = request.headers.get("X-Metrics-Key") or request.query_params.get("key") or ""
-        if not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
-            raise PermissionDenied("Invalid metrics key.")
+        if not settings.METRICS_PUBLIC:
+            expected = settings.METRICS_API_KEY
+            if not expected:
+                raise NotFound()
+            provided = request.headers.get("X-Metrics-Key") or request.query_params.get("key") or ""
+            if not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+                raise PermissionDenied("Invalid metrics key.")
         raw_days = request.query_params.get("days", str(DEFAULT_DAYS))
         try:
             days = int(raw_days)

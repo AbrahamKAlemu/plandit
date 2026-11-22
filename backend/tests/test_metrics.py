@@ -68,6 +68,29 @@ def test_no_jwt_needed_and_bearer_is_ignored(api_client, metrics_key):
     assert MetricsView.authentication_classes == []
 
 
+def test_public_metrics_need_no_key(api_client, settings):
+    settings.METRICS_PUBLIC = True
+    settings.METRICS_API_KEY = ""
+    response = api_client.get("/api/metrics/")
+    assert response.status_code == 200
+    assert response.json()["product"] == "Plandit"
+    assert len(response.json()["daily"]) == 30
+
+
+def test_public_metrics_ignore_any_key(api_client, settings):
+    settings.METRICS_PUBLIC = True
+    settings.METRICS_API_KEY = KEY
+    assert api_client.get("/api/metrics/").status_code == 200
+    assert get(api_client, key="nope").status_code == 200
+    assert get(api_client, key="nope", header=False).status_code == 200
+
+
+def test_public_metrics_still_check_days(api_client, settings):
+    settings.METRICS_PUBLIC = True
+    assert api_client.get("/api/metrics/", {"days": "0"}).status_code == 400
+    assert api_client.get("/api/metrics/", {"days": "7"}).status_code == 200
+
+
 def test_metrics_throttle_scope(settings):
     assert MetricsView.throttle_scope == "metrics"
     assert MetricsView.throttle_classes == [ScopedRateThrottle]

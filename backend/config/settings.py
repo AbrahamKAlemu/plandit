@@ -148,7 +148,10 @@ APPLE_TEAM_ID = env("APPLE_TEAM_ID")
 APPLE_CLIENT_ID = env("APPLE_CLIENT_ID", "com.plandit.app")
 APPLE_SIGNIN_KEY_ID = env("APPLE_SIGNIN_KEY_ID")
 APPLE_SIGNIN_PRIVATE_KEY = env("APPLE_SIGNIN_PRIVATE_KEY").replace("\\n", "\n")
-# Shared secret for GET /api/metrics/ (aggregate usage for the course staff). Empty turns it off.
+# GET /api/metrics/ (aggregate usage for the course staff) holds counts only, never names, emails or
+# ids. It's public by default, so the course staff's tools can read it with no key. METRICS_PUBLIC=0
+# requires METRICS_API_KEY again; with that and an empty key, the endpoint is off.
+METRICS_PUBLIC = env_bool("METRICS_PUBLIC", True)
 METRICS_API_KEY = env("METRICS_API_KEY")
 
 REST_FRAMEWORK = {

@@ -17,7 +17,7 @@ nearby and on budget, shown on a map.
 - docs/features/<feature>/: the Feature Forge record for each feature (brief, architecture, plan,
   verification, lessons).
 - README.md, "Usage metrics API": the live sign-up and usage numbers for course staff,
-  `GET https://plandit-api.onrender.com/api/metrics/?days=30` with the key in `X-Metrics-Key`.
+  `GET https://plandit-api.onrender.com/api/metrics/?days=30`, no key needed.
 
 ## How to run it
 - Stack: native iOS app (SwiftUI, iOS 17+) in `ios/`, Django + Django REST Framework API on
@@ -66,9 +66,10 @@ nearby and on budget, shown on a map.
     account with sync off; `-resetAuth` clears the Keychain session.
   - Supabase "Confirm email" is off: there is no custom SMTP, and the built-in sender only delivers
     to team members. Add SMTP before turning it back on.
-  - Class metrics: `GET https://plandit-api.onrender.com/api/metrics/?days=30` with header
-    `X-Metrics-Key` (value in the Render service's environment). "Real user" = built a plan with
-    at least one stop.
+  - Class metrics: `GET https://plandit-api.onrender.com/api/metrics/?days=30`, public with no key
+    (counts only) so the course staff's agent can read it. `METRICS_PUBLIC=0` in Render requires
+    the `X-Metrics-Key` header again (value in the Render service's environment). "Real user" =
+    built a plan with at least one stop.
   - Foundation's URL behavior changes between iOS versions: `appending(path:)` doubles a trailing
     slash on iOS 18, and the API answers 404. The iPhone 17 Pro test command only covers iOS 26, so
     run the tests on an iOS 18 simulator too before a TestFlight upload. There, about 23 unit tests

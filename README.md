@@ -12,9 +12,8 @@ Sign-ups and usage are live at:
 GET https://plandit-api.onrender.com/api/metrics/?days=30
 ```
 
-- **Key:** send it in the `X-Metrics-Key` header. If your tool can't set headers, add
-  `&key=<key>` to the URL instead (that works too, but the key then shows up in server logs).
-  The key isn't in this repo. Ask the Plandit team for it. Without it, the API answers `403`.
+- **No key needed.** It's a plain GET with no sign-in, header or key, so any tool or agent can read
+  it. (If the team ever turns the key back on, the API answers `403` and the team will send it.)
 - **`days`:** 1 to 365, default 30. Anything else answers `400`.
 - **Limit:** 30 requests a minute per IP address, then `429`.
 - **Privacy:** counts only, never names, emails or ids.
@@ -22,8 +21,7 @@ GET https://plandit-api.onrender.com/api/metrics/?days=30
   down.
 
 ```sh
-curl -s -H "X-Metrics-Key: $PLANDIT_METRICS_KEY" \
-  "https://plandit-api.onrender.com/api/metrics/?days=30"
+curl -s "https://plandit-api.onrender.com/api/metrics/?days=30"
 ```
 
 ### What it returns
