@@ -1,4 +1,3 @@
-import logging
 import uuid
 from datetime import UTC, date, timedelta
 from urllib.parse import urlencode
@@ -22,7 +21,6 @@ from plandit.core.public_forms import (
     RESPONDER_COOKIE_MAX_AGE,
     clean_first_name,
     client_ip,
-    describe_forwarding,
     public_page_csp,
     rate_limited,
     responder_token,
@@ -32,8 +30,6 @@ from plandit.plans.models import GroupRequest
 
 from .models import ANSWER_RETENTION_DAYS, ShareAnswer, SharedPlan
 from .serializers import SharedPlanSerializer
-
-logger = logging.getLogger(__name__)
 
 # Brief GS-2. The address limit counts the answers posted from one address to one link, so students
 # behind one campus address don't share a limit across every link; the link cap bounds each link,
@@ -167,8 +163,6 @@ class ShareAnswerDetailView(APIView):
 def shared_plan_page(request, slug):
     """GET /p/<slug>: the public page friends open. No sign-in. Plans shared with `answers: true`
     also get the answer form (brief GV-1 to GV-4)."""
-    # Temporary: the proxy chain's shape, no addresses, to measure TRUSTED_PROXY_HOPS (slice G1a).
-    logger.info("proxy chain: %s", describe_forwarding(request))
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
         return not_found_page(request)

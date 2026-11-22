@@ -11,13 +11,6 @@ day were dropped.
 
 ## Attention needed
 
-- Abraham: read the `proxy chain:` lines in Render's logs (the dashboard is blocked for Claude).
-  Four requests were sent from a laptop on November 22 at 11:14:45 to 11:14:49 EST to
-  `/p/measure-hops-*`: two plain, one with one forged X-Forwarded-For entry, one with two.
-  `true_client_ip_from_right=N` on the plain lines is the hop count. If it isn't 3, set
-  `TRUSTED_PROXY_HOPS` to N in Render; then the log line can be removed.
-- Abraham: merge #57 (the metrics become public, counts only, so the course staff's tools need no key) or
-  close it and send the key yourself. Claude's merge of it was blocked.
 - GS-6: #58 put the group plans text in this repo's `website/privacy.html`. Port it to Jaden's repo
   (the live plandit.app) before an app version with group plans is submitted, and set the effective
   date then.
@@ -134,6 +127,9 @@ day were dropped.
 
 ## Decisions and events
 
+- November 22: the proxy hop count is measured: Render's logs put the client 3 entries from the right
+  for plain and forged requests alike, so the default `TRUSTED_PROXY_HOPS=3` is right. The temporary
+  log line is removed. #57 (public, counts-only metrics) is merged.
 - November 22: Abraham dropped the "plans for a later day" slice. A group plan for a later day stays a
   preview with the answers so far, built on the day itself (D1).
 - November 22: invite links accept tokens of 16 to 64 URL-safe characters, not exactly 22, so a

@@ -2,7 +2,7 @@
 
 - `rate_limited` counts requests per key (an IP address, a link) in the `throttle` cache.
 - `responder_token` recognizes the same browser again through a cookie, storing only a hash.
-- `client_ip` is the address to rate limit by; `describe_forwarding` helps measure the proxy chain.
+- `client_ip` is the address to rate limit by.
 - `clean_first_name` is the only free text a friend can type (brief GS-4).
 - `first_name_of` is what other people see of an account's name.
 - `public_page_csp` is the Content Security Policy for the pages themselves (brief GS-3).
@@ -121,27 +121,6 @@ def client_ip(request) -> str:
             return address
     remote = request.META.get("REMOTE_ADDR", "")
     return _normalized(remote) or remote
-
-
-def describe_forwarding(request) -> str:
-    """How the proxy chain shaped this request, with no addresses in it: how many X-Forwarded-For
-    entries arrived, whether each of the last four (counted from the right) is a private address,
-    and which one, if any, equals the True-Client-IP header. Logged by the shared plan page so the
-    right TRUSTED_PROXY_HOPS can be read from Render's logs before any form relies on client_ip.
-    Remove it once the hop count is measured (group plans, slice G1a)."""
-    entries = _forwarded_entries(request)
-    true_client = _parsed(request.META.get("HTTP_TRUE_CLIENT_IP", "").strip())
-    private = ""
-    match = "none"
-    for position in range(1, min(4, len(entries)) + 1):
-        address = _parsed(entries[-position])
-        private += "?" if address is None else ("p" if address.is_private else "-")
-        if address is not None and address == true_client and match == "none":
-            match = str(position)
-    return (
-        f"forwarded_entries={len(entries)} private_from_right={private or '-'} "
-        f"true_client_ip={'absent' if true_client is None else 'present'} true_client_ip_from_right={match}"
-    )
 
 
 def _forwarded_entries(request) -> list[str]:

@@ -195,9 +195,8 @@ BEHIND_TRUSTED_PROXY = not DEBUG
 # How many X-Forwarded-For entries, counted from the right, our own proxies added, the client's
 # address included: plandit.core.public_forms.client_ip uses the entry this far from the right.
 # Entries further left are whatever the client sent. Public reports of Render's chain show
-# "<client-sent>, <client>, <Cloudflare edge>, <Render internal>", so the default is 3. Not yet
-# measured on our service: the shared plan page logs the chain's shape (describe_forwarding), and
-# no form may rely on client_ip until that log confirms this value (group plans, slice G1a).
+# "<client-sent>, <client>, <Cloudflare edge>, <Render internal>", so the default is 3. Measured on
+# our service on November 22, 2026: plain and forged requests alike put the client 3 from the right.
 TRUSTED_PROXY_HOPS = int(env("TRUSTED_PROXY_HOPS", "3"))
 if BEHIND_TRUSTED_PROXY:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
