@@ -93,7 +93,7 @@ extension DayPlan {
             title: title.isEmpty ? "A Plandit day" : title,
             dateText: date.formatted(.dateTime.weekday(.wide).month(.wide).day()),
             timeText: stops.count > 0 ? timeText : "",
-            note: String(trimmedNote.prefix(280)),
+            note: trimmedNote.prefix(codePoints: 280),
             costText: showPrices ? "About \(totalCost.wholeDollarsText) per person" : "",
             answers: true,
             date: Self.isoDay(date),

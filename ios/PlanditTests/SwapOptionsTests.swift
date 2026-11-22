@@ -204,6 +204,16 @@ import XCTest
         XCTAssertEqual(untouched.neighborhood, "Hudson River Park")
     }
 
+    func testTheNoteIsCutTheWayTheServerCountsIt() {
+        // 60 characters, 300 code points: the server's limit is 280 code points.
+        let note = String(repeating: "👩‍👩‍👧", count: 60)
+        let day = plan([stop(SampleData.highLine, at: at(13, 20))])
+        let sent = day.sharedPayload(showPrices: true, note: "  \(note)\n").note
+        XCTAssertEqual(sent.unicodeScalars.count, 280)
+        XCTAssertTrue(note.unicodeScalars.starts(with: sent.unicodeScalars), "trimmed, then cut between code points")
+        XCTAssertEqual(day.sharedPayload(showPrices: true, note: " See you there! ").note, "See you there!")
+    }
+
     // MARK: - Helpers
 
     private func makeStore(sharing: FakePlanSharing) -> PlanditStore {
