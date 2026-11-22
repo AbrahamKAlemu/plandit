@@ -936,3 +936,198 @@ def test_iso_2_an_outsider_cannot_tell_a_group_from_a_random_id(group):
         assert [r.status_code for r in pair] == [404, 404]
         assert pair[0].content == pair[1].content == b""
         assert not pair[0].has_header("ETag") and not pair[1].has_header("ETag")
+
+
+# --- Invites: preview, join and a new link (brief GE-1, GE-2, GE-8; INV-2 to INV-9, INV-14,
+# --- LIM-1, VER-8, MF-G) ----------------------------------------------------------------------
+
+
+def preview_path(token: str) -> str:
+    return f"{BASE}invites/{token}/"
+
+
+def join_path(token: str) -> str:
+    return f"{BASE}invites/{token}/join"
+
+
+def invite_path(group) -> str:
+    return f"{BASE}{group.id}/invite"
+
+
+def token_of(group: GroupPlan) -> str:
+    group.refresh_from_db()
+    return group.invite_token
+
+
+def join(who: Person, group: GroupPlan, token=None):
+    return who.client.post(join_path(token or token_of(group)))
+
+
+def test_inv_2_the_preview_shows_only_the_organizers_first_name_the_date_and_the_member_count(group):
+    sam = person("Sam Rivera")
+    response = sam.client.get(preview_path(token_of(group)))
+    assert response.status_code == 200
+    assert response.json() == {"organizerName": "Maya", "date": group.date.isoformat(), "memberCount": 2}
+    assert response["Cache-Control"] == "private, no-cache"
+
+
+def test_inv_3_joining_adds_the_member_by_first_name_and_they_can_read_the_plan(group, maya, jordan):
+    sam = person("Sam Rivera")
+    response = join(sam, group)
+
+    assert response.status_code == 200
+    member = member_of(group, sam)
+    assert member.display_name == "Sam"
+    group.refresh_from_db()
+    assert (group.version, group.members_version) == (3, 3)
+    assert response["ETag"] == '"3.3"'
+    body = response.json()
+    assert (body["id"], body["memberId"], body["isOrganizer"], body["inviteUrl"]) == (
+        str(group.id),
+        str(member.id),
+        False,
+        None,
+    )
+    assert [m["name"] for m in body["members"]] == ["Maya", "Jordan", "Sam"]
+    assert sam.client.get(detail(group.id)).status_code == 200
+    assert [g["id"] for g in sam.client.get(BASE).json()["groups"]] == [str(group.id)]
+
+
+def test_inv_4_a_joiner_without_a_usable_name_shows_as_friend(group):
+    sam = person("🎉")
+    assert join(sam, group).status_code == 200
+    assert member_of(group, sam).display_name == "Friend"
+
+
+def test_inv_5_joining_twice_changes_nothing(group):
+    sam = person("Sam Rivera")
+    assert join(sam, group).status_code == 200
+    before = row(group)
+    again = join(sam, group)
+    assert again.status_code == 200
+    assert again.json()["memberId"] == str(member_of(group, sam).id)
+    assert GroupMember.objects.filter(group=group, profile=sam.profile).count() == 1
+    assert row(group) == before
+
+
+def full_group(maya, jordan) -> GroupPlan:
+    others = [person(f"Friend{i} Lee") for i in range(6)]
+    group = make_group(maya, jordan, *others)
+    assert group.members.count() == 8
+    return group
+
+
+def test_inv_5_a_member_of_a_full_group_can_still_open_its_link(maya, jordan):
+    group = full_group(maya, jordan)
+    assert jordan.client.get(preview_path(token_of(group))).status_code == 200
+    assert join(jordan, group).status_code == 200
+    assert group.members.count() == 8
+
+
+def test_inv_6_the_organizer_opening_their_own_link_changes_nothing(group, maya):
+    before = row(group)
+    assert maya.client.get(preview_path(token_of(group))).status_code == 200
+    response = join(maya, group)
+    assert response.status_code == 200
+    assert response.json()["isOrganizer"] is True
+    assert row(group) == before
+
+
+def test_lim_1_inv_8_a_ninth_member_cannot_preview_or_join(maya, jordan):
+    group = full_group(maya, jordan)
+    before = row(group)
+    sam = person("Sam Rivera")
+    assert sam.client.get(preview_path(token_of(group))).status_code == 404
+    response = join(sam, group)
+    assert response.status_code == 404
+    assert response.content == b""
+    assert group.members.count() == 8
+    assert row(group) == before
+
+
+def test_inv_7_only_the_latest_link_works_after_replacing_it_twice(group, maya, jordan):
+    first = token_of(group)
+    second_url = maya.client.post(invite_path(group)).json()["inviteUrl"]
+    second = token_of(group)
+    response = maya.client.post(invite_path(group))
+    assert response.status_code == 200
+    third = token_of(group)
+    assert response.json() == {"inviteUrl": f"http://testserver/j/{third}"}
+    assert second_url == f"http://testserver/j/{second}"
+    assert len({first, second, third}) == 3
+
+    sam = person("Sam Rivera")
+    for old in (first, second):
+        assert sam.client.get(preview_path(old)).status_code == 404
+        assert sam.client.post(join_path(old)).status_code == 404
+    assert not GroupMember.objects.filter(profile=sam.profile).exists()
+    assert sam.client.get(preview_path(third)).status_code == 200
+    assert sam.client.post(join_path(third)).status_code == 200
+    assert [m.display_name for m in group.members.order_by("joined_at")] == ["Maya", "Jordan", "Sam"]
+
+
+def test_inv_7_only_the_organizer_replaces_the_link(group, jordan):
+    before = row(group)
+    assert jordan.client.post(invite_path(group)).status_code == 404
+    assert person("Sam Rivera").client.post(invite_path(group)).status_code == 404
+    assert row(group) == before
+
+
+def test_inv_9_mf_g_someone_the_organizer_removed_cannot_rejoin_with_the_link(group):
+    riley = person("Riley Park")
+    GroupRemoval.objects.create(group=group, profile_id=riley.id)
+    assert riley.client.get(preview_path(token_of(group))).status_code == 404
+    assert join(riley, group).status_code == 404
+    assert not GroupMember.objects.filter(profile=riley.profile).exists()
+
+
+def test_inv_14_a_group_past_its_day_cannot_be_previewed_or_joined(maya, jordan):
+    over = make_group(maya, jordan, day=today() - timedelta(days=1))
+    sam = person("Sam Rivera")
+    assert sam.client.get(preview_path(token_of(over))).status_code == 404
+    assert join(sam, over).status_code == 404
+    on_the_day = make_group(person("Ana Cruz"), day=today())
+    assert sam.client.get(preview_path(token_of(on_the_day))).status_code == 200
+    assert join(sam, on_the_day).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "token",
+    ["fake-invite-token", "fake-invite-token-for-tests", "fake.invite.token.for.t", "x" * 200, "%20"],
+)
+def test_a_malformed_or_unknown_token_is_404(group, token):
+    sam = person("Sam Rivera")
+    assert sam.client.get(preview_path(token)).status_code == 404
+    assert sam.client.post(join_path(token)).status_code == 404
+
+
+def test_iso_6_an_anonymous_session_can_preview_but_not_join(group):
+    """N-10: joining needs a name to show; the preview shows nothing about the caller."""
+    anon = person("", is_anonymous=True)
+    assert anon.client.get(preview_path(token_of(group))).status_code == 200
+    response = join(anon, group)
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Sign in with email or Apple to plan with friends."}
+    assert not GroupMember.objects.filter(profile=anon.profile).exists()
+
+
+def test_invites_need_an_account(group):
+    for client in (anonymous_client(), deleted_client()):
+        assert client.get(preview_path(token_of(group))).status_code == 401
+        assert client.post(join_path(token_of(group))).status_code == 401
+        assert client.post(invite_path(group)).status_code == 401
+
+
+def test_ver_8_the_etag_changes_when_someone_joins(group, jordan):
+    old = jordan.client.get(detail(group.id))["ETag"]
+    assert join(person("Sam Rivera"), group).status_code == 200
+    response = jordan.client.get(detail(group.id), HTTP_IF_NONE_MATCH=old)
+    assert response.status_code == 200
+    assert [m["name"] for m in response.json()["members"]] == ["Maya", "Jordan", "Sam"]
+
+
+@pytest.mark.parametrize("path", ["{base}invites/{token}/join/", "{base}{id}/invite/"])
+def test_ctr_1_post_paths_work_with_a_trailing_slash_too(group, maya, path):
+    """POST can't follow APPEND_SLASH's redirect, so both spellings answer (never 301)."""
+    url = path.format(base=BASE, token=token_of(group), id=group.id)
+    assert maya.client.post(url).status_code == 200

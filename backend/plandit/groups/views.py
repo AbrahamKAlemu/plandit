@@ -18,6 +18,7 @@ Locking (MF-E), so writes never deadlock or fail at commit:
 
 import functools
 import logging
+import re
 from contextlib import contextmanager
 
 from django.conf import settings
@@ -35,7 +36,16 @@ from plandit.core.models import Profile
 from plandit.core.public_forms import FIRST_NAME_MAX_LENGTH, clean_first_name
 from plandit.core.retention import purge_expired
 
-from .models import EDIT_LOG_KEPT, GroupMember, GroupPlan, GroupPlanEdit
+from .models import (
+    EDIT_LOG_KEPT,
+    INVITE_TOKEN_LENGTH,
+    MAX_MEMBERS,
+    GroupMember,
+    GroupPlan,
+    GroupPlanEdit,
+    GroupRemoval,
+    new_invite_token,
+)
 from .validation import (
     MAX_REQUEST_BYTES,
     PLAN_MAX_BYTES,
@@ -59,6 +69,7 @@ TOO_LARGE = "This plan is too big to save for the group."
 DAY_OVER = "This plan's day is over."
 NOT_THIS_PLAN = "This isn't the group's plan."
 FALLBACK_NAME = "Friend"
+INVITE_TOKEN = re.compile(rf"\A[A-Za-z0-9_-]{{{INVITE_TOKEN_LENGTH}}}\Z")
 
 
 def invite_url(request, token: str) -> str:
@@ -271,6 +282,39 @@ def _conflict_response(group: GroupPlan, base: int):
     return _with_cache_headers(Response(body, status=status.HTTP_409_CONFLICT), group)
 
 
+def _add_member(group: GroupPlan, profile: Profile) -> GroupMember:
+    """Add the caller to the locked group, after the invite was checked again under the lock."""
+    member = GroupMember.objects.create(group=group, profile=profile, display_name=display_name(profile))
+    group.members_version += 1
+    group.save(update_fields=["members_version", "updated_at"])
+    return member
+
+
+def _replace_token(group: GroupPlan) -> None:
+    """Turn the old link off (brief GE-8). Members stay; a join that waited for this lock sees the
+    new token and is refused (CON-4b)."""
+    group.invite_token = new_invite_token()
+    group.save(update_fields=["invite_token", "updated_at"])
+
+
+def _invited_group(token: str) -> GroupPlan | None:
+    return GroupPlan.objects.filter(invite_token=token).first() if INVITE_TOKEN.match(token) else None
+
+
+def _can_use_invite(group: GroupPlan, profile: Profile) -> tuple[bool, GroupMember | None]:
+    """Whether the invite works for this caller, and their membership if they have one. It doesn't
+    once the plan's day is over (N-7), for someone the organizer removed (MF-G), or for a newcomer
+    when the group is full (brief GE-1). The four cases look the same to the caller (N-17)."""
+    if group.date < timezone.localdate():
+        return False, None
+    if GroupRemoval.objects.filter(group=group, profile_id=profile.pk).exists():
+        return False, None
+    member = GroupMember.objects.filter(group=group, profile=profile).first()
+    if member is None and group.members.count() >= MAX_MEMBERS:
+        return False, None
+    return True, member
+
+
 class GroupPlanListView(APIView):
     """POST /api/group-plans/: create a group plan from one of the caller's plans (brief GE-1).
     GET: the caller's groups, soonest first, with their ETags."""
@@ -400,3 +444,67 @@ class GroupPlanDetailView(APIView):
                 return _conflict_response(group, base)
             _write_plan(group, caller, plan, edit_id, kind, stop_ids)
             return _saved_response(group, group.version)
+
+
+class GroupInviteView(APIView):
+    """GET /api/group-plans/invites/<token>/: what the join sheet shows before joining: the
+    organizer's first name, the date and the member count, and nothing else (brief GE-2, INV-2).
+    404 when the link doesn't work for the caller. Anonymous sessions may look; they can't join."""
+
+    def get(self, request, token):
+        group = _invited_group(token)
+        usable = group is not None and _can_use_invite(group, request.user)[0]
+        if not usable:
+            return _not_found()
+        organizer = GroupMember.objects.filter(group=group, profile_id=group.owner_id).first()
+        body = {
+            "organizerName": organizer.display_name if organizer else FALLBACK_NAME,
+            "date": group.date.isoformat(),
+            "memberCount": group.members.count(),
+        }
+        response = Response(body)
+        response["Cache-Control"] = "private, no-cache"
+        return response
+
+
+class GroupJoinView(APIView):
+    """POST /api/group-plans/invites/<token>/join: join the group (brief GE-2). 200 with the group,
+    as GET answers it; joining again, or as the organizer, changes nothing. 404 when the link
+    doesn't work for the caller (`_can_use_invite`)."""
+
+    @try_again_on_lock_timeout
+    def post(self, request, token):
+        _refuse_anonymous(request)
+        if _invited_group(token) is None:
+            return _not_found()
+        with locking():
+            hold_profile(request.user)
+            pk = GroupPlan.objects.filter(invite_token=token).values_list("pk", flat=True).first()
+            group = lock_group(pk) if pk is not None else None
+            # Again, under the lock: the link may have been replaced, the group ended or filled, or
+            # the caller removed while this waited (CON-2, CON-4b).
+            if group is None or group.invite_token != token:
+                return _not_found()
+            usable, caller = _can_use_invite(group, request.user)
+            if not usable:
+                return _not_found()
+            if caller is None:
+                caller = _add_member(group, request.user)
+        return _detail_response(request, group, caller)
+
+
+class GroupInviteReplaceView(APIView):
+    """POST /api/group-plans/<id>/invite: the organizer turns the old link off and gets a new one
+    (brief GE-8). 200 `{inviteUrl}`. Anyone else gets 404 and the link stays."""
+
+    @try_again_on_lock_timeout
+    def post(self, request, group_id):
+        pk = parse_uuid(group_id)
+        if pk is None:
+            return _not_found()
+        with locking():
+            group = lock_group(pk)
+            if group is None or group.owner_id != request.user.pk:
+                return _not_found()
+            _replace_token(group)
+        return Response({"inviteUrl": invite_url(request, group.invite_token)})
