@@ -194,7 +194,7 @@ extension DayPlan {
     /// Evening-only places (nightlife) don't start before 8 PM.
     private static func evening(_ start: Date, for place: Place, calendar: Calendar) -> Date {
         guard let opens = place.category.earliestStartMinutes,
-              let evening = calendar.date(byAdding: .minute, value: opens, to: calendar.startOfDay(for: start)) else { return start }
+              let evening = calendar.date(atClockMinutes: opens, on: start) else { return start }
         return max(start, evening)
     }
 }
