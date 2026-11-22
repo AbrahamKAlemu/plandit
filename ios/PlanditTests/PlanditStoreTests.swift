@@ -498,4 +498,62 @@ final class PlanditStoreTests: XCTestCase {
         _ = store.addToToday(store.plannablePosts[1].id)
         XCTAssertTrue(store.suggestions.isEmpty, "no suggestions once Today has a plan")
     }
+
+    // MARK: - Places done today (SP-9)
+
+    @MainActor func testPlaceDoneTodayIsNotSuggestedAfterItLeavesThePlan() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PlanditStoreTests-\(UUID().uuidString).json")
+        let storage = SnapshotStore(url: url)
+        defer { storage.reset() }
+        let posts = suggestionPosts()
+
+        let store = PlanditStore(
+            today: .empty(for: .now, budget: 60), saved: posts, profile: SampleData.profile,
+            pastPlans: [], visited: [], extractor: NoExtractor(), storage: storage
+        )
+        store.suggestionStart = { SampleData.at(14) }
+        store.refreshSuggestions()
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+
+        // Done at the first stop, then every stop taken out of the plan.
+        let first = store.today.stops[0]
+        let done = try XCTUnwrap(first.sourcePostID)
+        store.complete(first.id)
+        for stop in store.today.stops { store.removeStop(stop.id) }
+        XCTAssertTrue(store.today.stops.isEmpty)
+
+        XCTAssertFalse(store.suggestions.isEmpty, "the places not done yet are still suggested")
+        XCTAssertFalse(store.suggestions.contains { $0.postIDs.contains(done) }, "the place done today isn't")
+        XCTAssertEqual(store.postsDoneToday, [done])
+
+        // After a restart, from the files on the phone.
+        store.flush()
+        let reloaded = PlanditStore(snapshot: try XCTUnwrap(storage.load()), extractor: NoExtractor(), storage: storage)
+        reloaded.suggestionStart = { SampleData.at(14) }
+        reloaded.refreshSuggestions()
+        XCTAssertEqual(reloaded.postsDoneToday, [done])
+        XCTAssertFalse(reloaded.suggestions.isEmpty)
+        XCTAssertFalse(reloaded.suggestions.contains { $0.postIDs.contains(done) }, "still skipped after a restart")
+        // Kept beside the snapshot, not in it: the synced copy's shape doesn't change.
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        XCTAssertTrue(Set(object.keys).isSubset(of: ["saved", "today", "profile", "pastPlans", "visited", "sharedLink"]),
+                      "\(object.keys.sorted())")
+
+        // A new day starts with nothing done.
+        reloaded.rollOverIfNeeded(now: try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 1, to: .now)))
+        XCTAssertTrue(reloaded.postsDoneToday.isEmpty)
+        reloaded.flush()
+        let nextDay = PlanditStore(snapshot: try XCTUnwrap(storage.load()), extractor: NoExtractor(), storage: storage)
+        XCTAssertTrue(nextDay.postsDoneToday.isEmpty)
+    }
+
+    @MainActor func testUndoingDoneHereMeansNotDone() throws {
+        let (store, _) = suggestionStore(suggestionPosts(), start: SampleData.at(14))
+        XCTAssertEqual(store.useSuggestion(try XCTUnwrap(store.suggestions.first)), .applied)
+        let first = store.today.stops[0]
+        store.complete(first.id)
+        XCTAssertEqual(store.postsDoneToday, [try XCTUnwrap(first.sourcePostID)])
+        store.leave(first.id)
+        XCTAssertTrue(store.postsDoneToday.isEmpty, "back to planned: not done after all")
+    }
 }
