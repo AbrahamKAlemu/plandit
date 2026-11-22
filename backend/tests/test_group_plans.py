@@ -1239,6 +1239,20 @@ def test_ver_8_the_etag_changes_when_someone_joins(group, jordan):
     assert [m["name"] for m in response.json()["members"]] == ["Maya", "Jordan", "Sam"]
 
 
+def test_ver_8_the_etag_changes_when_the_link_is_replaced(group, maya):
+    """So the organizer's other phone, polling with its ETag, gets the new link."""
+    group.refresh_from_db()
+    old_tag, members_version = etag(group), group.members_version
+    old_url = maya.client.get(detail(group.id)).json()["inviteUrl"]
+    new_url = maya.client.post(invite_path(group)).json()["inviteUrl"]
+    response = maya.client.get(detail(group.id), HTTP_IF_NONE_MATCH=old_tag)
+    assert response.status_code == 200
+    assert response.json()["inviteUrl"] == new_url != old_url
+    assert response["ETag"] == etag(group) != old_tag
+    group.refresh_from_db()
+    assert (group.version, group.members_version) == (3, members_version + 1)
+
+
 @pytest.mark.parametrize("path", ["{base}invites/{token}/join/", "{base}{id}/invite/"])
 def test_ctr_1_post_paths_work_with_a_trailing_slash_too(group, maya, path):
     """POST can't follow APPEND_SLASH's redirect, so both spellings answer (never 301)."""
@@ -1734,7 +1748,8 @@ def test_iso_1_every_endpoint_against_every_caller(world, endpoint, actor):
         assert len(members_now) == len(members_before) + (0 if is_member else 1)
     elif endpoint == "new link":
         assert (row(group)[4] != before[4]) is (actor == "organizer")
-        assert row(group)[:3] == before[:3]
+        assert row(group)[:2] == before[:2]
+        assert row(group)[2] == before[2] + (actor == "organizer")  # membersVersion, for the ETag
     elif endpoint == "put from the current version" and response.status_code == 200:
         assert row(group)[1] == before[1] + 1
     elif endpoint in ("remove someone else", "leave") and response.status_code == 204:

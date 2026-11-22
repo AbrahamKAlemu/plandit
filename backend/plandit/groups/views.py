@@ -312,9 +312,11 @@ def _add_member(group: GroupPlan, profile: Profile) -> GroupMember:
 
 def _replace_token(group: GroupPlan) -> None:
     """Turn the old link off (brief GE-8). Members stay; a join that waited for this lock sees the
-    new token and is refused (CON-4b)."""
+    new token and is refused (CON-4b). `membersVersion` goes up, so the ETag changes and the
+    organizer's other devices get the new link on their next poll."""
     group.invite_token = new_invite_token()
-    group.save(update_fields=["invite_token", "updated_at"])
+    group.members_version += 1
+    group.save(update_fields=["invite_token", "members_version", "updated_at"])
 
 
 def _remove_member(group: GroupPlan, member: GroupMember, *, by_organizer: bool) -> None:
