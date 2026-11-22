@@ -120,6 +120,35 @@ import XCTest
         XCTAssertEqual(calls, 2, "after 10 s it does")
     }
 
+    func testTwoRefreshesAtLaunchAskOnce() async throws {
+        // The app becoming active and Today appearing both ask before the first answer is back.
+        let (store, answers) = try await sharedStore()
+        await answers.set([answer("Maya", .in)])
+        let start = Date()
+        await answers.holdNext()
+        let first = Task { await store.refreshShareAnswers(now: start) }
+        try await waitUntilHeld(answers)
+        await store.refreshShareAnswers(now: start.addingTimeInterval(0.5))
+        await answers.release()
+        await first.value
+        let calls = await answers.calls
+        XCTAssertEqual(calls, 1)
+        XCTAssertEqual(store.answerSummary?.text, "1 in")
+    }
+
+    func testAFirstRefreshThatFailsTriesAgainNextTime() async throws {
+        let (store, answers) = try await sharedStore()
+        await answers.set([answer("Maya", .in)])
+        await answers.failNext()
+        let start = Date()
+        await store.refreshShareAnswers(now: start)
+        XCTAssertNil(store.answerSummary)
+        await store.refreshShareAnswers(now: start.addingTimeInterval(1))
+        let calls = await answers.calls
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(store.answerSummary?.text, "1 in")
+    }
+
     func testAFailedRefreshKeepsWhatWasShownAndTriesAgainNextTime() async throws {
         let (store, answers) = try await sharedStore()
         await answers.set([answer("Maya", .in)])

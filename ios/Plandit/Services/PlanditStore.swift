@@ -32,8 +32,10 @@ final class PlanditStore {
     /// Friends' answers on `answersSlug`'s page, as last fetched. Memory only (GS-7).
     private(set) var fetchedAnswers: [ShareAnswer] = []
     private var answersSlug: String?
-    /// When answers were last fetched, so Today appearing again doesn't ask again within 10 s.
-    @ObservationIgnored private var answersFetchedAt: Date?
+    /// The link and time the last refresh that counts went out, set as it starts: Today appearing
+    /// again within 10 s doesn't ask again, and neither does Today while the app's launch refresh is
+    /// still out. A refresh that fails puts back what was there, so the next one tries again.
+    @ObservationIgnored private var answersAsked: (slug: String, at: Date)?
     /// Goes up with each change to the answers made here (removing one, stopping sharing), so a
     /// refresh that was out meanwhile can't bring back what it changed (GV-7).
     @ObservationIgnored private var answersChanges = 0
@@ -1028,15 +1030,19 @@ final class PlanditStore {
     /// Failures are quiet: what was shown stays, and the next appearance tries again.
     func refreshShareAnswers(now: Date = Date(), force: Bool = false) async {
         guard let link = todayLink, let answerClient else { return }
-        if !force, link.slug == answersSlug, let answersFetchedAt,
-           now.timeIntervalSince(answersFetchedAt) < Self.answersRefreshInterval { return }
+        if !force, let asked = answersAsked, asked.slug == link.slug,
+           now.timeIntervalSince(asked.at) < Self.answersRefreshInterval { return }
+        let previous = answersAsked
+        answersAsked = (link.slug, now)
         let changes = answersChanges
-        guard let answers = try? await answerClient.answers(slug: link.slug) else { return }
+        guard let answers = try? await answerClient.answers(slug: link.slug) else {
+            if answersAsked?.slug == link.slug, answersAsked?.at == now { answersAsked = previous }
+            return
+        }
         // Shared again, or stopped, or an answer removed while the request was out: what it read
         // may be from before that.
         guard todayLink?.slug == link.slug, answersChanges == changes else { return }
         answersSlug = link.slug
-        answersFetchedAt = now
         if answers != fetchedAnswers { fetchedAnswers = answers }
     }
 
@@ -1052,7 +1058,7 @@ final class PlanditStore {
         answersChanges += 1
         fetchedAnswers = []
         answersSlug = nil
-        answersFetchedAt = nil
+        answersAsked = nil
     }
 
     enum SwapAvailability: Equatable {
