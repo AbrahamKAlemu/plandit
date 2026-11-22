@@ -82,7 +82,15 @@ def stop_json(stop_id=None, name="The Met") -> dict:
     """One `PlanStop` as the app encodes it (ios/Plandit/Models/DayPlan.swift)."""
     return {
         "id": stop_id or new_id(),
-        "place": {"id": new_id(), "name": name, "category": "culture", "neighborhood": "Upper East Side"},
+        "place": {
+            "id": new_id(),
+            "name": name,
+            "category": "culture",
+            "neighborhood": "Upper East Side",
+            "address": "1000 5th Ave",
+            "latitude": 40.7794,
+            "longitude": -73.9632,
+        },
         "start": 785_001_000.0,
         "durationMinutes": 90,
         "estimatedCost": 30,
@@ -431,10 +439,12 @@ def test_lim_4_create_accepts_20_stops_and_refuses_21():
     assert response.json() == {"plan": ["A group plan has at most 20 stops."]}
 
 
-# The keys the app's Codable types decode with no default (ios/Plandit/Models/DayPlan.swift on
-# feat/group-requests-app): a plan without one fails to decode on every member's phone.
+# The keys the app's Codable types decode with no default (ios/Plandit/Models/DayPlan.swift,
+# Place.swift and Pricing.swift): a plan without one fails to decode on every member's phone.
 STOP_KEYS = ["id", "place", "start", "durationMinutes", "estimatedCost", "status"]
 LEG_KEYS = ["id", "fromStopID", "toStopID", "mode", "minutes", "miles"]
+PLACE_KEYS = ["id", "name", "category", "neighborhood", "address", "latitude", "longitude"]
+COST_ITEM_KEYS = ["id", "name", "amount"]
 
 
 def without(item: dict, key: str) -> dict:
@@ -468,6 +478,17 @@ def bad_plans(plan_id=None):
     stop = stop_json()
     duplicate = {**stop_json(), "id": stop["id"].lower()}
     leg = plan()["legs"][0]
+    item = {"id": new_id(), "name": "Tickets", "amount": 25}
+
+    def stop_with(**fields):
+        return plan(stops=[{**stop, **fields}])
+
+    def place_with(**fields):
+        return stop_with(place={**stop["place"], **fields})
+
+    def leg_with(**fields):
+        return plan(legs=[{**leg, **fields}])
+
     cases = {
         "not an object": [plan()],
         "no id": without(plan(), "id"),
@@ -486,8 +507,53 @@ def bad_plans(plan_id=None):
         **{f"a leg without {key}": plan(legs=[without(leg, key)]) for key in LEG_KEYS},
         "a leg with a null mode": plan(legs=[{**leg, "mode": None}]),
         "extras not a list": plan(extras={"snacks": 8}),
-        "extras null": plan(extras=None),
-        "nested 33 levels deep": plan(extras=nested(32)),
+        "nested 33 levels deep": plan(fromANewerApp=nested(32)),
+        # The values inside each stop, place, leg and cost item, as the app's Codable types decode them.
+        "a place not an object": stop_with(place="The Met"),
+        **{f"a place without {key}": stop_with(place=without(stop["place"], key)) for key in PLACE_KEYS},
+        "a place with a null name": place_with(name=None),
+        "a place id not a UUID": place_with(id="met-1"),
+        "a place id in braces": place_with(id="{" + stop["place"]["id"] + "}"),
+        "a place name not text": place_with(name=7),
+        "a place category the app doesn't know": place_with(category="museum"),
+        "a place category in capitals": place_with(category="Culture"),
+        "a place neighborhood not text": place_with(neighborhood=["Upper East Side"]),
+        "a place address not text": place_with(address=1000),
+        "a place latitude as text": place_with(latitude="40.7794"),
+        "a place longitude a bool": place_with(longitude=True),
+        "a place's hours not text": place_with(hours=9),
+        "a stop start as a date string": stop_with(start="2026-11-28T15:00:00Z"),
+        "a stop durationMinutes with a fraction": stop_with(durationMinutes=90.5),
+        "a stop durationMinutes as text": stop_with(durationMinutes="90"),
+        "a stop durationMinutes past 64 bits": stop_with(durationMinutes=2**63),
+        "a stop estimatedCost as text": stop_with(estimatedCost="30"),
+        "a stop estimatedCost a bool": stop_with(estimatedCost=False),
+        "a stop status the app doesn't know": stop_with(status="skipped"),
+        "a stop status not text": stop_with(status=1),
+        "a stop note not text": stop_with(note=5),
+        "a stop sourcePostID not a UUID": stop_with(sourcePostID="post-1"),
+        "a stop costIsCustom as a number": stop_with(costIsCustom=1),
+        "a stop costItems not a list": stop_with(costItems={"tickets": 25}),
+        "a stop cost item not an object": stop_with(costItems=["Tickets"]),
+        **{f"a stop cost item without {key}": stop_with(costItems=[without(item, key)]) for key in COST_ITEM_KEYS},
+        "a stop cost item id not a UUID": stop_with(costItems=[{**item, "id": "tickets"}]),
+        "a stop cost item name not text": stop_with(costItems=[{**item, "name": 25}]),
+        "a stop cost item amount as text": stop_with(costItems=[{**item, "amount": "25"}]),
+        "a leg id not a UUID": leg_with(id="leg-1"),
+        "a leg fromStopID not a UUID": leg_with(fromStopID=7),
+        "a leg toStopID as bare hex": leg_with(toStopID=leg["toStopID"].replace("-", "")),
+        "a leg mode not text": leg_with(mode=3),
+        "a leg minutes with a fraction": leg_with(minutes=25.5),
+        "a leg miles as text": leg_with(miles="3.1"),
+        "a leg cost as text": leg_with(cost="2.90"),
+        "a leg detail not text": leg_with(detail=["Q train"]),
+        "a leg isChosen as text": leg_with(isChosen="yes"),
+        "an extra not an object": plan(extras=["Snacks"]),
+        "an extra without amount": plan(extras=[without(item, "amount")]),
+        "an extra with a null name": plan(extras=[{**item, "name": None}]),
+        "an extra amount as text": plan(extras=[{**item, "amount": "8"}]),
+        "date as a date string": plan(date="2026-11-28"),
+        "a date past what a Double holds": plan(date=10**400),
         "no date": without(plan(), "date"),
         "null date": plan(date=None),
         "no title": without(plan(), "title"),
@@ -498,6 +564,10 @@ def bad_plans(plan_id=None):
         "a null character": plan(title="Sat\x00urday"),
     }
     return cases
+
+
+PLACE_NEEDS = "Every place needs `id`, `name`, `category`, `neighborhood`, `address`, `latitude` and `longitude`."
+COST_ITEM_NEEDS = "Every cost item needs `id`, `name` and `amount`."
 
 
 @pytest.mark.parametrize("case", list(bad_plans()))
@@ -522,6 +592,43 @@ def test_lim_5_create_refuses_a_plan_of_the_wrong_shape(case):
         ("a leg without miles", "Every leg needs `id`, `fromStopID`, `toStopID`, `mode`, `minutes` and `miles`."),
         ("extras not a list", "`extras` must be a list."),
         ("nested 33 levels deep", "Can't be nested more than 32 levels deep."),
+        ("a place not an object", PLACE_NEEDS),
+        ("a place without address", PLACE_NEEDS),
+        ("a place with a null name", PLACE_NEEDS),
+        ("a place id in braces", "Every place's `id` must be a UUID in its 36-character form."),
+        ("a place name not text", "Every place's `name` must be text."),
+        (
+            "a place category the app doesn't know",
+            "Every place's `category` must be one of `food`, `coffee`, `activity`, `outdoors`, `culture`, "
+            "`nightlife` or `shopping`.",
+        ),
+        ("a place latitude as text", "Every place's `latitude` must be a number."),
+        ("a place's hours not text", "Every place's `hours` must be text."),
+        ("a stop start as a date string", "Every stop's `start` must be a number."),
+        ("a stop durationMinutes with a fraction", "Every stop's `durationMinutes` must be a whole number."),
+        ("a stop durationMinutes past 64 bits", "Every stop's `durationMinutes` must be a whole number."),
+        ("a stop estimatedCost a bool", "Every stop's `estimatedCost` must be a number."),
+        ("a stop status the app doesn't know", "Every stop's `status` must be one of `done`, `now` or `upcoming`."),
+        ("a stop note not text", "Every stop's `note` must be text."),
+        ("a stop sourcePostID not a UUID", "Every stop's `sourcePostID` must be a UUID in its 36-character form."),
+        ("a stop costIsCustom as a number", "Every stop's `costIsCustom` must be true or false."),
+        ("a stop costItems not a list", "Every stop's `costItems` must be a list."),
+        ("a stop cost item not an object", COST_ITEM_NEEDS),
+        ("a stop cost item without id", COST_ITEM_NEEDS),
+        ("a stop cost item amount as text", "Every cost item's `amount` must be a number."),
+        ("a leg id not a UUID", "Every leg's `id` must be a UUID in its 36-character form."),
+        ("a leg toStopID as bare hex", "Every leg's `toStopID` must be a UUID in its 36-character form."),
+        ("a leg mode not text", "Every leg's `mode` must be text."),
+        ("a leg minutes with a fraction", "Every leg's `minutes` must be a whole number."),
+        ("a leg miles as text", "Every leg's `miles` must be a number."),
+        ("a leg cost as text", "Every leg's `cost` must be a number."),
+        ("a leg detail not text", "Every leg's `detail` must be text."),
+        ("a leg isChosen as text", "Every leg's `isChosen` must be true or false."),
+        ("an extra not an object", COST_ITEM_NEEDS),
+        ("an extra with a null name", COST_ITEM_NEEDS),
+        ("an extra amount as text", "Every cost item's `amount` must be a number."),
+        ("date as a date string", "`date` must be a number."),
+        ("a date past what a Double holds", "`date` must be a number."),
     ],
 )
 def test_lim_5_the_new_shape_checks_say_what_is_wrong(case, message):
@@ -542,8 +649,59 @@ def test_lim_5_a_plan_with_only_the_keys_the_app_needs_is_accepted_unchanged():
 
 
 def test_lim_5_a_plan_nested_32_levels_deep_is_accepted():
-    """The plan object is level 1, so `extras` may hold 31 more."""
-    assert create(person("Maya Lopez"), plan_json(extras=nested(31))).status_code == 201
+    """The plan object is level 1, so a key the app doesn't read may hold 31 more."""
+    assert create(person("Maya Lopez"), plan_json(fromANewerApp=nested(31))).status_code == 201
+
+
+def lenient_plans() -> dict:
+    """Plans whose values the app decodes although they aren't what it writes: the server accepts
+    them as Swift's JSONDecoder does, and stores them unchanged."""
+    stop = stop_json()
+    item = {"id": new_id().lower(), "name": "Tickets", "amount": 25, "fromANewerApp": True}
+
+    def stop_with(**fields):
+        return plan_json(stops=[{**stop, **fields}, stop_json()])
+
+    def place_with(**fields):
+        return stop_with(place={**stop["place"], **fields})
+
+    def leg_with(**fields):
+        plan = plan_json()
+        plan["legs"] = [{**plan["legs"][0], **fields}]
+        return plan
+
+    return {
+        "extras null": plan_json(extras=None),
+        "extras with a cost item": plan_json(extras=[item]),
+        "optional stop values null": stop_with(note=None, sourcePostID=None, costItems=None, costIsCustom=None),
+        "optional stop values set": stop_with(
+            note="Go early", sourcePostID=new_id(), costItems=[item], costIsCustom=True
+        ),
+        "a stop without its optional keys": plan_json(stops=[{key: stop[key] for key in STOP_KEYS}]),
+        "a place's hours null": place_with(hours=None),
+        "a place's hours set": place_with(hours="10 AM to 5 PM"),
+        "whole numbers written with a fraction": stop_with(durationMinutes=90.0),
+        "whole numbers for Doubles": place_with(latitude=41, longitude=-74),
+        "a stop start as a whole number": stop_with(start=785_001_000),
+        "an empty name and address": place_with(name="", address=""),
+        "lower-case UUIDs": place_with(id=stop["place"]["id"].lower()),
+        "keys the app doesn't read": stop_with(fromANewerApp={"a": 1}, place={**stop["place"], "rating": 4.5}),
+        "optional leg values null": leg_with(cost=None, detail=None, isChosen=None),
+        "a leg mode the app doesn't know": leg_with(mode="scooter"),
+        "a leg minutes written with a fraction": leg_with(minutes=25.0),
+        "leg stop ids that aren't in the plan": leg_with(fromStopID=new_id(), toStopID=new_id()),
+    }
+
+
+@pytest.mark.parametrize("case", list(lenient_plans()))
+def test_lim_5_values_the_app_decodes_are_accepted_unchanged(case):
+    """Optional values may be missing or null, unknown keys are kept, a whole number may be written
+    90.0, a leg's `mode` may be any text (the app reads one it doesn't know as walking), and a leg's
+    stop ids needn't name a stop in the plan (the app never assumes they do)."""
+    plan = lenient_plans()[case]
+    response = create(person("Maya Lopez"), plan)
+    assert response.status_code == 201, response.json()
+    assert response.json()["plan"] == plan
 
 
 @pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])

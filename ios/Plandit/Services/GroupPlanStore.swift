@@ -86,8 +86,11 @@ enum GroupPlanFailure: Error, Equatable {
 @Observable @MainActor
 final class GroupPlanStore {
     private(set) var groups: [GroupPlanState] = []
-    /// Messages for the person (the screens decide how to show them).
-    @ObservationIgnored var onMessage: ((GroupPlanMessage) -> Void)?
+    /// Messages for the person (the screens decide how to show them). Ones from before it's set
+    /// (queued edits sent at launch) wait for it, the latest few, and are delivered in order then.
+    @ObservationIgnored var onMessage: ((GroupPlanMessage) -> Void)? {
+        didSet { deliverWaitingMessages() }
+    }
     /// Where finished group days are filed.
     @ObservationIgnored weak var history: PlanditStore?
 
@@ -112,6 +115,10 @@ final class GroupPlanStore {
         /// The version of `plan`; 0 before the first fetch.
         var version: Int
         var membersVersion: Int
+        /// The `membersVersion` of the last whole group fetched: what `inviteUrl`, `memberId` and
+        /// `isOrganizer` are from. A PUT's answer or a 409 brings newer members without them; until a
+        /// GET brings the rest, no ETag is kept, so the next refresh fetches the whole group.
+        var detailMembersVersion: Int
         /// Exactly as the server sent it, for `If-None-Match`; nil when it doesn't name what's held.
         var etag: String?
         /// The server's plan, without this phone's queued edits.
@@ -129,6 +136,7 @@ final class GroupPlanStore {
             date = detail.date
             version = detail.version
             membersVersion = detail.membersVersion
+            detailMembersVersion = detail.membersVersion
             self.etag = etag
             plan = detail.plan
             members = detail.members
@@ -145,6 +153,7 @@ final class GroupPlanStore {
             date = summary.date
             version = 0
             membersVersion = 0
+            detailMembersVersion = 0
             plan = nil
             members = []
             memberId = summary.memberId
@@ -156,7 +165,8 @@ final class GroupPlanStore {
 
         /// Takes what's newer: the plan by `version`, the members by `membersVersion`; an older
         /// answer (a poll that crossed a PUT) changes nothing (RB-7). The ETag is kept only while
-        /// it names exactly the plan and members held.
+        /// it names exactly the plan and members held, and the whole group was fetched at those
+        /// members (a 304 would otherwise keep a link replaced on another phone).
         mutating func absorb(version: Int, membersVersion: Int, plan: DayPlan?, members: [GroupPlanMember], etag: String?) {
             let planNewer = plan != nil && (self.plan == nil || version > self.version)
             let membersNewer = membersVersion > self.membersVersion
@@ -171,21 +181,23 @@ final class GroupPlanStore {
                 if let organizer = members.first(where: \.isOrganizer) { organizerName = organizer.name }
                 if let me = members.first(where: { $0.id == memberId }) { isOrganizer = me.isOrganizer }
             }
-            if self.version == version, self.membersVersion == membersVersion {
+            if self.version == version, self.membersVersion == membersVersion, detailMembersVersion == membersVersion {
                 self.etag = etag
             } else if planNewer || membersNewer {
                 self.etag = nil
             }
         }
 
+        /// A whole group (a GET, create or join): also the link and this person's place in it, when
+        /// newer than the ones held, even if a PUT's answer already brought these members.
         mutating func absorb(_ detail: GroupPlanDetail, etag: String?) {
-            let membersNewer = detail.membersVersion > membersVersion
-            absorb(version: detail.version, membersVersion: detail.membersVersion, plan: detail.plan, members: detail.members, etag: etag)
-            if membersNewer {
+            if detail.membersVersion > detailMembersVersion {
+                detailMembersVersion = detail.membersVersion
                 memberId = detail.memberId
                 isOrganizer = detail.isOrganizer
                 inviteUrl = detail.inviteUrl
             }
+            absorb(version: detail.version, membersVersion: detail.membersVersion, plan: detail.plan, members: detail.members, etag: etag)
         }
     }
 
@@ -204,6 +216,8 @@ final class GroupPlanStore {
     static let pollInterval: Duration = .seconds(15)
     /// After this many 409s in a row an edit is dropped with a message (N-3).
     static let conflictsAllowed = 3
+    /// Messages kept while nothing listens; older ones are dropped.
+    private static let messagesKept = 3
 
     @ObservationIgnored private var records: [Record]
     @ObservationIgnored private let server: any GroupPlanServing
@@ -226,6 +240,8 @@ final class GroupPlanStore {
     /// Left, ended or dropped in this session: a list that crossed it doesn't bring it back.
     @ObservationIgnored private var forgotten: Set<UUID> = []
     @ObservationIgnored private var conflicts: [UUID: Conflict] = [:]
+    /// Said before `onMessage` was set, oldest first.
+    @ObservationIgnored private var waitingMessages: [GroupPlanMessage] = []
 
     init(userID: String, server: any GroupPlanServing, directory: URL = SnapshotStore.directory, calendar: Calendar = .current,
          now: @escaping () -> Date = { Date() }, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
@@ -388,11 +404,24 @@ final class GroupPlanStore {
         while !Task.isCancelled, !isClosed, !readOnly.contains(id) {
             dropEditsThatNoLongerApply(id)
             guard let held = record(id), let head = held.pending.first, let serverPlan = held.plan else { return }
-            guard case .applied(let sent) = PlanEdit.apply(head.edit, to: serverPlan, now: now(), calendar: calendar) else { continue }
-            let base = held.version
+            let base: Int
+            let sent: DayPlan?
+            switch PlanEdit.apply(head.edit, to: serverPlan, now: now(), calendar: calendar) {
+            case .applied(let plan):
+                base = held.version
+                sent = plan
+            case .noLongerApplies where head.mayHaveLanded:
+                // Its answer was lost and the plan has moved on since, maybe with it. The server
+                // looks up a known editId before the base, so the same editId on the version it was
+                // made on (one the server has passed) is 200 if it was stored and 409 if not.
+                base = head.madeOn
+                sent = nil
+            default:
+                continue
+            }
             let body = GroupPlanUpdate(baseVersion: base, editId: head.editId,
-                                         edit: .init(kind: head.edit.kind, stopIds: head.edit.stopIDs(before: serverPlan, after: sent)),
-                                         plan: sent)
+                                         edit: .init(kind: head.edit.kind, stopIds: head.edit.stopIDs(before: serverPlan, after: sent ?? serverPlan)),
+                                         plan: sent ?? serverPlan)
             updatePending(id, head.editId) { $0.sending = true }
             save()
 
@@ -420,13 +449,20 @@ final class GroupPlanStore {
             switch answer {
             case let .saved(saved, etag):
                 // Stored just now on `base`: the server's plan is exactly the one sent.
-                let fresh = !head.mayHaveLanded && saved.version == base + 1
+                let fresh = sent != nil && !head.mayHaveLanded && saved.version == base + 1
                 if !fresh {
-                    // Stored earlier (MF-B): fetch the server's plan before letting the edit go, so it
-                    // doesn't flicker away, and never add it twice.
+                    // Stored earlier (MF-B): the edit stays on screen until a fetch brings the server's
+                    // plan with it, and is never added twice. A refresh can join a GET already out,
+                    // which may be older: a second one at once, then with backoff until one brings it.
                     update(id) { $0.absorb(version: saved.version, membersVersion: saved.membersVersion, plan: nil, members: saved.members, etag: etag) }
                     updatePending(id, head.editId) { $0.sending = false }
-                    for _ in 0..<2 where (record(id)?.version ?? .max) < saved.version {
+                    var tries = 0
+                    while (record(id)?.version ?? .max) < saved.version {
+                        tries += 1
+                        if tries > 2 {
+                            do { try await sleep(Self.retryDelay(failures: tries - 2)) } catch { return }
+                        }
+                        guard !Task.isCancelled, !isClosed, !readOnly.contains(id), index(id) != nil else { return }
                         await refresh(id)
                     }
                     guard !isClosed, index(id) != nil else { return }
@@ -460,7 +496,8 @@ final class GroupPlanStore {
     }
 
     /// Makes the queue again on the server's plan, in order: an edit the plan already shows goes
-    /// quietly; edits that no longer apply go with one message.
+    /// quietly; edits that no longer apply go with one message. One the server may already have
+    /// (its answer was lost) stays until the server says whether it was stored.
     private func dropEditsThatNoLongerApply(_ id: UUID) {
         guard let index = index(id), var plan = records[index].plan else { return }
         var kept: [PendingEdit] = []
@@ -472,6 +509,8 @@ final class GroupPlanStore {
                 kept.append(pending)
             case .alreadyApplied:
                 continue
+            case .noLongerApplies where pending.mayHaveLanded:
+                kept.append(pending)
             case .noLongerApplies(let reason):
                 dropped.append((pending.edit, reason))
             }
@@ -697,6 +736,7 @@ final class GroupPlanStore {
         listing?.cancel()
         listing = nil
         stopPolling()
+        waitingMessages = []
         onMessage = nil
         history = nil
     }
@@ -829,7 +869,19 @@ final class GroupPlanStore {
 
     private func emit(_ id: UUID, _ kind: GroupPlanMessage.Kind) {
         guard !isClosed else { return }
-        onMessage?(GroupPlanMessage(groupID: id, kind: kind, text: Self.text(for: kind)))
+        let message = GroupPlanMessage(groupID: id, kind: kind, text: Self.text(for: kind))
+        guard let onMessage else {
+            waitingMessages.append(message)
+            waitingMessages.removeFirst(max(0, waitingMessages.count - Self.messagesKept))
+            return
+        }
+        onMessage(message)
+    }
+
+    private func deliverWaitingMessages() {
+        while !isClosed, let onMessage, !waitingMessages.isEmpty {
+            onMessage(waitingMessages.removeFirst())
+        }
     }
 
     private static func failure(_ error: Error) -> GroupPlanFailure {

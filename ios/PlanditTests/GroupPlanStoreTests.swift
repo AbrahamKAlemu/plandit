@@ -75,15 +75,20 @@ import XCTest
         return DayPlan(date: at(9, day: date), title: "Uptown to the Village", budget: 60, stops: stops, legs: legs)
     }
 
-    private func makeStore(userID: String = "user-1", in folder: URL? = nil) -> GroupPlanStore {
+    /// `listening: false` is the app at launch: no screen has set `onMessage` yet.
+    private func makeStore(userID: String = "user-1", in folder: URL? = nil, listening: Bool = true) -> GroupPlanStore {
         let clock = clock!
         let store = GroupPlanStore(
             userID: userID, server: server, directory: folder ?? directory, calendar: calendar,
             now: { [unowned self] in self.now }, sleep: { try await clock.sleep($0) },
-            onMessage: { [unowned self] in self.messages.append($0) }
+            onMessage: listening ? { [unowned self] in self.messages.append($0) } : nil
         )
         stores.append(store)
         return store
+    }
+
+    private func listen(to store: GroupPlanStore) {
+        store.onMessage = { [unowned self] in self.messages.append($0) }
     }
 
     /// Maya's group with Jordan and you; the store has fetched it at version 1.
@@ -439,6 +444,83 @@ import XCTest
         XCTAssertEqual(store.group(id)?.plan, stored)
         let version = await server.info(id)?.version
         XCTAssertEqual(version, 2, "no second version")
+    }
+
+    /// RB-8, MF-B: an edit stored earlier (its answer lost) stays on screen until a fetch brings the
+    /// server's plan with it, however many fetches fail first; it isn't sent again.
+    func testRB8_AnEditStoredEarlierStaysShownUntilAFetchBringsIt() async throws {
+        let (store, id) = await joinedGroup()
+        await server.script(.put, .lostAfterSaving)
+        store.apply(addEdit(SampleData.littleIsland), to: id)
+        await eventually("the retry waits") { self.clock.sleeping == 1 }
+        let fetches = await server.count(.fetch)
+        await server.script(.fetch, .network)
+        await server.script(.fetch, .network)
+
+        clock.advance(by: .seconds(60))
+        await eventually("the retry's 200, then two fetches with no answer") { await self.server.count(.fetch) == fetches + 2 }
+        await settle()
+
+        XCTAssertEqual(try shown(store, id).stops.filter { $0.place.name == SampleData.littleIsland.name }.count, 1, "still shown")
+        XCTAssertEqual(store.group(id)?.version, 1)
+        await eventually("waiting to fetch again") { self.clock.sleeping == 1 }
+        clock.advance(by: .seconds(60))
+        await eventually("the server's plan") { store.group(id)?.version == 2 }
+        await waitUntilSent(store, id)
+
+        let stored = try await requirePlan(id)
+        XCTAssertEqual(store.group(id)?.plan, stored)
+        XCTAssertEqual(stored.stops.filter { $0.place.name == SampleData.littleIsland.name }.count, 1)
+        let puts = await server.count(.put)
+        XCTAssertEqual(puts, 2, "not sent again")
+    }
+
+    /// RB-8, MF-B: the server took the edit but the answer was lost, then someone else changed that
+    /// stop. The server's list of edits says it was stored, so there's no message.
+    func testRB8_ALandedEditIsNotReportedAsNotMadeWhenTheStopChangedSince() async throws {
+        let (store, id) = await joinedGroup()
+        let stop = try shown(store, id).stops[1].id
+        await server.script(.put, .lostAfterSaving)
+        store.apply(try XCTUnwrap(PlanEdit.status(.arrive, stopID: stop, in: try shown(store, id))), to: id)
+        await eventually("the retry waits") { self.clock.sleeping == 1 }
+        let landed = await server.info(id)?.version
+        XCTAssertEqual(landed, 2, "the server has the arrive")
+        await members.edit("Maya", id) { PlanEdit.status(.complete, stopID: stop, in: $0) }
+        await store.refresh(id)
+        clock.advance(by: .seconds(60))
+        await waitUntilSent(store, id)
+
+        XCTAssertEqual(messages.map(\.kind), [], "the arrive landed at v2, yet: \(messages.map(\.text))")
+        let updates = await server.updates
+        XCTAssertEqual(updates.count, 2, "the server was asked")
+        XCTAssertEqual(updates.first?.editId, updates.last?.editId)
+        let version = await server.info(id)?.version
+        XCTAssertEqual(version, 3, "nothing stored again")
+        let latest = await serverPlan(id)
+        XCTAssertEqual(store.group(id)?.plan, latest)
+    }
+
+    /// RB-8: the answer was lost and the edit wasn't stored, then someone else changed that stop.
+    /// The message comes only once the server says it doesn't have the edit (its 409), naming who.
+    func testRB8_AnEditThatDidntLandIsReportedOnceTheServerSaysSo() async throws {
+        let (store, id) = await joinedGroup()
+        let stop = try shown(store, id).stops[1].id
+        await server.script(.put, .network)
+        store.apply(try XCTUnwrap(PlanEdit.status(.arrive, stopID: stop, in: try shown(store, id))), to: id)
+        await eventually("the retry waits") { self.clock.sleeping == 1 }
+        await members.edit("Maya", id) { PlanEdit.status(.complete, stopID: stop, in: $0) }
+        await store.refresh(id)
+        clock.advance(by: .seconds(60))
+        await waitUntilSent(store, id)
+
+        let updates = await server.updates
+        XCTAssertEqual(updates.count, 2, "the server was asked")
+        XCTAssertEqual(updates.first?.editId, updates.last?.editId)
+        let version = await server.info(id)?.version
+        XCTAssertEqual(version, 2, "nothing stored")
+        XCTAssertEqual(messages.map(\.kind), [.editsNotMade(count: 1, author: "Maya", reason: .stopChanged(stop))])
+        let latest = await serverPlan(id)
+        XCTAssertEqual(store.group(id)?.plan, latest)
     }
 
     /// RB-9: 404 on the PUT drops the group, its edits and its cache, with a message; no retry.
@@ -995,6 +1077,58 @@ import XCTest
         XCTAssertEqual(relaunched.group(id)?.plan?.stops.filter { $0.place.name == SampleData.littleIsland.name }.count, 1)
     }
 
+    private static let dayOverDetail = "This plan's day is over, so it can't be changed."
+
+    /// Edits waiting in the cache that the server refuses as the app opens, before any screen
+    /// listens: first a stop too big to save (413), then `removals` stops removed on a day that's
+    /// over (400). Returns the relaunched store once it has sent them all.
+    private func messagesAtLaunch(removals: Int) async throws -> (GroupPlanStore, UUID) {
+        let (first, id) = await joinedGroup()
+        await server.script(.put, .network)
+        first.apply(addEdit(SampleData.littleIsland, note: String(repeating: "x", count: 70_000)), to: id)
+        for _ in 0..<removals { first.apply(try removeEdit(first, id, 1), to: id) }
+        await eventually("offline, waiting to retry") { self.clock.sleeping == 1 }
+        first.close()
+        await server.setDayOver(id)
+
+        let relaunched = makeStore(listening: false)
+        await waitUntilSent(relaunched, id)
+        XCTAssertTrue(messages.isEmpty, "nobody is listening yet")
+        return (relaunched, id)
+    }
+
+    /// OFF-2: messages from before a screen listens (edits refused as the app opens) wait for it,
+    /// and come in order.
+    func testOFF2_MessagesFromBeforeAScreenListensWaitForItInOrder() async throws {
+        let (store, id) = try await messagesAtLaunch(removals: 1)
+
+        listen(to: store)
+
+        XCTAssertEqual(messages.map(\.kind), [.planTooLarge(FakeGroupPlanServer.tooLargeDetail), .editRefused(Self.dayOverDetail)])
+        XCTAssertEqual(messages.map(\.groupID), [id, id])
+        listen(to: store)
+        XCTAssertEqual(messages.count, 2, "each once")
+    }
+
+    /// Only the latest 3 wait; older ones are dropped.
+    func testOFF2_OnlyTheLatestThreeMessagesWait() async throws {
+        let (store, _) = try await messagesAtLaunch(removals: 3)
+
+        listen(to: store)
+
+        XCTAssertEqual(messages.map(\.kind), Array(repeating: .editRefused(Self.dayOverDetail), count: 3), "the oldest, too big, dropped")
+    }
+
+    /// REM-4: closing (sign-out) drops the messages waiting; none reach a screen afterwards.
+    func testREM4_ClosingDropsTheMessagesWaiting() async throws {
+        let (store, _) = try await messagesAtLaunch(removals: 1)
+
+        store.close()
+        listen(to: store)
+
+        XCTAssertTrue(messages.isEmpty)
+    }
+
     /// OFF-4: a corrupt cache file starts empty, then the list fills it, with no crash.
     func testOFF4_ACorruptCacheStartsEmptyAndFetchesTheList() async throws {
         let id = await server.seedGroup(plan: day(), date: "2026-11-20", organizer: "Maya")
@@ -1160,6 +1294,44 @@ import XCTest
         let ended = await server.info(id)
         XCTAssertNil(ended)
         XCTAssertTrue(messages.isEmpty)
+    }
+
+    /// The organizer's other phone made a new link. This phone's edit is answered with the newer
+    /// members but no link, so the next refresh fetches the whole group, link included.
+    func testANewLinkMadeOnAnotherPhoneArrivesAfterAnEdit() async throws {
+        let id = try await makeStore().create(from: day()).get()
+        let store = stores[0]
+        let newLink = try await server.newInvite(id)
+        XCTAssertNotNil(newLink)
+
+        store.apply(try removeEdit(store, id, 1), to: id)
+        await waitUntilSent(store, id)
+        await store.refresh(id)
+
+        XCTAssertEqual(store.group(id)?.inviteUrl, newLink, "not the old link, which no longer works")
+    }
+
+    /// The same through a 409, and after a relaunch: the cache keeps no ETag that would answer 304.
+    func testANewLinkMadeOnAnotherPhoneArrivesAfterAConflictAndARelaunch() async throws {
+        let id = try await makeStore().create(from: day()).get()
+        let first = stores[0]
+        let newLink = try await server.newInvite(id)
+        await server.addMember("Jordan", to: id)
+        await retitle(id, "Jordan's title", by: "Jordan")
+
+        first.apply(try removeEdit(first, id, 1), to: id)
+        await waitUntilSent(first, id)
+        let updates = await server.updates
+        XCTAssertEqual(updates.map(\.baseVersion), [1, 2], "a 409, then the rebase")
+        XCTAssertEqual(first.group(id)?.members.map(\.name), ["Sofia", "Jordan"], "the 409's members")
+        first.close()
+
+        let relaunched = makeStore()
+        await relaunched.refreshList()
+
+        XCTAssertEqual(relaunched.group(id)?.inviteUrl, newLink)
+        XCTAssertEqual(relaunched.group(id)?.members.map(\.name), ["Sofia", "Jordan"])
+        XCTAssertEqual(relaunched.group(id)?.version, 3)
     }
 
     /// RO-1's boundary: 4 AM New York time the morning after, also across the clock change.

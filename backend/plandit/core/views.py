@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 from plandit.groups.models import GroupMember, GroupPlan, GroupRemoval
 from plandit.plans.models import GroupRequest
 from plandit.shares.models import SharedPlan
+from plandit.shares.views import _hold_owner
 
 from . import apple_signin, supabase_admin
 from .metrics import DEFAULT_DAYS, MAX_DAYS, MIN_DAYS, compute_metrics, iso_utc
@@ -254,6 +255,16 @@ def _has_built_plan(data: dict, today_stop_count: int) -> bool:
     return any(isinstance(plan, dict) and _is_positive_int(plan.get("stopCount")) for plan in past_plans)
 
 
+def _lock_profile_for_sync(profile: Profile) -> None:
+    """Row-lock the profile before the snapshot, the order account deletion takes them in. The sync
+    writes both; locking the snapshot first deadlocked with a deletion that held the profile and was
+    waiting to delete the snapshot. FOR NO KEY UPDATE is the lock the sync's profile update takes
+    anyway, and it waits for deletion's FOR UPDATE. An account deleted meanwhile is 401."""
+    locked = Profile.objects.select_for_update(no_key=True).filter(pk=profile.pk).values_list("pk", flat=True)
+    if not list(locked):
+        raise AuthenticationFailed("Account deleted.")
+
+
 def _too_large(size: int) -> Response:
     return Response(
         {"detail": f"Snapshot is {size} bytes; the limit is {SNAPSHOT_MAX_BYTES}."},
@@ -300,6 +311,7 @@ class SnapshotView(APIView):
             "today_stop_count": _count(today.get("stops")) if isinstance(today, dict) else 0,
         }
         with transaction.atomic():
+            _lock_profile_for_sync(profile)
             snapshot, _ = AppSnapshot.objects.select_for_update().get_or_create(profile=profile)
             snapshot.data = data
             snapshot.version += 1
@@ -325,6 +337,9 @@ class EventsView(APIView):
         name = serializer.validated_data["name"]
         occurred_at = serializer.validated_data["occurred_at"]
         with transaction.atomic():
+            # The profile first, as sharing a plan does: the new row's foreign key would otherwise
+            # wait for an account deletion's lock and then fail on the deleted profile.
+            _hold_owner(request.user)
             ActivityEvent.objects.create(profile=request.user, name=name, occurred_at=occurred_at)
             if name == ActivityEventName.PLAN_BUILT:
                 _activate(request.user, timezone.now())

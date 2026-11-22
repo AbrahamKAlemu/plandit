@@ -141,6 +141,40 @@ import XCTest
         try assertClosed(groups, id, cacheKept: false)
     }
 
+    /// REM-4: a session the server stopped taking (here a 401 even after a refresh) is a sign-out
+    /// too, through the account's hook as the app sets it: the cache goes and the store is closed.
+    func testREM4_ARevokedSessionDeletesTheGroupCacheAndClosesTheStore() async throws {
+        let id = await cacheOneGroup()
+        let transport = FakeTransport { request in
+            let url = request.url!.absoluteString
+            if url.contains("grant_type=refresh_token") { return (200, TestJSON.session(access: "rotated", refresh: "refresh-2")) }
+            if url.contains("api/group-plans/") { return (401, TestJSON.object(["detail": "Invalid token."])) }
+            if url.contains("snapshot") {
+                return request.httpMethod == "GET" ? (404, TestJSON.object(["detail": "No snapshot yet."])) : (200, TestJSON.object(["version": 1]))
+            }
+            return (201, Data())
+        }
+        let stored = AuthSession(accessToken: "valid", refreshToken: "refresh-1", expiresAt: Date().addingTimeInterval(3600), user: user)
+        let client = SupabaseAuthClient(configuration: TestJSON.configuration, transport: transport, sessionStore: InMemoryAuthSessionStore(session: stored))
+        let account = AccountModel(client: client, apiBaseURL: TestJSON.configuration.apiBaseURL, transport: transport)
+        await account.start()
+        XCTAssertEqual(account.state, .signedIn(user))
+        let session = await AccountSession.bootstrap(
+            user: user, profileName: nil, api: account.api(for: user.id), directory: directory,
+            legacyStore: SnapshotStore(url: directory.appending(path: "missing-legacy.json")), extractor: NoExtractor()
+        )
+        addTeardownBlock { @MainActor in session.tearDown() }
+        account.onSessionRevoked = { session.forgetGroupPlans() }
+        let groups = try XCTUnwrap(session.groups)
+        XCTAssertNotNil(groups.group(id))
+        XCTAssertTrue(cacheExists)
+
+        await groups.refreshList()
+        await eventually("signed out") { account.state == .signedOut }
+
+        try assertClosed(groups, id, cacheKept: false)
+    }
+
     /// Replaced by a new session for the same account (a second bootstrap): the cache stays for it.
     func testTearingDownClosesTheStoreButKeepsTheCache() async throws {
         let id = await cacheOneGroup()

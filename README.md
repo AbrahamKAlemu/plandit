@@ -35,7 +35,17 @@ curl -s -H "X-Metrics-Key: $PLANDIT_METRICS_KEY" \
   - `active_users_today`, `active_users_7d`, `active_users_30d`;
   - `plans_built`, `places_saved`, `links_saved`;
   - `waitlist_signups` (emails left on the website's waitlist);
-  - `anonymous_sessions` (installs from early TestFlight builds, before accounts existed).
+  - `anonymous_sessions` (installs from early TestFlight builds, before accounts existed);
+  - `links_with_answers` and `answers_per_link`: shared plans (`/p/` links) with at least one
+    friend's "I'm in" or "Can't make it", and the average number of answers on such a plan;
+  - `plan_requests` and `plan_requests_built`: friends' input links (`/g/` links) sent, and how
+    many were built into a plan;
+  - `request_links_with_answers` and `answers_per_request_link`: friends' input links with at
+    least one friend's answer (their budget and when they're free), and the average number of
+    answers on such a link. These are counted apart from the shared plans' answers above.
+
+  Friends' answers and input links are deleted 30 days after the plan's day, so those numbers
+  count what's kept now, not all time.
 - `daily`: one entry per day for the last `days` days, oldest first, with zeros on days with no
   activity. Each has `date`, `signups`, `new_real_users`, `active_users`, `plans_built`,
   `places_saved` and `links_saved`.

@@ -20,6 +20,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.throttling import BaseThrottle
 
 from plandit.core.auth import SupabaseJWTAuthentication
+from plandit.shares.views import _hold_owner
 
 from .models import ResolutionAttempt, SocialEvidenceThrottleState
 from .providers.ensembledata import (
@@ -62,6 +63,9 @@ class SocialEvidenceThrottle(BaseThrottle):
 
         now = timezone.now()
         with transaction.atomic():
+            # The profile first, as sharing a plan does: a new state row's foreign key would otherwise
+            # wait for an account deletion's lock and then fail on the deleted profile (401 instead).
+            _hold_owner(request.user)
             state, _ = SocialEvidenceThrottleState.objects.select_for_update().get_or_create(
                 user=request.user,
                 defaults={"window_started_at": now},

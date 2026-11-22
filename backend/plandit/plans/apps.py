@@ -11,5 +11,6 @@ class PlansConfig(AppConfig):
 
         from .models import REQUEST_RETENTION_DAYS, GroupRequest
 
-        # Brief GS-5. Deleting the request deletes its answers with it (CASCADE).
-        retention.register(GroupRequest, "day", days=REQUEST_RETENTION_DAYS)
+        # Brief GS-5. Deleting the request deletes its answers with it (CASCADE). Locked first, as
+        # account deletion, the organizer's delete and a friend's answer lock it before its answers.
+        retention.register(GroupRequest, "day", days=REQUEST_RETENTION_DAYS, lock_first=True)

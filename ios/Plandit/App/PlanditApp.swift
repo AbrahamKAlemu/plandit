@@ -135,8 +135,10 @@ private struct AccountGate: View {
         } else {
             next = await AccountSession.bootstrap(user: user, profileName: account.pendingProfileName, api: account.api(for: user.id))
         }
-        // Signed out while the fetch was out: don't resurrect the session.
+        // Signed out while the fetch was out: don't resurrect the session, and its group plans
+        // leave the phone as on any sign-out (REM-4).
         guard account.currentUser?.id == user.id else {
+            next.forgetGroupPlans()
             next.tearDown()
             return
         }
@@ -145,6 +147,8 @@ private struct AccountGate: View {
             await next.sync?.finalPush()
             next.forgetGroupPlans()
         }
+        // A revoked or expired session signs out too (REM-4).
+        account.onSessionRevoked = { next.forgetGroupPlans() }
         account.onAccountDeleted = tutorial.deletionHook(removing: next)
         // Set with the session, in the same update, so the map never flashes first.
         showsTutorial = tutorial.decide(userID: user.id, isNewAccount: next.isNewAccount, launch: .current)
@@ -163,6 +167,7 @@ private struct AccountGate: View {
     /// stay, so one cut short by a revoked session still comes back; only deletion forgets them.
     private func close() {
         account.beforeSignOut = nil
+        account.onSessionRevoked = nil
         account.onAccountDeleted = nil
         session?.tearDown()
         session = nil
