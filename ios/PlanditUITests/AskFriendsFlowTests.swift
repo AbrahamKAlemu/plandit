@@ -72,15 +72,33 @@ final class AskFriendsFlowTests: XCTestCase {
     }
 
     /// Picks a place on the form, or leaves it picked: a row that's already picked is never tapped,
-    /// since a tap would unpick it. Now and then the simulator drops or delays a tap on this list,
-    /// so after each tap it waits for the row to change, and reads it again before tapping again.
+    /// since a tap would unpick it. Each pick moves the form for a moment (the line under the list
+    /// changes), and a tap aimed while it moves lands on the next row, so it taps only once the row
+    /// is still. Then it waits for the row to change, and reads it again before tapping again.
     @MainActor private func pick(_ row: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<3 {
             if row.isSelected { return }
             scrollTo(row, in: app)
+            waitUntilStill(row)
             if row.isSelected { return }
             row.tap()
-            if row.wait(for: \.isSelected, toEqual: true, timeout: 4) { return }
+            if row.wait(for: \.isSelected, toEqual: true, timeout: 4) {
+                waitUntilStill(row)
+                return
+            }
+        }
+    }
+
+    /// Waits until the element stays put for a quarter of a second, up to about 3 seconds.
+    @MainActor private func waitUntilStill(_ element: XCUIElement) {
+        var last = element.frame
+        var stillFor = 0
+        for _ in 0..<24 {
+            usleep(125_000)
+            let now = element.frame
+            stillFor = now == last ? stillFor + 1 : 0
+            if stillFor >= 2 { return }
+            last = now
         }
     }
 
