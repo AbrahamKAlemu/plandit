@@ -6,6 +6,8 @@ struct SavedPostDetailView: View {
     let postID: UUID
     @Environment(PlanditStore.self) private var store
     @Environment(SheetRouter.self) private var router
+    /// Where "Add to today's plan" goes: your own plan, or the group plan picked in Today.
+    @TodayContext private var today
     @Environment(\.dismiss) private var dismiss
     @State private var isSearchingForPlace = false
     @State private var searchName = ""
@@ -18,7 +20,7 @@ struct SavedPostDetailView: View {
 
     var body: some View {
         if let post = store.post(id: postID) {
-            let isInToday = store.isInToday(post)
+            let isInToday = today.contains(post)
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     switch post.status {
@@ -64,7 +66,7 @@ struct SavedPostDetailView: View {
                                 if isInToday {
                                     HStack(spacing: Space.xs) {
                                         Icon(.circleCheck, size: 18)
-                                        Text("In today's plan")
+                                        Text("In \(today.planName)")
                                     }
                                     .font(.label)
                                     .foregroundStyle(.emeraldDeep)
@@ -78,21 +80,22 @@ struct SavedPostDetailView: View {
                                     } label: {
                                         HStack(spacing: Space.xs) {
                                             Icon(.route, size: 18)
-                                            Text("View today's plan")
+                                            Text("View \(today.planName)")
                                         }
                                     }
                                     .buttonStyle(.secondary)
                                     .transition(.opacity)
                                 } else {
                                     Button {
-                                        withAnimation(.snappy) { _ = store.addToToday(post.id) }
+                                        withAnimation(.snappy) { _ = today.add(post) }
                                     } label: {
                                         HStack(spacing: Space.xs) {
                                             Icon(.plus, size: 18)
-                                            Text("Add to today's plan")
+                                            Text("Add to \(today.planName)")
                                         }
                                     }
                                     .buttonStyle(.primary)
+                                    .disabled(!today.canEdit)
                                     .transition(.opacity)
                                 }
                             }
@@ -579,10 +582,10 @@ struct SourceCard: View {
 /// "Stop 4 · 2:30–3:15 PM", "Closes at 9 PM", "$5 over today's budget".
 private struct TodayPlacement: View {
     let postID: UUID
-    @Environment(PlanditStore.self) private var store
+    @TodayContext private var today
 
     var body: some View {
-        let plan = store.today
+        let plan = today.plan
         if let index = plan.stops.firstIndex(where: { $0.sourcePostID == postID }) {
             let stop = plan.stops[index]
             VStack(spacing: Space.xxs) {
@@ -600,17 +603,19 @@ private struct TodayPlacement: View {
                     Text(warning).font(.metadata).foregroundStyle(Color.error).multilineTextAlignment(.center)
                 }
                 // Takes it out of today only; the place stays in Saved.
-                Button {
-                    withAnimation(.snappy) { store.removeStop(stop.id) }
-                } label: {
-                    Text("Remove from today")
-                        .font(.label)
-                        .foregroundStyle(.ink)
-                        .underline()
-                        .frame(minHeight: 44)
+                if today.canEdit {
+                    Button {
+                        withAnimation(.snappy) { today.remove(stop.id) }
+                    } label: {
+                        Text(today.isGroup ? "Remove from \(today.planName)" : "Remove from today")
+                            .font(.label)
+                            .foregroundStyle(.ink)
+                            .underline()
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityHint("Keeps it in your saved places")
+                    .accessibilityIdentifier("remove-from-today")
                 }
-                .accessibilityHint("Keeps it in your saved places")
-                .accessibilityIdentifier("remove-from-today")
             }
             .frame(maxWidth: .infinity)
         }

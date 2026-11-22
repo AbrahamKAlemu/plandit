@@ -135,6 +135,30 @@ import XCTest
         XCTAssertEqual(groups.group(id)?.pendingEdits, 0)
     }
 
+    /// Saved's "Add to Maya's plan" while her plan is shown in Today (GE-3).
+    func testAddingASavedPlaceGoesToThePlanShown() async throws {
+        let id = await mayasGroup()
+        let context = context()
+        context.select(.group(id))
+        let post = try XCTUnwrap(store.saved.first { $0.isMappable && !store.isInToday($0) })
+        let ownBefore = store.today
+        XCTAssertEqual(context.planName, "Maya's plan")
+        XCTAssertFalse(context.contains(post))
+
+        let added = try XCTUnwrap(context.add(post))
+
+        XCTAssertTrue(context.contains(post))
+        XCTAssertEqual(groups.group(id)?.plan?.stop(id: added)?.sourcePostID, post.id)
+        XCTAssertEqual(store.today, ownBefore, "your own plan is untouched")
+        XCTAssertNil(context.add(post), "already in it")
+
+        context.select(.mine)
+        XCTAssertEqual(context.planName, "today's plan")
+        XCTAssertFalse(context.contains(post))
+        XCTAssertNotNil(context.add(post))
+        XCTAssertTrue(store.isInToday(post))
+    }
+
     func testStartingAGroupPlanSelectsItAndGivesItsLink() async throws {
         let context = context()
         let ownBefore = store.today

@@ -133,10 +133,24 @@ struct TodayPlanContext {
         perform(.startRestFromNow) { store.startRestFromNow() }
     }
 
-    /// Adds a saved place to the group plan on screen. Your own plan uses `PlanditStore.addToToday`.
-    func addToGroup(_ candidate: PlanCandidate) {
-        guard let id = group?.id else { return }
-        apply(.add(candidate), to: id)
+    /// Where Saved's + puts a place: "today's plan", "Maya's plan", "your group plan".
+    var planName: String {
+        guard let group else { return "today's plan" }
+        return group.isOrganizer ? "your group plan" : (label ?? GroupToday.label(for: group))
+    }
+
+    func contains(_ post: SavedPost) -> Bool {
+        guard isGroup else { return store.isInToday(post) }
+        return plan.stops.contains { $0.sourcePostID == post.id }
+    }
+
+    /// Adds a saved place to the plan shown in Today, where it fits best (GE-3 for a group plan).
+    /// Returns the new stop's id, or nil when it wasn't added.
+    @discardableResult
+    func add(_ post: SavedPost) -> UUID? {
+        guard let id = group?.id else { return store.addToToday(post.id) }
+        guard canEdit, !contains(post), let candidate = PlanCandidate(post: post) else { return nil }
+        return apply(.add(candidate), to: id).contains(.queued) ? candidate.id : nil
     }
 
     /// "Edit with friends": a group plan made from your own, selected, and its link to send.
