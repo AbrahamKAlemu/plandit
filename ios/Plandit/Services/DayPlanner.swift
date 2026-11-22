@@ -13,6 +13,9 @@ struct PlanCandidate: Identifiable, Hashable {
     /// Carried through re-planning so a cost the user set stays theirs.
     var costItems: [CostItem] = []
     var costIsCustom = false
+    /// When something has to be left out, the lowest priority goes first (group plans: how many
+    /// friends starred the place). Equal priorities, the default, plan exactly as before.
+    var priority = 0
 
     init(id: UUID = UUID(), place: Place, cost: Double, durationMinutes: Int? = nil, sourcePostID: UUID? = nil, note: String? = nil) {
         self.id = id
@@ -171,15 +174,19 @@ struct DayPlanner {
                 skipped.append(Skip(candidate: kept.remove(at: order[worst]), reason: .closed))
                 continue
             }
-            // 2. The day runs too late: drop the stop that frees up the most time.
+            // 2. The day runs too late: drop the stop that frees up the most time, among those with
+            //    the lowest priority.
             if schedule.end > dayEnd {
-                let position = problem.positionSavingMost(in: order) { Double($0.durationMinutes) } legValue: { Double($0.minutes) }
+                let position = problem.positionSavingMost(in: order, among: problem.lowestPriority(in: order)) {
+                    Double($0.durationMinutes)
+                } legValue: { Double($0.minutes) }
                 skipped.append(Skip(candidate: kept.remove(at: order[position]), reason: .outOfTime))
                 continue
             }
-            // 3. Over budget: drop the stop that saves the most money.
+            // 3. Over budget: drop the stop that saves the most money, among those with the lowest
+            //    priority.
             if request.alreadySpent + schedule.cost > request.budget + 0.005 {
-                let position = problem.positionSavingMost(in: order) { $0.cost } legValue: { $0.cost }
+                let position = problem.positionSavingMost(in: order, among: problem.lowestPriority(in: order)) { $0.cost } legValue: { $0.cost }
                 skipped.append(Skip(candidate: kept.remove(at: order[position]), reason: .overBudget))
                 continue
             }
@@ -380,9 +387,16 @@ private struct Problem {
         return (tour, score)
     }
 
-    /// The position whose removal saves the most (its own value plus the legs around it, minus the
-    /// leg that would replace them). Ties drop the stop picked last.
-    func positionSavingMost(in order: [Int], stopValue: (PlanCandidate) -> Double, legValue: (TravelLeg) -> Double) -> Int {
+    /// The positions in `order` whose candidates have the lowest priority: the only ones a drop rule
+    /// may take. With every priority equal, that's all of them.
+    func lowestPriority(in order: [Int]) -> [Int] {
+        guard let lowest = order.map({ candidates[$0].priority }).min() else { return [] }
+        return order.indices.filter { candidates[order[$0]].priority == lowest }
+    }
+
+    /// The position, of `positions`, whose removal saves the most (its own value plus the legs
+    /// around it, minus the leg that would replace them). Ties drop the stop picked last.
+    func positionSavingMost(in order: [Int], among positions: [Int], stopValue: (PlanCandidate) -> Double, legValue: (TravelLeg) -> Double) -> Int {
         func saving(_ position: Int) -> Double {
             var saved = stopValue(candidates[order[position]])
             if let into = leg(into: position, of: order) { saved += legValue(into) }
@@ -396,7 +410,7 @@ private struct Problem {
             }
             return saved
         }
-        return order.indices.max { (saving($0), order[$0]) < (saving($1), order[$1]) }!
+        return positions.max { (saving($0), order[$0]) < (saving($1), order[$1]) }!
     }
 
     func outcome(order: [Int], schedule: Schedule, skipped: [DayPlanner.Skip]) -> DayPlanner.Outcome {
