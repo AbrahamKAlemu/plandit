@@ -189,13 +189,12 @@ def answer_plan(request, slug):
 @public_page_csp
 @require_POST
 def take_back_answer(request, slug):
-    """POST /p/<slug>/answer/delete: the browser takes back its own answer (brief GV-4). Not rate
-    limited: it can only remove what this browser's cookie wrote. 303 back to the page."""
+    """POST /p/<slug>/answer/delete: the browser takes back its own answer (brief GV-4), on any link
+    that exists, even once it stops taking answers: deleting your own answer is always safe. Not
+    rate limited: it can only remove what this browser's cookie wrote. 303 back to the page."""
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
         return _not_found_page(request)
-    if not _takes_answers(shared):
-        raise Http404
     purge_expired()
     responder = _existing_responder(request, slug)
     ShareAnswer.objects.filter(shared_plan=shared, responder=responder).delete()

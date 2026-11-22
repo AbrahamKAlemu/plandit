@@ -512,6 +512,19 @@ def test_resharing_with_answers_off_hides_the_form_and_keeps_answers_for_the_own
     assert [a["name"] for a in auth_client.get(f"/api/shares/{slug}/answers/").json()["answers"]] == ["Maya"]
 
 
+def test_a_friend_can_still_take_back_their_answer_after_answers_are_turned_off(auth_client, browser, plan_id, slug):
+    answer(browser, slug, name="Maya")
+    answer_as(slug, "Jordan")
+    share(auth_client, answers_payload(plan_id, answers=False))
+
+    response = take_back(browser, slug)
+    assert response.status_code == 303 and response["Location"] == f"/p/{slug}"
+    assert response["Cache-Control"] == "private, no-store"
+    assert [a.name for a in ShareAnswer.objects.all()] == ["Jordan"]
+    assert take_back(new_browser(), slug).status_code == 303  # no answer of its own: nothing happens
+    assert ShareAnswer.objects.count() == 1
+
+
 def test_another_plan_of_the_owner_is_left_alone(auth_client, plan_id, slug):
     other_slug = share(auth_client, answers_payload()).json()["slug"]
     answer(new_browser(), other_slug, name="Maya", swaps={TACOS: PIZZA})
@@ -549,7 +562,8 @@ def test_plans_shared_without_answers_show_no_form_and_refuse_answers(auth_clien
     for text in ("I'm in", "Can't make it", "I'd swap this", "csrfmiddlewaretoken", "<form"):
         assert text not in body
     assert answer(browser, slug).status_code == 404
-    assert take_back(browser, slug).status_code == 404
+    # Taking back your own answer is always allowed; there's just nothing to take back here.
+    assert take_back(browser, slug).status_code == 303
     assert ShareAnswer.objects.count() == 0
 
 
@@ -569,6 +583,17 @@ def test_a_plan_past_its_retention_takes_no_more_answers(auth_client, browser):
     assert 'id="answer"' not in html(page(browser, slug))
     assert answer(browser, slug).status_code == 404
     assert ShareAnswer.objects.count() == 0
+
+
+def test_an_answer_can_be_taken_back_until_it_is_deleted(auth_client, browser, plan_id, slug):
+    """The plan moves to a past date, so the page stops taking answers; the browser can still take
+    back the answer it gave."""
+    answer(browser, slug, name="Maya")
+    share(auth_client, answers_payload(plan_id, date=(timezone.localdate() - timedelta(days=29)).isoformat()))
+    assert answer(new_browser(), slug).status_code == 303  # day 29: still taking answers
+    share(auth_client, answers_payload(plan_id, date=(timezone.localdate() - timedelta(days=30)).isoformat()))
+    assert answer(new_browser(), slug).status_code == 404
+    assert take_back(browser, slug).status_code == 303
 
 
 # --- GS-3: CSRF, headers and the policy ------------------------------------------------
