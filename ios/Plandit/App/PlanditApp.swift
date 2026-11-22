@@ -94,7 +94,7 @@ private struct AccountGate: View {
                 }
             case .app:
                 if let session {
-                    PlanditRoot(store: session.store, sync: session.sync, appearance: appearance, router: router)
+                    PlanditRoot(store: session.store, sync: session.sync, groups: session.groups, appearance: appearance, router: router)
                         .transition(.opacity)
                 }
             }
@@ -129,6 +129,9 @@ private struct AccountGate: View {
         let next: AccountSession
         if account.isLocalTestAccount {
             next = .local(userID: user.id)
+            #if DEBUG
+            await next.attachFakeGroupPlans()
+            #endif
         } else {
             next = await AccountSession.bootstrap(user: user, profileName: account.pendingProfileName, api: account.api(for: user.id))
         }
@@ -140,6 +143,7 @@ private struct AccountGate: View {
         account.beforeSignOut = {
             next.store.flush()
             await next.sync?.finalPush()
+            next.forgetGroupPlans()
         }
         account.onAccountDeleted = tutorial.deletionHook(removing: next)
         // Set with the session, in the same update, so the map never flashes first.
@@ -170,6 +174,7 @@ private struct AccountGate: View {
 private struct PlanditRoot: View {
     let store: PlanditStore
     let sync: SyncCoordinator?
+    let groups: GroupPlanStore?
     let appearance: AppearanceSettings
     let router: SheetRouter
     @Environment(\.scenePhase) private var scenePhase
@@ -204,11 +209,14 @@ private struct PlanditRoot: View {
                     if let sync {
                         Task { await sync.appBecameActive() }
                     }
+                    // The group plan on screen, queued edits, the list, and group days that ended.
+                    groups?.appBecameActive()
                     // Friends may have answered the shared plan while the app was away (GV-5).
                     Task { await store.refreshShareAnswers() }
                 case .inactive, .background:
                     store.flush()
                     sync?.appWillResign()
+                    groups?.appWillResign()
                 @unknown default:
                     break
                 }
