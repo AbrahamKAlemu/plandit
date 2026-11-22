@@ -49,20 +49,23 @@ extension DayPlan {
     // MARK: - Swapping one stop
 
     /// "Swap it" on a friend's pick: `candidate` takes the stop's place in the day, and the stops
-    /// from there on are timed again, as when a stop is removed and a place added. Nil when the stop
-    /// isn't still ahead (done or underway stops never change).
+    /// from there on are timed again, as when a stop is removed and a place added. The day's first
+    /// stop keeps its time (or waits for the new place to open). Nil when the stop isn't still ahead
+    /// (done or underway stops never change).
     func swapping(_ stopID: UUID, for candidate: PlanCandidate, travel: TravelPreference, now: Date = .now,
                   calendar: Calendar = .current) -> DayPlan? {
         let first = firstMovableIndex
         guard let index = stops.firstIndex(where: { $0.id == stopID }), index >= first else { return nil }
         let without = edited(keeping: stops[first...].map(\.id).filter { $0 != stopID }, travel: travel, calendar: calendar)
         let alreadyLate = Set(without.stopsArrivingAfterClose(calendar: calendar).map(\.id))
-        return without.trialInsert(candidate, at: index, travel: travel, now: now, calendar: calendar, alreadyLate: alreadyLate).plan
+        return without.trialInsert(candidate, at: index, travel: travel, now: now, calendar: calendar, alreadyLate: alreadyLate,
+                                   firstSlot: stops[index].start).plan
     }
 
+    /// `firstSlot`: when a place going in first starts; otherwise when the current first stop does.
     private func trialInsert(
         _ candidate: PlanCandidate, at position: Int, travel: TravelPreference,
-        now: Date, calendar: Calendar, alreadyLate: Set<UUID>
+        now: Date, calendar: Calendar, alreadyLate: Set<UUID>, firstSlot: Date? = nil
     ) -> Insertion {
         var plan = self
         plan.stops.insert(PlanStop(
@@ -77,7 +80,7 @@ extension DayPlan {
             let previous = plan.stops[position - 1]
             start = previous.end.addingTimeInterval(TimeInterval((plan.leg(after: previous)?.minutes ?? 0) * 60))
         } else {
-            start = stops.first?.start ?? now
+            start = firstSlot ?? stops.first?.start ?? now
         }
         if stops.isEmpty || calendar.isDate(date, inSameDayAs: now) { start = max(start, now) }
         start = Self.evening(start, for: candidate.place, calendar: calendar).roundedUpToFiveMinutes
