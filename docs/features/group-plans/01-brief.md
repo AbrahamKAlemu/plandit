@@ -1,7 +1,6 @@
 # Group plans: brief
 
-Status: draft for approval, November 21, 2026. Owner: Abraham. Design only; nothing is built until
-Abraham approves this dossier.
+Status: approved by Abraham, November 21, 2026. Owner: Abraham.
 
 ## Context
 
@@ -251,22 +250,7 @@ answers, groups, the limits and the report link, and the demo setup gets a seede
 
 ## Questions
 
-Open (for Abraham):
-
-- **Q-2 Names on the page.** The page shows up to 3 first names of people who are in (GV-3). The
-  safer option is counts only ("3 are in"). Recommendation: names, because seeing who's coming is
-  what makes people say yes, and the link only lives in the group chat. Sofia, Andre and Amara all
-  asked for names.
-- **Q-3 Universal links.** Mode 3's invite opens in Plandit only by pasting or sharing it to the
-  app. Opening it straight from Messages needs universal links: an
-  `apple-app-site-association` file on the link's domain (plandit.app is on Jaden's Vercel
-  project) and a new app entitlement. Recommendation: do it as a follow-up slice once mode 3 is in
-  use.
-- **Q-4 Throttle storage.** Today's cache is per process and resets when Render sleeps, so the
-  per-IP limit is weak. Django's database cache needs no new service. Recommendation: use it for
-  these limits only.
-- **Q-5 Order.** Recommendation: mode 1, then 2, then 3, one app version each. Mode 3 is the
-  largest and the only one that needs both people to have the app.
+Open: none.
 
 Resolved:
 
@@ -275,3 +259,8 @@ Resolved:
   November 21), so no paid plan is needed. GV-11 is still measured before mode 1 ships, so the job
   is confirmed working, not assumed. If it stops, Render goes back to sleeping and links take 30 to
   60 s again.
+- Q-2 to Q-5, with the recommended answers (Abraham, November 21):
+  - **Q-2** Names on the page: up to 3 first names of people who are in.
+  - **Q-3** Universal links: a follow-up slice once mode 3 is in use.
+  - **Q-4** Rate limits use Django's database cache.
+  - **Q-5** Order: mode 1, then 2, then 3, one app version each.

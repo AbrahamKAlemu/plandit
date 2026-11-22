@@ -1,6 +1,6 @@
 # Group plans: architecture
 
-Status: draft for approval, November 21, 2026. Brief: [01-brief.md](01-brief.md). Verification:
+Status: approved by Abraham, November 21, 2026. Brief: [01-brief.md](01-brief.md). Verification:
 [03-plan.md](03-plan.md#verification).
 
 ## Summary
@@ -79,11 +79,11 @@ Unique on (shared_plan, responder).
   - sets the cookie `pa` with Path=/p/<slug>, HttpOnly, Secure, SameSite=Lax and a 30-day max age;
   - redirects (303) to the page.
 - `POST /p/<slug>/answer/delete` removes the caller's own answer.
-- `GET /p/<slug>` adds the form, the "in" names and the viewer's own answer. Cache-Control becomes
+- `GET /p/<slug>` adds the form, the "in" names and the viewer's own answer, only when the plan was shared with `answers: true` (the G1b app sends it). Older shares look exactly as now, and the answer POST answers 404 for them, so nothing is collected before the app and the privacy policy are ready. Cache-Control becomes
   `private, no-store`, because the page now depends on the cookie, and a CSP is added (GS-3).
 - `GET /api/shares/<slug>/answers/` and `DELETE /api/shares/<slug>/answers/<id>/` are owner-only,
   404 otherwise.
-- `SharedPlanSerializer` accepts optional `stops[].id`, `stops[].alternates` (≤ 2 of `{id, name,
+- `SharedPlanSerializer` accepts an optional `answers` flag (default false), plus optional `stops[].id`, `stops[].alternates` (≤ 2 of `{id, name,
   neighborhood, kind, costText}`, in dollars as the plan page shows them) and `date` (ISO). Old apps that don't send them keep working;
   without stop ids, the swap buttons are hidden.
 - When the plan is updated, `swaps` entries for stop ids no longer in `data` are dropped (GV-8).

@@ -5,14 +5,11 @@ Documents: [brief](01-brief.md) · [brief reviews](01-brief_reviews.md) ·
 
 ## Summary
 
-Design written November 21, 2026, for all three modes. Waiting for Abraham's approval; nothing
-is built.
+Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mode 3.
 
 ## Attention needed
 
-- Abraham: approve the dossier, or change it.
-- Q-2 to Q-5 (Q-1 is resolved): names on the page, universal links later, the database cache for
-  rate limits, and the order of the modes.
+- Abraham merges each slice's PR (merging is blocked for Claude).
 - #41 (row level security) must be merged before any group slice.
 
 ## Phases
@@ -22,7 +19,7 @@ is built.
 | Clarify | Done: all three modes (Abraham, November 21). |
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
-| Human approval | Waiting. |
+| Human approval | Approved November 21 with the recommended answers. |
 | Build (G0 to G3b) | Not started. |
 | Verify, ship, learn | Not started. |
 
@@ -32,6 +29,9 @@ None yet.
 
 ## Decisions and events
 
+- November 21: Abraham approved the dossier and the recommended answers to Q-2 to Q-5.
+- November 21: G1a's form only appears on plans shared with `answers: true`, so the backend stays
+  inert until the G1b app ships.
 - November 21: Q-1 resolved. A cron job on Supabase already keeps Render awake, so links meet GV-11
   without a paid plan. Still measured before mode 1 ships.
 - November 21: Abraham chose all three modes.

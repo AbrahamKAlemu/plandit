@@ -1,6 +1,6 @@
 # Group plans: plan
 
-Status: draft for approval, November 21, 2026. Brief: [01-brief.md](01-brief.md). Architecture:
+Status: approved by Abraham, November 21, 2026. Brief: [01-brief.md](01-brief.md). Architecture:
 [02-architecture.md](02-architecture.md).
 
 ## Slices
@@ -11,7 +11,7 @@ level security on every table, plus the test) must be merged first.
 | Slice | Outcome | Depends on | Lands safely because |
 |---|---|---|---|
 | G0. Public form basics (backend) | `public_forms` (cookie, rate limit with a database cache, name check), `retention`, CSP on `/p/` | #41 | No new behavior on the pages beyond headers. |
-| G1a. Answers on the plan page (backend) | `ShareAnswer`, the form on `/p/`, owner answers API, new optional payload fields | G0 | Pages without stop ids look like today plus the I'm in form. |
+| G1a. Answers on the plan page (backend) | `ShareAnswer`, the form on `/p/`, owner answers API, new optional payload fields | G0 | The form only shows on plans shared with `answers: true`, which only the G1b app sends, so every existing page looks the same until G1b ships. |
 | G1b. Answers in the app (iOS) | Stop ids and swap options in shares, the answers summary, "Swap it" | G1a deployed | Ships in an app version; old versions ignore answers. |
 | G2a. Friends' input links (backend) | `GroupRequest`, `GroupAnswer`, `/g/` pages, owner API, `request` on shares | G1a | Nothing creates requests until G2b. |
 | G2b. Ask friends what works (iOS) | Create a request, answers screen, `GroupInputs`, planner priorities, build and share | G2a deployed, G1b | New entry point only. The planner change is a no-op at equal priority. |
@@ -136,8 +136,9 @@ because a wrong rebase silently loses someone's edit. Modes 1 and 2 are covered 
 
 ## Human approval
 
-Waiting for Abraham. Silence isn't approval. Open questions Q-2 to Q-5 are in the brief; Q-1 is
-resolved (the Supabase keep-awake job).
+Approved by Abraham on November 21, 2026 ("Please do everything and do what you recommend"), with
+the brief's recommended answers to Q-2 to Q-5. Q-1 was resolved by the Supabase keep-awake job.
+Merging stays with Abraham.
 
 ## Rollout and final checks
 
