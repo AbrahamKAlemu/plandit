@@ -70,6 +70,7 @@ TRY_AGAIN = "Try again in a moment."
 TOO_LARGE = "This plan is too big to save for the group."
 DAY_OVER = "This plan's day is over."
 NOT_THIS_PLAN = "This isn't the group's plan."
+EDIT_ID_TAKEN = "Already used by another member's edit. Send a new one."
 ORGANIZER_CANNOT_LEAVE = "Organizers can't leave their own plan. End the plan instead."
 FALLBACK_NAME = "Friend"
 INVITE_TOKEN = re.compile(rf"\A[A-Za-z0-9_-]{{{INVITE_TOKEN_LENGTH}}}\Z")
@@ -441,9 +442,10 @@ class GroupPlanDetailView(APIView):
 
     @try_again_on_lock_timeout
     def put(self, request, group_id):
-        """PUT {baseVersion, editId, edit: {kind, stopIds}, plan} (brief GE-5, MF-B, MF-C). A known
-        `editId` is 200 with that edit's version and changes nothing; the current `baseVersion`
-        stores the plan as the next version; any other is 409 with what changed since."""
+        """PUT {baseVersion, editId, edit: {kind, stopIds}, plan} (brief GE-5, MF-B, MF-C). The
+        caller's own known `editId` is 200 with that edit's version and changes nothing (another
+        member's is 400); the current `baseVersion` stores the plan as the next version; any other
+        is 409 with what changed since."""
         pk = parse_uuid(group_id)
         # Before anything about the body, so an outsider gets the same 404 for any request.
         if not _is_member(pk, request.user):
@@ -466,6 +468,10 @@ class GroupPlanDetailView(APIView):
                 return _not_found()
             logged = GroupPlanEdit.objects.filter(group=group, edit_id=edit_id).first()
             if logged is not None:
+                # A retry only from the member who made that edit (by member id: someone who left
+                # and joined again is a new member).
+                if logged.member_id != caller.id:
+                    raise ValidationError({"editId": [EDIT_ID_TAKEN]})
                 return _saved_response(group, logged.version)
             if parse_uuid(plan["id"]) != group.plan_id:
                 raise ValidationError({"plan": [NOT_THIS_PLAN]})

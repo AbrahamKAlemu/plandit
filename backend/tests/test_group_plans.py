@@ -903,6 +903,21 @@ def test_ver_10_a_retried_edit_answers_with_its_version_and_changes_nothing(grou
     assert row(group) == before
 
 
+@pytest.mark.parametrize("base", ["the edit's base", "the current version"])
+def test_ver_10_another_members_edit_id_is_never_a_retry(group, maya, jordan, base):
+    """A known editId is a retry only from the member who logged it. Anyone else gets 400 and
+    neither the edit's version nor the plan changes hands."""
+    edit_id = new_id()
+    assert put(maya, group, edit_id=edit_id).status_code == 200
+    before = row(group)
+    response = put(jordan, group, edit_id=edit_id, base=3 if base == "the edit's base" else 4)
+    assert response.status_code == 400
+    assert response.json() == {"editId": ["Already used by another member's edit. Send a new one."]}
+    assert row(group) == before
+    assert GroupPlanEdit.objects.count() == 1
+    assert put(maya, group, edit_id=edit_id, base=3).json()["version"] == 4  # Maya's own retry still is
+
+
 def test_ver_11_the_409_names_who_made_each_edit_since_the_base(maya, jordan):
     """MF-C: A removes s2 at v2, B changes s1's time at v3, C sends a PUT from v1."""
     casey = person("Casey Kim")
