@@ -105,6 +105,45 @@ final class GroupJoinFlowTests: XCTestCase {
         todayHasNoNewPlan(in: app)
     }
 
+    /// Today's own "Paste a link", on an empty day with your plan picked: an invite opens the join
+    /// sheet there too, not only from Saved.
+    @MainActor func testPastingAnInviteOnAnEmptyTodayOpensTheJoinSheet() {
+        emptyTheSampleDay()
+        let app = launch(["-skipAuth", "-resetSavedData", "-startDetent", "large", "-clock", "11:00", "-planStart", "23:45", "-fakeGroupPlans"])
+        let mine = switcher(app).buttons["Mine"]
+        XCTAssertTrue(mine.waitForExistence(timeout: 10))
+        mine.tap()
+
+        paste(jordansLink, in: app, from: "today-paste-link")
+
+        XCTAssertTrue(app.textFields["social-link-field"].waitForNonExistence(timeout: 5), "Add a link closes")
+        joinSheetShowsJordansPlan(in: app)
+    }
+
+    /// Removes every stop from the sample day, then quits, so the next launch opens on an empty
+    /// day. Planning from 11:45 PM, so the emptied day shows the empty Today, not suggestion cards.
+    @MainActor private func emptyTheSampleDay() {
+        let app = launch(["-skipAuth", "-resetData", "-startDetent", "large", "-clock", "11:00", "-planStart", "23:45"])
+        XCTAssertTrue(app.buttons["edit-plan"].waitForExistence(timeout: 5))
+        let firstStop = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Stop 1,'")).firstMatch
+        var removed = 0
+        while firstStop.waitForExistence(timeout: 3), removed < 10 {
+            let label = firstStop.label
+            firstStop.press(forDuration: 1.2)
+            let remove = app.buttons["Remove from plan"]
+            XCTAssertTrue(remove.waitForExistence(timeout: 3))
+            remove.tap()
+            // The removed row stays in the tree while it animates out: wait, or the next press
+            // lands on it and opens no menu.
+            XCTAssertTrue(app.buttons[label].waitForNonExistence(timeout: 3))
+            removed += 1
+        }
+        XCTAssertTrue(app.staticTexts["Nothing planned yet"].waitForExistence(timeout: 3))
+        // Let the emptied day save before quitting.
+        sleep(2)
+        app.terminate()
+    }
+
     @MainActor func testASharedPlanLinkStillGoesWhereItWent() {
         let app = launchWithGroups()
 

@@ -184,11 +184,9 @@ struct TodaySheet: View {
         .sheet(isPresented: $isSendingPlan) { SendPlanSheet() }
         .sheet(isPresented: $isShowingAnswers) { ShareAnswersSheet() }
         .sheet(item: $membersShown) { GroupMembersSheet(groupID: $0.id) }
-        .sheet(isPresented: $isAddingLink) {
-            AddLinkSheet { id in
-                // Same landing as from Saved: watch the new post get mapped.
-                router.showPost(id)
-            }
+        .addLinkSheet(isPresented: $isAddingLink) { id in
+            // Same landing as from Saved: watch the new post get mapped.
+            router.showPost(id)
         }
     }
 

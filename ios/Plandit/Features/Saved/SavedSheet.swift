@@ -10,8 +10,6 @@ struct SavedSheet: View {
     /// Counts + taps that added a place, for the success haptic.
     @State private var adds = 0
     @State private var isAddingLink = false
-    /// An invite link pasted in "Add a link": its join sheet opens once that sheet has gone.
-    @State private var inviteFromLink: String?
     @AppStorage("plandit.saved.showShareTip") private var showShareTip = true
 
     var body: some View {
@@ -115,18 +113,10 @@ struct SavedSheet: View {
         }
         .onAppear { query.forgetMissingGroup(in: store.saved) }
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $isAddingLink, onDismiss: openInviteFromLink) {
-            AddLinkSheet(onSaved: { id in
-                // Land on the new post so the user watches it get mapped.
-                router.savedPath = [id]
-            }, onInvite: { inviteFromLink = $0 })
+        .addLinkSheet(isPresented: $isAddingLink) { id in
+            // Land on the new post so the user watches it get mapped.
+            router.savedPath = [id]
         }
-    }
-
-    private func openInviteFromLink() {
-        guard let token = inviteFromLink else { return }
-        inviteFromLink = nil
-        router.join(invite: token)
     }
 
     private var categoryPictures: some View {
