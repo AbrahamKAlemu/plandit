@@ -69,6 +69,22 @@ import XCTest
         XCTAssertEqual(deleted, [])
     }
 
+    // Round 3, R2: a slow read from "Ask about another day" can't bring back an answer removed meanwhile.
+    func testASlowCheckDoesNotBringBackARemovedAnswer() async throws {
+        let (store, requests) = try await F.requestedStore()
+        let maya = F.answer("Maya", budget: 20, 13, 18)
+        await requests.setAnswers([maya, F.answer("Jordan", budget: 30, 12, 17)])
+        await store.refreshPlanRequest(force: true)
+        await requests.holdNext()
+        let check = Task { try await store.discardKind() }
+        for _ in 0..<200 { if await requests.isHolding { break }; try await Task.sleep(for: .milliseconds(10)) }
+        try await store.removeRequestAnswer(maya.id)
+        await requests.release()
+        let kind = try await check.value
+        XCTAssertEqual(kind, .delete, "it still decides by what the server said")
+        XCTAssertEqual(store.requestDetails?.answers.map(\.name), ["Jordan"], "Maya's removed answer came back")
+    }
+
     // R7
     func testTheStatusLineAfterTheBuiltPlanStopsBeingShared() {
         let link = PlanRequestLink(slug: "req1", url: URL(string: "https://plandit.app/g/req1")!, day: "2026-11-22",

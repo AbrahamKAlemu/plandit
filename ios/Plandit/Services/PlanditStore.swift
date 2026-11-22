@@ -1311,8 +1311,11 @@ final class PlanditStore {
     /// can't be read, and the link stays.
     func discardKind() async throws -> RequestDiscard {
         guard let link = planRequest, let requestClient else { return .forget }
+        let changes = requestChanges
         guard let fetched = try await requestClient.fetch(slug: link.slug) else { return .forget }
-        if planRequest?.slug == link.slug, fetched != fetchedRequest {
+        // As for a refresh: a change made here while this was out (a removed answer, say) isn't
+        // undone by what it read. The decision still goes by the server's status.
+        if planRequest?.slug == link.slug, requestChanges == changes, fetched != fetchedRequest {
             fetchedRequest = fetched
             requestFetchFailed = false
         }
