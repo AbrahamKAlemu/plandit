@@ -160,6 +160,8 @@ nonisolated enum UsageEvent: String, Sendable, CaseIterable {
     case planBuilt = "plan_built"
     case linkSaved = "link_saved"
     case placeSaved = "place_saved"
+    /// "Use this plan" on a suggested plan in the empty Today. `plan_built` is sent too.
+    case suggestionUsed = "suggestion_used"
 }
 
 /// `POST /api/me/events/`. Fire and forget: a lost event is never surfaced to the person.

@@ -86,6 +86,7 @@ final class PlanditStore {
         self.mediaStore = mediaStore
         self.extractionRetryDelay = extractionRetryDelay
         self.events = events
+        doneToday = storage?.loadDoneToday()
         resumeInterruptedLookups()
     }
 
@@ -161,6 +162,15 @@ final class PlanditStore {
     /// or when launched with `-resetData`.
     static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = launchExtractor()) -> PlanditStore {
         if CommandLine.arguments.contains("-resetData") { storage.reset() }
+#if DEBUG
+        if CommandLine.arguments.contains("-seedSuggestions") {
+            storage.reset()
+            return PlanditStore(
+                today: .empty(for: .now, budget: SampleData.profile.defaultBudget), saved: SuggestionSeed.savedPosts,
+                profile: SampleData.profile, pastPlans: [], visited: [], extractor: extractor, storage: storage
+            )
+        }
+#endif
         let resetsSavedData = CommandLine.arguments.contains("-resetSavedData")
         guard let snapshot = storage.load() else {
             let store = sample(
@@ -1128,6 +1138,124 @@ final class PlanditStore {
         return first == last ? "A day in \(first)" : "\(first) to \(last)"
     }
 
+    // MARK: - Suggested plans (the empty Today)
+
+    /// Up to three plans built from saved places, for an empty Today; none once it has a plan.
+    /// Worked out on the phone and never stored or synced.
+    private(set) var suggestions: [PlanSuggestion] = []
+    /// Set when a tapped card had gone stale and the cards were refreshed (SP-11).
+    private(set) var suggestionNotice: String?
+    /// Where suggestions start: the planner's default start, so "Change it" lands on the same time.
+    @ObservationIgnored var suggestionStart: () -> Date = { PlanDefaults.start() }
+    /// What the current suggestions were worked out from. Between changes to it, the cards stay put.
+    @ObservationIgnored private var suggestionKey: SuggestionKey?
+    /// Saved posts checked off on some date; only today's count (see `postsDoneToday`).
+    @ObservationIgnored private var doneToday: DoneToday?
+
+    static let suggestionsChangedMessage = "It's later now, so these plans changed."
+
+    enum UseResult: Equatable {
+        case applied
+        /// The card no longer matches what the planner would build; the cards were refreshed instead.
+        case stale
+    }
+
+    private struct SuggestionKey: Equatable {
+        /// The 15-minute time slot of the start.
+        var slot: Int
+        var saves: Int
+        var budget: Double
+        var travel: TravelPreference
+        var extras: Double
+        var done: Set<UUID>
+    }
+
+    /// Saved posts checked off today, even if they've since left the plan. Not suggested again
+    /// today (SP-9); a new day starts with none.
+    var postsDoneToday: Set<UUID> {
+        guard let doneToday, doneToday.day == DoneToday.key(for: today.date) else { return [] }
+        return doneToday.postIDs
+    }
+
+    /// Keeps `postsDoneToday` in step with the plan: a stop marked done adds its post, a stop in
+    /// the plan that isn't done (Undo, "Not here yet") takes it out, and a stop removed from the
+    /// plan leaves it as it was. Written to this phone only, beside the snapshot.
+    ///
+    /// Only a plan for the real current day is recorded. Another phone's copy from another day
+    /// (after sync, written before `replace(with:)` rolls it over) leaves today's set alone.
+    private func noteDoneStops() {
+        guard Calendar.current.isDate(today.date, inSameDayAs: .now) else { return }
+        let day = DoneToday.key(for: today.date)
+        var done = postsDoneToday
+        for stop in today.stops {
+            guard let postID = stop.sourcePostID else { continue }
+            if stop.status == .done { done.insert(postID) } else { done.remove(postID) }
+        }
+        let next = DoneToday(day: day, postIDs: done)
+        guard next != doneToday else { return }
+        doneToday = next
+        guard let storage, !isClosed else { return }
+        try? storage.saveDoneToday(next)
+    }
+
+    /// Works the suggestions out again if anything they depend on changed: the saves, the default
+    /// budget, the travel setting, Today, or the 15-minute slot the start time is in (SP-8).
+    func refreshSuggestions() {
+        guard today.stops.isEmpty else {
+            suggestionKey = nil
+            if !suggestions.isEmpty { suggestions = [] }
+            if suggestionNotice != nil { suggestionNotice = nil }
+            return
+        }
+        let start = suggestionStart()
+        var saves = Hasher()
+        for post in saved where post.isMappable { saves.combine(post) }
+        let done = postsDoneToday
+        let key = SuggestionKey(
+            slot: Int((start.timeIntervalSinceReferenceDate / (15 * 60)).rounded(.down)),
+            saves: saves.finalize(),
+            budget: profile.defaultBudget,
+            travel: travelPreference,
+            extras: today.extras.total,
+            done: done
+        )
+        guard key != suggestionKey else { return }
+        // "It's later now…" explains the cards it came with; once the time slot moves on, it goes.
+        if let previous = suggestionKey, previous.slot != key.slot, suggestionNotice != nil { suggestionNotice = nil }
+        suggestionKey = key
+        let next = PlanSuggester(planner: DayPlanner(travel: travelPreference)).suggestions(
+            posts: saved,
+            excluding: done,
+            start: start,
+            budget: profile.defaultBudget,
+            end: start.addingTimeInterval(PlanDefaults.suggestionLength),
+            alreadySpent: today.extras.total
+        )
+        if next != suggestions { suggestions = next }
+    }
+
+    /// "Use this plan": makes exactly the card's plan today's plan, with the same undo step as
+    /// building one by hand (SP-10). If the planner would now build something else (a stop has
+    /// closed, the time slot moved), nothing changes: the cards are refreshed instead (SP-11).
+    @discardableResult
+    func useSuggestion(_ suggestion: PlanSuggestion) -> UseResult {
+        guard today.stops.isEmpty else { return .stale }
+        let start = suggestionStart()
+        let end = start.addingTimeInterval(PlanDefaults.suggestionLength)
+        let budget = profile.defaultBudget
+        let preview = previewPlan(postIDs: suggestion.postIDs, start: start, budget: budget, mode: .replace, end: end)
+        guard preview.isSamePlan(as: suggestion.outcome) else {
+            suggestionKey = nil
+            refreshSuggestions()
+            suggestionNotice = Self.suggestionsChangedMessage
+            return .stale
+        }
+        suggestionNotice = nil
+        buildPlan(postIDs: suggestion.postIDs, start: start, budget: budget, mode: .replace, end: end)
+        events?(.suggestionUsed)
+        return .applied
+    }
+
     // MARK: - Profile
 
     func updateProfile(_ change: (inout UserProfile) -> Void) {
@@ -1148,6 +1276,8 @@ final class PlanditStore {
     /// Coalesces bursts of changes into one write a moment later.
     private func persist() {
         scheduleShareUpdate()
+        noteDoneStops()
+        refreshSuggestions()
         guard let storage, !isClosed else { return }
         let snapshot = snapshot
         pendingSave?.cancel()
@@ -1181,6 +1311,8 @@ final class PlanditStore {
     func persistNow() {
         pendingSave?.cancel()
         pendingSave = nil
+        noteDoneStops()
+        refreshSuggestions()
         guard let storage, !isClosed else { return }
         let snapshot = snapshot
         guard (try? storage.save(snapshot)) != nil else { return }

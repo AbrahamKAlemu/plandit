@@ -189,6 +189,8 @@ private struct PlanditRoot: View {
                 switch phase {
                 case .active:
                     store.rollOverIfNeeded()
+                    // The start time and opening hours may have moved on while the app was away.
+                    store.refreshSuggestions()
                     // Unread shared videos older than a day go first (SHR-3); a share whose video
                     // went this way still arrives, asking for the video again. (AccountGate runs
                     // this too, but not necessarily before the ingest below.)
