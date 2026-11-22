@@ -844,6 +844,8 @@ components:
               answers_per_link,
               plan_requests,
               plan_requests_built,
+              request_links_with_answers,
+              answers_per_request_link,
             ]
           properties:
             signups: { type: integer }
@@ -860,7 +862,9 @@ components:
             anonymous_sessions: { type: integer }
             links_with_answers:
               type: integer
-              description: Shared plans with at least one friend's answer kept now (answers expire)
+              description: >-
+                Shared plans with at least one friend's answer kept now (answers expire). Friends' input links
+                are counted in `request_links_with_answers`
             answers_per_link:
               type: number
               description: Average answers per link in `links_with_answers`, one decimal; 0 when none
@@ -870,6 +874,12 @@ components:
             plan_requests_built:
               type: integer
               description: Of `plan_requests`, those built into a plan
+            request_links_with_answers:
+              type: integer
+              description: Of `plan_requests`, those with at least one friend's answer
+            answers_per_request_link:
+              type: number
+              description: Average answers per link in `request_links_with_answers`, one decimal; 0 when none
         daily:
           type: array
           description: Exactly `days` entries, oldest to newest, ending today, zero-filled

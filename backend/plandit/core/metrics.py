@@ -5,12 +5,14 @@ Everything is counted in the database, grouped by local day in the project time 
 payload holds counts only: no ids, emails or names. Anonymous profiles (old TestFlight builds)
 are excluded from every number except `anonymous_sessions`.
 
-Friends' answers on shared plans (group plans) are counted, never read: how many links have any,
-and how many each such link has on average (brief "Analytics", GS-7). Answers are deleted 30 days
-after the plan's date, so these describe the answers kept now, not all time.
+Friends' answers on shared plans (group plans, "I'm in") are counted, never read: how many links
+have any, and how many each such link has on average (brief "Analytics", GS-7). Answers are deleted
+30 days after the plan's date, so these describe the answers kept now, not all time.
 
-Friends' input links (mode 2) are counted the same way: how many there are, and how many were
-built into a plan. Their answers aren't read at all. Requests are deleted 30 days after their day.
+Friends' input links (mode 2) are counted the same way: how many there are, how many were built
+into a plan, how many have answers (a friend's budget and free time) and how many each such link
+has on average. Those answers are counted apart from shared plans' and never read. Requests and
+their answers are deleted 30 days after their day.
 
 Group plans that members edit together (mode 3) are counted too: how many there are, how many have
 at least one friend in them, and how many edits were made (each adds one to the plan's version).
@@ -25,7 +27,7 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from plandit.groups.models import GroupPlan
-from plandit.plans.models import GroupRequest
+from plandit.plans.models import GroupAnswer, GroupRequest
 from plandit.shares.models import ShareAnswer
 from plandit.waitlist.models import WaitlistSignup
 
@@ -62,22 +64,29 @@ def _active_users_between(first: date, last: date) -> int:
     return rows.aggregate(n=Count("profile", distinct=True))["n"]
 
 
-def _answer_totals() -> dict:
-    counts = ShareAnswer.objects.filter(shared_plan__owner__is_anonymous=False).aggregate(
-        answers=Count("id"), links=Count("shared_plan", distinct=True)
-    )
+def _links_and_answers_per_link(answers, link: str) -> tuple[int, float]:
+    """How many links have any of `answers`, and the average number on such a link."""
+    counts = answers.aggregate(answers=Count("id"), links=Count(link, distinct=True))
     links = counts["links"]
-    return {
-        "links_with_answers": links,
-        "answers_per_link": round(counts["answers"] / links, 1) if links else 0.0,
-    }
+    return links, round(counts["answers"] / links, 1) if links else 0.0
+
+
+def _answer_totals() -> dict:
+    """Shared plans' answers only, as these keys always counted."""
+    answers = ShareAnswer.objects.filter(shared_plan__owner__is_anonymous=False)
+    links, per_link = _links_and_answers_per_link(answers, "shared_plan")
+    return {"links_with_answers": links, "answers_per_link": per_link}
 
 
 def _request_totals() -> dict:
     requests = GroupRequest.objects.filter(owner__is_anonymous=False)
+    answers = GroupAnswer.objects.filter(request__owner__is_anonymous=False)
+    links, per_link = _links_and_answers_per_link(answers, "request")
     return {
         "plan_requests": requests.count(),
         "plan_requests_built": requests.filter(status=GroupRequest.Status.BUILT).count(),
+        "request_links_with_answers": links,
+        "answers_per_request_link": per_link,
     }
 
 

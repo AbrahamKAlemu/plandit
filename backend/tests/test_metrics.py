@@ -127,6 +127,8 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
         "answers_per_link": 0.0,
         "plan_requests": 0,
         "plan_requests_built": 0,
+        "request_links_with_answers": 0,
+        "answers_per_request_link": 0.0,
         "group_plans": 0,
         "group_plans_with_friends": 0,
         "group_plan_edits": 0,
@@ -187,6 +189,8 @@ def test_totals_and_daily_counts(api_client, metrics_key):
         "answers_per_link": 0.0,
         "plan_requests": 0,
         "plan_requests_built": 0,
+        "request_links_with_answers": 0,
+        "answers_per_request_link": 0.0,
         "group_plans": 0,
         "group_plans_with_friends": 0,
         "group_plan_edits": 0,
@@ -342,6 +346,44 @@ def test_friends_input_link_counts_without_names(api_client, metrics_key):
     assert (body["totals"]["plan_requests"], body["totals"]["plan_requests_built"]) == (4, 2)
     text = json.dumps(body)
     assert "Quentinia" not in text and "137" not in text
+
+
+def add_request_answers(request, count: int) -> None:
+    for n in range(count):
+        GroupAnswer.objects.create(
+            request=request,
+            responder=uuid.uuid4().hex * 2,
+            name=f"Friend{n}",
+            budget=40,
+            free_from=time(13),
+            free_until=time(18),
+        )
+
+
+def test_friends_input_link_answers_are_counted_apart_from_shared_plan_answers(api_client, metrics_key):
+    """A friends' input link with 50 answers used to leave `links_with_answers` at 0: that key and
+    `answers_per_link` count shared plans' answers ("I'm in"), and still do. Answers on friends'
+    input links (a budget and a free window) have their own pair."""
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    full, one, _unanswered = make_plan_request(owner), make_plan_request(owner), make_plan_request(owner)
+    add_request_answers(full, 50)
+    add_request_answers(one, 2)
+    add_request_answers(make_plan_request(make_profile(is_anonymous=True)), 3)
+    link = SharedPlan.objects.create(owner=owner, plan_id=uuid.uuid4(), data={})
+    add_answers(link, ["Quentinia"])
+
+    totals = get(api_client).json()["totals"]
+    assert (totals["request_links_with_answers"], totals["answers_per_request_link"]) == (2, 26.0)
+    assert (totals["links_with_answers"], totals["answers_per_link"]) == (1, 1.0)
+    assert totals["plan_requests"] == 3
+
+
+def test_friends_input_link_answers_per_link_is_rounded_to_one_place(api_client, metrics_key):
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    for count in (1, 1, 2):
+        add_request_answers(make_plan_request(owner), count)
+    totals = get(api_client).json()["totals"]
+    assert (totals["request_links_with_answers"], totals["answers_per_request_link"]) == (3, 1.3)
 
 
 def make_group_plan(owner, *members, version=1) -> GroupPlan:
