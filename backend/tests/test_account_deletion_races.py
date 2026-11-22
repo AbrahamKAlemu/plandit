@@ -26,7 +26,7 @@ from plandit.plans.models import REQUEST_RETENTION_DAYS, GroupAnswer, GroupReque
 from plandit.shares.models import SharedPlan
 from tests.test_group_plan_races import delete_account_later, first_holds_until_second_waits, second_device, warm
 from tests.test_group_plans import person, plan_json, with_and_without_supabase
-from tests.test_requests import add_answer, local_today, make_request
+from tests.test_requests import add_answer, create, local_today, make_request, request_payload
 from tests.test_shares import plan_payload, share
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -136,6 +136,30 @@ def test_a_share_with_request_that_waited_for_the_accounts_deletion_is_401(maya,
     assert results["second"].json() == ACCOUNT_DELETED
     assert not SharedPlan.objects.exists()
     assert not GroupRequest.objects.exists()
+
+
+# --- Another write that adds a row for the account, from another device ---------------------------
+
+# Each write's request from the second device, and the table its new row goes in.
+ADDS_A_ROW = {
+    "plan-request": (lambda who: create(who.client, request_payload()), GroupRequest),
+}
+
+
+@pytest.mark.parametrize("write", list(ADDS_A_ROW))
+def test_a_write_that_adds_a_row_and_waited_for_the_accounts_deletion_is_401(maya, settings, monkeypatch, write):
+    """The new row's foreign key waited for the deletion's lock on the profile, then found the
+    profile gone: an IntegrityError, a 500. The write now takes the profile's key-share lock first,
+    as sharing a plan does, and gets the same 401 as any request from a deleted account."""
+    send, model = ADDS_A_ROW[write]
+    warm(maya)
+    phone = second_device(maya)
+    delete = delete_account_later(maya, settings, monkeypatch, with_supabase=False)
+    results = first_holds_until_second_waits(monkeypatch, core_views, "_lock_group_plans", delete, lambda: send(phone))
+    assert (results["first"].status_code, results["second"].status_code) == (204, 401)
+    assert results["second"].json() == ACCOUNT_DELETED
+    assert not Profile.objects.filter(pk=maya.id).exists()
+    assert not model.objects.exists()
 
 
 # --- The retention purge on an expired friends' input link ---------------------------------------

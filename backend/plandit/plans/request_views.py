@@ -45,6 +45,7 @@ from plandit.shares.views import (
     ANSWERS_PER_LINK,
     LINK_FULL,
     TRY_LATER,
+    _hold_owner,
     not_found_page,
     with_page_headers,
 )
@@ -93,15 +94,19 @@ class PlanRequestListView(APIView):
         serializer = GroupRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        group = GroupRequest.objects.create(
-            owner=request.user,
-            places=[dict(place) for place in data["places"]],
-            day=data["day"],
-            window_start=data["windowStart"],
-            window_end=data["windowEnd"],
-            time_zone=data["timeZone"],
-            answers_by=data["answersBy"],
-        )
+        with transaction.atomic():
+            # The owner's profile first, as sharing a plan does: the new row's foreign key would
+            # otherwise wait for an account deletion's lock and then fail on the deleted profile.
+            _hold_owner(request.user)
+            group = GroupRequest.objects.create(
+                owner=request.user,
+                places=[dict(place) for place in data["places"]],
+                day=data["day"],
+                window_start=data["windowStart"],
+                window_end=data["windowEnd"],
+                time_zone=data["timeZone"],
+                answers_by=data["answersBy"],
+            )
         return Response(_request_json(request, group), status=status.HTTP_201_CREATED)
 
 
