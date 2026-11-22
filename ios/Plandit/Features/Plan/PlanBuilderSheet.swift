@@ -9,11 +9,11 @@ struct PlanBuilderSheet: View {
     /// Picked post ids, in the order they were picked.
     @State private var picked: [UUID] = []
     @State private var mode: PlanditStore.PlanMode = .replace
-    @State private var start = PlanBuilderSheet.defaultStart()
+    @State private var start = PlanDefaults.start()
     @State private var budget: Double = 60
     /// "Free until": off means the day can run late.
     @State private var hasEnd = false
-    @State private var end = PlanBuilderSheet.defaultStart().addingTimeInterval(4 * 3600)
+    @State private var end = PlanDefaults.start().addingTimeInterval(4 * 3600)
     @State private var didSetUp = false
     @State private var built = 0
 
@@ -218,27 +218,6 @@ struct PlanBuilderSheet: View {
         }
         built += 1
         router.finishPlanning()
-    }
-
-    /// The next quarter hour. Debug builds launched with `-planStart 11:00` start there instead,
-    /// so UI tests don't depend on the time of day.
-    static func defaultStart(now: Date = .now, calendar: Calendar = .current) -> Date {
-        #if DEBUG
-        if let value = UserDefaults.standard.string(forKey: "planStart") {
-            let parts = value.split(separator: ":").compactMap { Int($0) }
-            if parts.count == 2, let date = calendar.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: now) {
-                return date
-            }
-        }
-        #endif
-        return nextQuarterHour(after: now, calendar: calendar)
-    }
-
-    /// 10:07 → 10:15, 10:15 → 10:30: always a little ahead of now.
-    static func nextQuarterHour(after date: Date = .now, calendar: Calendar = .current) -> Date {
-        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        let wholeMinute = calendar.date(from: parts) ?? date
-        return calendar.date(byAdding: .minute, value: 15 - (parts.minute ?? 0) % 15, to: wholeMinute) ?? date
     }
 }
 
