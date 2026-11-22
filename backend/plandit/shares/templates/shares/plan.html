@@ -20,6 +20,7 @@
   <section class="cover" aria-labelledby="plan-title">
     <div class="kicker">You're invited to a plan</div>
     <h1 id="plan-title">{{ plan.title }}</h1>
+    {% if going %}<p class="going">{{ going }}</p>{% endif %}
     <div class="facts">
       <div class="fact">{{ plan.dateText }}{% if plan.timeText %}<small>{{ plan.timeText }}</small>{% endif %}</div>
     </div>
@@ -46,10 +47,48 @@
             {% if stop.costText %}<span>{{ stop.costText }}</span>{% endif %}
             <a href="{{ stop.maps_url }}" rel="noopener">Open in Maps</a>
           </div>
+          {% if stop.id %}
+          {# Part of the form under the stops (form="answer"). Ticking the box shows the alternates, in CSS. #}
+          <div class="swap">
+            <input type="checkbox" id="swap-{{ forloop.counter }}" name="swap" value="{{ stop.id }}" form="answer"{% if stop.swap_checked %} checked{% endif %}>
+            <label for="swap-{{ forloop.counter }}" id="swap-label-{{ forloop.counter }}">I'd swap this</label>
+            {% if stop.alternates %}
+            <div class="alternates" role="radiogroup" aria-labelledby="swap-label-{{ forloop.counter }}">
+              {% for alternate in stop.alternates %}
+              <label class="alternate"><input type="radio" name="swap_to_{{ stop.id }}" value="{{ alternate.id }}" form="answer"{% if alternate.id == stop.swap_pick %} checked{% endif %}><span><span class="alternate-name">{{ alternate.name }} instead</span>{% if alternate.details %}<small>{{ alternate.details }}</small>{% endif %}</span></label>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
         </div>
       </article>
       {% if stop.leg %}<div class="leg">{{ stop.leg }}</div>{% endif %}
     </li>
     {% endfor %}
   </ol>
+
+  {% if takes_answers %}
+  <section class="answer" aria-labelledby="answer-title">
+    <h2 id="answer-title">Your answer</h2>
+    {% if own %}<p class="own">You said: <strong>{% if own.status == "in" %}I'm in{% else %}Can't make it{% endif %}</strong></p>{% endif %}
+    <form id="answer" method="post" action="{% url 'shared-plan-answer' slug %}">
+      {% csrf_token %}
+      {% if error %}<p class="error" id="answer-error" role="alert">{{ error }}</p>{% endif %}
+      <label class="field-label" for="answer-name">First name</label>
+      <input id="answer-name" name="name" type="text" value="{{ form.name }}" maxlength="30" required autocomplete="given-name" autocapitalize="words" spellcheck="false" aria-describedby="answer-name-hint{% if error %} answer-error{% endif %}"{% if name_invalid %} aria-invalid="true"{% endif %}>
+      <p class="hint" id="answer-name-hint">If you're in, your first name shows on this page.</p>
+      <div class="buttons">
+        <button type="submit" name="status" value="in" class="primary">I'm in</button>
+        <button type="submit" name="status" value="out" class="secondary">Can't make it</button>
+      </div>
+    </form>
+    {% if own %}
+    <form method="post" action="{% url 'shared-plan-answer-delete' slug %}" class="take-back">
+      {% csrf_token %}
+      <button type="submit" class="link">Take back my answer</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
 {% endblock %}
