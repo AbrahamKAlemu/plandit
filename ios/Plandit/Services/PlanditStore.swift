@@ -34,6 +34,9 @@ final class PlanditStore {
     private var answersSlug: String?
     /// When answers were last fetched, so Today appearing again doesn't ask again within 10 s.
     @ObservationIgnored private var answersFetchedAt: Date?
+    /// Goes up with each change to the answers made here (removing one, stopping sharing), so a
+    /// refresh that was out meanwhile can't bring back what it changed (GV-7).
+    @ObservationIgnored private var answersChanges = 0
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
 
@@ -1027,9 +1030,11 @@ final class PlanditStore {
         guard let link = todayLink, let answerClient else { return }
         if !force, link.slug == answersSlug, let answersFetchedAt,
            now.timeIntervalSince(answersFetchedAt) < Self.answersRefreshInterval { return }
+        let changes = answersChanges
         guard let answers = try? await answerClient.answers(slug: link.slug) else { return }
-        // Shared again, or stopped, while the request was out.
-        guard todayLink?.slug == link.slug else { return }
+        // Shared again, or stopped, or an answer removed while the request was out: what it read
+        // may be from before that.
+        guard todayLink?.slug == link.slug, answersChanges == changes else { return }
         answersSlug = link.slug
         answersFetchedAt = now
         if answers != fetchedAnswers { fetchedAnswers = answers }
@@ -1039,10 +1044,12 @@ final class PlanditStore {
     func removeShareAnswer(_ id: UUID) async throws {
         guard let link = todayLink, let answerClient else { return }
         try await answerClient.remove(slug: link.slug, answerID: id)
+        answersChanges += 1
         fetchedAnswers.removeAll { $0.id == id }
     }
 
     private func forgetAnswers() {
+        answersChanges += 1
         fetchedAnswers = []
         answersSlug = nil
         answersFetchedAt = nil

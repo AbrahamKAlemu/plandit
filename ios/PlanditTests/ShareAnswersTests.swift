@@ -244,6 +244,26 @@ import XCTest
         XCTAssertEqual(removed, [maya.id])
     }
 
+    func testASlowRefreshDoesntBringBackAnAnswerJustRemoved() async throws {
+        let (store, answers) = try await sharedStore()
+        let maya = answer("Maya", .in)
+        await answers.set([maya, answer("Sam", .out)])
+        await store.refreshShareAnswers()
+
+        // A refresh goes out while Maya is still on the page...
+        await answers.holdNext()
+        let refresh = Task { await store.refreshShareAnswers(force: true) }
+        try await waitUntilHeld(answers)
+        // ...the organizer removes her, and then the refresh's answer, Maya included, comes back.
+        try await store.removeShareAnswer(maya.id)
+        await answers.release()
+        await refresh.value
+        XCTAssertEqual(store.shareAnswers.map(\.name), ["Sam"], "Maya stays gone")
+
+        await store.refreshShareAnswers(force: true)
+        XCTAssertEqual(store.shareAnswers.map(\.name), ["Sam"], "and the next refresh still works")
+    }
+
     func testAFailedRemovalKeepsTheAnswer() async throws {
         let (store, answers) = try await sharedStore()
         let maya = answer("Maya", .in)
@@ -282,6 +302,15 @@ import XCTest
         ShareAnswer(id: UUID(), name: name, status: status, swaps: swaps, createdAt: Date(), updatedAt: Date())
     }
 
+    /// Until the held request has gone out.
+    private func waitUntilHeld(_ answers: RecordingAnswers) async throws {
+        for _ in 0..<200 {
+            if await answers.isHolding { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("the request never went out")
+    }
+
     private func api(_ transport: FakeTransport) -> PlanditAPIClient {
         PlanditAPIClient(baseURL: URL(string: "https://api.example")!, userID: "user-1", tokenProvider: FakeTokenProvider(), transport: transport)
     }
@@ -291,17 +320,31 @@ import XCTest
 private actor RecordingAnswers: ShareAnswersFetching {
     private var answers: [ShareAnswer] = []
     private var failsNext = false
+    private var holdsNext = false
+    private var held: CheckedContinuation<Void, Never>?
     private(set) var calls = 0
     private(set) var removed: [UUID] = []
 
     func set(_ answers: [ShareAnswer]) { self.answers = answers }
     func failNext() { failsNext = true }
+    /// The next request waits for `release()`, then answers with what was set when it was asked.
+    func holdNext() { holdsNext = true }
+    func release() {
+        held?.resume()
+        held = nil
+    }
+    var isHolding: Bool { held != nil }
 
     func answers(slug: String) async throws -> [ShareAnswer] {
         calls += 1
         if failsNext {
             failsNext = false
             throw APIError.network
+        }
+        let answers = self.answers
+        if holdsNext {
+            holdsNext = false
+            await withCheckedContinuation { held = $0 }
         }
         return answers
     }
