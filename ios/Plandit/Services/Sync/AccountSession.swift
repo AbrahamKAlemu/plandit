@@ -32,6 +32,12 @@ final class AccountSession {
             if CommandLine.arguments.contains("-fakeAnswers") {
                 store.answerClient = FakeShareAnswers(sharing: sharing)
             }
+            // `-fakeRequests` (or `-fakeRequests clash`): "Ask friends what works" links with
+            // friends' fixed answers (`FakePlanRequests`).
+            if let index = CommandLine.arguments.firstIndex(of: "-fakeRequests") {
+                let next = CommandLine.arguments.indices.contains(index + 1) ? CommandLine.arguments[index + 1] : ""
+                store.requestClient = FakePlanRequests(sharing: sharing, clashes: next == "clash")
+            }
         }
         #endif
         return AccountSession(userID: userID, store: store, sync: nil, storage: .default)
@@ -121,6 +127,7 @@ final class AccountSession {
         }
         store.sharing = SharedPlanClient(api: api)
         store.answerClient = ShareAnswersClient(api: api)
+        store.requestClient = PlanRequestClient(api: api)
         store.persistNow()
         let sync = SyncCoordinator(userID: user.id, client: client, stateStore: stateStore, store: store)
         sync.start(version: version, dirty: dirty, readOnly: readOnly)

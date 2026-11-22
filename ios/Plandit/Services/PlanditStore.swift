@@ -48,6 +48,26 @@ final class PlanditStore {
     @ObservationIgnored private var answersChanges = 0
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
+    /// How many "Build our plan" shares are putting the plan on friends' link (`shareGroupPlan`).
+    /// A count, so one ending can't let Undo back while another is still out (round 4 review, N2).
+    private(set) var groupSharesOut = 0
+    /// Until the last share ends, the build's Undo is held back: the server may already have the
+    /// built plan (round 3 review, R1).
+    var isSharingGroupPlan: Bool { groupSharesOut > 0 }
+    /// The "Ask friends what works" link (plandit.app/g/<slug>), kept in the snapshot.
+    private(set) var planRequest: PlanRequestLink?
+    /// Makes and reads those links; nil when signed out of the server (the local test account).
+    @ObservationIgnored var requestClient: (any PlanRequesting)?
+    /// `planRequest` with friends' answers, as last fetched. Memory only: answers are never saved on the phone.
+    private(set) var fetchedRequest: PlanRequest?
+    /// The answers couldn't be read and none were read before (after a relaunch, say): there's
+    /// nothing to plan from until they are.
+    private(set) var requestFetchFailed = false
+    /// The link and time the last refresh that counts went out, as for shared plans' answers.
+    @ObservationIgnored private var requestAsked: (slug: String, at: Date)?
+    /// Goes up with each change made here (a new link, a removed answer, closing, building), so a
+    /// refresh that was out meanwhile can't bring back what it changed.
+    @ObservationIgnored private var requestChanges = 0
 
     /// Computed from real past plans and visited places; never sample numbers.
     var stats: UserStats { UserStats.compute(pastPlans: pastPlans, visited: visited, placesSaved: saved.count) }
@@ -127,6 +147,7 @@ final class PlanditStore {
             events: events
         )
         sharedLink = snapshot.sharedLink
+        planRequest = snapshot.planRequest
     }
 
     /// Swaps in another copy of this account's data (the server's, after sync) and writes it locally.
@@ -140,6 +161,7 @@ final class PlanditStore {
         pastPlans = snapshot.pastPlans
         visited = snapshot.visited
         sharedLink = snapshot.sharedLink
+        planRequest = snapshot.planRequest
         legPaths = [:]
         persistNow()
         rollOverIfNeeded()
@@ -210,6 +232,7 @@ final class PlanditStore {
             storage: storage
         )
         store.sharedLink = snapshot.sharedLink
+        store.planRequest = snapshot.planRequest
         store.rollOverIfNeeded()
         if resetsSavedData { store.persistNow() }
         return store
@@ -857,7 +880,8 @@ final class PlanditStore {
             profile: profile,
             pastPlans: pastPlans,
             visited: visited,
-            sharedLink: sharedLink
+            sharedLink: sharedLink,
+            planRequest: planRequest
         )
         try storage.save(snapshot)
         onChange?(snapshot)
@@ -963,16 +987,25 @@ final class PlanditStore {
 
     /// Creates today's link (or updates its page with new options) and remembers it. With
     /// `suggestsSwaps`, the page offers friends up to two saved places per stop (`swapOptions`).
+    /// With `request`, the plan was built from that "Ask friends what works" link, which then opens
+    /// this plan (GI-7).
     @discardableResult
-    func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true) async throws -> SharedLink {
+    /// `stillWanted` is asked again right before the plan goes out, once it's this request's turn:
+    /// false drops it (`CancellationError`), and the link stays as it was.
+    func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true, request: String? = nil,
+                    stillWanted: (() -> Bool)? = nil) async throws -> SharedLink {
         guard let sharing else { throw APIError.network }
         // Nothing older may land after this (`holdPageUpdates`).
         holdPageUpdates()
         let sent: (slug: String, url: URL, payload: SharedPlanPayload)
         do {
             sent = try await inTurn {
-                let payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
+                if let stillWanted, !stillWanted() { throw CancellationError() }
+                var payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
+                payload.request = request
                 let created = try await sharing.publish(payload)
+                // Page updates never carry the request: compare them with the page itself.
+                payload.request = nil
                 return (created.slug, created.url, payload)
             }
         } catch {
@@ -1186,24 +1219,298 @@ final class PlanditStore {
         persist()
     }
 
+    // MARK: - Ask friends what works (group plans, mode 2)
+
+    /// Making a link needs the server: the answers are read from it and the plan goes on a link.
+    var canAskFriends: Bool { requestClient != nil && sharing != nil }
+
+    /// The link still in play: its day hasn't gone by. One for an earlier day is left to the
+    /// server's clean-up (GS-5), and the planner offers a new one.
+    func activeRequest(now: Date = AppClock.now) -> PlanRequestLink? {
+        guard let planRequest, !planRequest.isOver(now: now) else { return nil }
+        return planRequest
+    }
+
+    /// The link's request with friends' answers, as last fetched; nil before the first fetch.
+    var requestDetails: PlanRequest? {
+        guard let fetchedRequest, fetchedRequest.slug == planRequest?.slug else { return nil }
+        return fetchedRequest
+    }
+
+    /// How often the answers screen appearing or the app opening may ask again.
+    static var requestRefreshInterval: TimeInterval = 10
+
+    /// Makes the link for `draft` (GI-1) and keeps it. `answersBy` is the draft's deadline.
+    func createPlanRequest(_ draft: PlanRequestDraft, answersBy: Date) async throws {
+        guard let requestClient else { throw APIError.network }
+        let created = try await requestClient.create(draft)
+        requestChanges += 1
+        planRequest = PlanRequestLink(request: created, draft: draft, answersBy: answersBy)
+        fetchedRequest = created
+        requestFetchFailed = false
+        requestAsked = (created.slug, Date())
+        persist()
+    }
+
+    /// Reads the link's answers, at most every `requestRefreshInterval` unless forced. A failure
+    /// keeps what was shown, and the next appearance tries again; with nothing read yet it sets
+    /// `requestFetchFailed`. A link the server no longer has (deleted on another phone, or cleaned
+    /// up) is forgotten.
+    func refreshPlanRequest(now: Date = Date(), force: Bool = false) async {
+        guard let link = planRequest, let requestClient else { return }
+        if !force, let asked = requestAsked, asked.slug == link.slug,
+           now.timeIntervalSince(asked.at) < Self.requestRefreshInterval { return }
+        let previous = requestAsked
+        requestAsked = (link.slug, now)
+        let changes = requestChanges
+        let fetched: PlanRequest?
+        do {
+            fetched = try await requestClient.fetch(slug: link.slug)
+        } catch {
+            if requestAsked?.slug == link.slug, requestAsked?.at == now { requestAsked = previous }
+            if planRequest?.slug == link.slug, requestDetails == nil { requestFetchFailed = true }
+            return
+        }
+        // A new link, a removed answer, closing or building while the request was out: what it
+        // read may be from before that.
+        guard planRequest?.slug == link.slug, requestChanges == changes else { return }
+        requestFetchFailed = false
+        guard let fetched else {
+            fetchedRequest = nil
+            planRequest = nil
+            persist()
+            return
+        }
+        if fetched != fetchedRequest { fetchedRequest = fetched }
+    }
+
+    /// Takes a friend's answer off the link: it no longer counts (GS-4).
+    func removeRequestAnswer(_ id: UUID) async throws {
+        guard let link = planRequest, let requestClient else { return }
+        try await requestClient.removeAnswer(slug: link.slug, answerID: id)
+        requestChanges += 1
+        if fetchedRequest?.slug == link.slug { fetchedRequest?.answers.removeAll { $0.id == id } }
+    }
+
+    /// The link stops taking answers before its deadline (GI-3). The plan can still be built.
+    func closePlanRequest() async throws {
+        guard let link = planRequest, let requestClient else { return }
+        try await requestClient.close(slug: link.slug)
+        requestChanges += 1
+        if fetchedRequest?.slug == link.slug, fetchedRequest?.status == .open { fetchedRequest?.status = .closed }
+    }
+
+    /// What "Ask about another day" does with the link.
+    enum RequestDiscard: Equatable {
+        /// It never opened a plan: it goes, with friends' answers.
+        case delete
+        /// It opens a plan (or the server no longer has it): the app lets go of it, and friends'
+        /// link keeps working until it's cleaned up 30 days after its day (GS-5).
+        case forget
+    }
+
+    /// Reads the link first and decides by what the server says now, not what this phone last
+    /// read: built (maybe on another phone) is forgotten, open or closed is deleted. Throws when it
+    /// can't be read, and the link stays.
+    func discardKind() async throws -> RequestDiscard {
+        guard let link = planRequest, let requestClient else { return .forget }
+        let changes = requestChanges
+        guard let fetched = try await requestClient.fetch(slug: link.slug) else { return .forget }
+        // As for a refresh: a change made here while this was out (a removed answer, say) isn't
+        // undone by what it read. The decision still goes by the server's status.
+        if planRequest?.slug == link.slug, requestChanges == changes, fetched != fetchedRequest {
+            fetchedRequest = fetched
+            requestFetchFailed = false
+        }
+        return fetched.status == .built ? .forget : .delete
+    }
+
+    /// "Ask about another day", once `discardKind` decided: deletes or forgets the link so a new
+    /// one can be made.
+    func discardPlanRequest(_ kind: RequestDiscard) async throws {
+        guard let link = planRequest else { return }
+        if kind == .delete, let requestClient {
+            // Read once more right before deleting: another phone may have built the plan while
+            // the organizer confirmed, and friends' link then opens it, so it's only forgotten. The
+            // server's delete doesn't check, so a build landing between these two calls still goes.
+            if let current = try await requestClient.fetch(slug: link.slug), current.status != .built {
+                try await requestClient.delete(slug: link.slug)
+            }
+        }
+        requestChanges += 1
+        planRequest = nil
+        fetchedRequest = nil
+        requestAsked = nil
+        requestFetchFailed = false
+        persist()
+    }
+
+    /// The organizer's own inputs until they change them: their default budget and the whole
+    /// range (GI-5).
+    func organizerInputs(for link: PlanRequestLink) -> GroupInputs.Person {
+        GroupInputs.Person(member: .organizer, budget: profile.defaultBudget,
+                           from: link.start ?? ClockTime(12), until: link.end ?? ClockTime(20), stars: [])
+    }
+
+    /// Everyone's inputs together (`GroupInputs.combine`), over the link's places still saved. Nil
+    /// until the answers have been read: a plan from the organizer's inputs alone would leave
+    /// friends out.
+    func groupInputs(organizer: GroupInputs.Person, leftOut: Set<GroupMember>) -> GroupInputs.Result? {
+        guard let link = planRequest, let details = requestDetails else { return nil }
+        let places = link.placeIDs.filter { post(id: $0)?.isMappable == true }
+        return GroupInputs.combine(answers: details.answers, organizer: organizer, places: places, leftOut: leftOut)
+    }
+
+    /// The link's day is today, both where it was made and on the phone: Today only holds today's
+    /// plan, so a plan for a later day is built on that day (D1).
+    func canBuildGroupPlan(now: Date = AppClock.now) -> Bool {
+        guard let link = planRequest else { return false }
+        return link.isToday(now: now) && link.day == DayPlan.isoDay(now, calendar: .current)
+    }
+
+    /// The plan from the answers so far, planned on the link's day, without changing anything:
+    /// what "Build our plan" would put in Today, or for a later day how it looks so far. Nil once
+    /// the day is over.
+    func previewGroupPlan(_ plan: GroupInputs.Plan, now: Date = AppClock.now) -> DayPlanner.Outcome? {
+        groupPlanRequest(plan, now: now).map { DayPlanner(travel: travelPreference).plan($0) }
+    }
+
+    /// "Build our plan": the answers' plan replaces today's and the link remembers it. Then
+    /// `shareGroupPlan` puts it on the link. Until that works, Undo puts the old plan back (and
+    /// Build is offered again); once friends' link opens it, there's no Undo: the organizer changes
+    /// it in Today, as with any shared plan. Nil unless `canBuildGroupPlan`.
+    @discardableResult
+    func buildGroupPlan(_ plan: GroupInputs.Plan, now: Date = AppClock.now) -> DayPlanner.Outcome? {
+        guard canBuildGroupPlan(now: now), var link = planRequest, let request = groupPlanRequest(plan, now: now) else { return nil }
+        let outcome = DayPlanner(travel: travelPreference).plan(request)
+        guard !outcome.stops.isEmpty else { return outcome }
+        remember(Self.groupBuildUndoMessage, isGroupBuild: true)
+        today.stops = outcome.stops
+        today.legs = outcome.legs
+        legPaths = [:]
+        today.budget = plan.budget
+        today.title = Self.title(for: today.stops)
+        link.builtPlanID = today.id
+        link.builtStopIDs = today.stops.map(\.id)
+        planRequest = link
+        requestChanges += 1
+        persist()
+        events?(.planBuilt)
+        Task { await loadRoutes() }
+        return outcome
+    }
+
+    /// Puts the plan built from the answers on today's link, with the request's slug, so friends'
+    /// /g/ link now opens it (GI-7). It goes out like Share plan, one at a time with page updates.
+    /// An existing link keeps its settings; a new one shows prices, and no swaps, since the
+    /// organizer hasn't seen swap options for this plan (GV-9).
+    /// While it's out, Undo is held back (`canUndo`), and once it's this request's turn to go out
+    /// the built plan must still be Today's, or nothing is sent: a plan waiting behind a page
+    /// update could otherwise have been changed meanwhile.
+    /// When Today no longer holds the built plan, before or while it goes out, it throws
+    /// `GroupShareError.planChanged` and lets go of the build, so Build is offered again (N1).
+    func shareGroupPlan() async throws {
+        guard groupPlanAwaitsLink, let link = planRequest else {
+            if forgetReplacedGroupBuild() { throw GroupShareError.planChanged }
+            throw APIError.invalidResponse
+        }
+        groupSharesOut += 1
+        defer { groupSharesOut -= 1 }
+        let current = todayLink
+        do {
+            try await shareToday(showPrices: current?.showPrices ?? true, note: current?.note ?? "",
+                                 suggestsSwaps: current?.suggestsSwaps ?? false, request: link.slug,
+                                 stillWanted: { [unowned self] in self.groupPlanAwaitsLink && self.planRequest?.slug == link.slug })
+        } catch is CancellationError {
+            if forgetReplacedGroupBuild() { throw GroupShareError.planChanged }
+            throw CancellationError()
+        }
+        // Friends' link opens this plan now: undoing the build would put the old one there.
+        if undo?.isGroupBuild == true { undo = nil }
+        requestChanges += 1
+        if fetchedRequest?.slug == link.slug { fetchedRequest?.status = .built }
+        await refreshPlanRequest(force: true)
+    }
+
+    /// The plan "Build our plan" put in Today is still there, with the same stops, and isn't on
+    /// friends' link yet: "Try again" puts it there. False once it's undone or another plan
+    /// replaced it, so the link never gets a plan that wasn't built from the answers.
+    var groupPlanAwaitsLink: Bool {
+        guard let link = planRequest, let builtID = link.builtPlanID, builtID == today.id,
+              let stopIDs = link.builtStopIDs, let details = requestDetails, details.status != .built else { return false }
+        return Set(stopIDs) == Set(today.stops.map(\.id))
+    }
+
+    static let groupBuildUndoMessage = "Built our plan. It isn't on the link yet."
+
+    enum GroupShareError: Error {
+        /// Today has another plan than the one "Build our plan" made: nothing went on the link.
+        case planChanged
+    }
+
+    /// The plan "Build our plan" made isn't Today's any more (another plan replaced it) and friends'
+    /// link doesn't open it: lets go of it, so Build is offered again. True when it did.
+    private func forgetReplacedGroupBuild() -> Bool {
+        guard var link = planRequest, let builtID = link.builtPlanID, requestDetails?.status != .built else { return false }
+        let stillToday = builtID == today.id && link.builtStopIDs.map { Set($0) == Set(today.stops.map(\.id)) } == true
+        guard !stillToday else { return false }
+        link.builtPlanID = nil
+        link.builtStopIDs = nil
+        planRequest = link
+        persist()
+        return true
+    }
+
+    /// The planner's inputs for the answers' plan, on the link's day, so places' hours are that
+    /// day's: from the start of everyone's time (or the next quarter hour, if that's later) to its
+    /// end, on the lowest budget, most-starred places first. Today's extra costs only count today.
+    private func groupPlanRequest(_ plan: GroupInputs.Plan, now: Date) -> DayPlanner.Request? {
+        guard let link = planRequest, !link.isOver(now: now), let day = link.dayDate,
+              let windowStart = plan.start.date(on: day, calendar: link.calendar),
+              let windowEnd = plan.end.date(on: day, calendar: link.calendar) else { return nil }
+        let start = max(windowStart, PlanDefaults.nextQuarterHour(after: now))
+        let priorities = Dictionary(plan.candidates.map { ($0.placeID, $0.stars) }, uniquingKeysWith: max)
+        var request = basePlanRequest(postIDs: plan.candidates.map(\.placeID), start: start, budget: plan.budget,
+                                      mode: .replace, priorities: priorities)
+        if !canBuildGroupPlan(now: now) { request.alreadySpent = 0 }
+        request.dayEnd = windowEnd
+        return request
+    }
+
     // MARK: - Undo
 
     struct PlanUndo: Identifiable {
         let id = UUID()
         let message: String
         let plan: DayPlan
+        /// "Build our plan", before the plan went on friends' link.
+        var isGroupBuild = false
+    }
+
+    /// The undo bar offers Undo. Not for "Build our plan" while it's going on friends' link: the
+    /// server may already have it, and the old plan would then go out after it (R1). If that
+    /// fails, Undo is offered again.
+    var canUndo: Bool {
+        guard let undo else { return false }
+        return !(undo.isGroupBuild && isSharingGroupPlan)
     }
 
     /// Call before changing `today`.
-    private func remember(_ message: String) {
-        undo = PlanUndo(message: message, plan: today)
+    private func remember(_ message: String, isGroupBuild: Bool = false) {
+        undo = PlanUndo(message: message, plan: today, isGroupBuild: isGroupBuild)
     }
 
     /// Puts today's plan back the way it was before the last change.
     func undoLastChange() {
-        guard let undo else { return }
+        guard canUndo, let undo else { return }
         today = undo.plan
         self.undo = nil
+        if undo.isGroupBuild, var link = planRequest {
+            // The built plan is gone: no "Try again" for it, and Build is offered again.
+            link.builtPlanID = nil
+            link.builtStopIDs = nil
+            planRequest = link
+        }
         persist()
         Task { await loadRoutes() }
     }
@@ -1312,9 +1619,15 @@ final class PlanditStore {
         return bounded
     }
 
-    private func basePlanRequest(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode) -> DayPlanner.Request {
+    /// `priorities` (saved post id → priority) are for "Build our plan": how many people starred each place.
+    private func basePlanRequest(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode, priorities: [UUID: Int] = [:]) -> DayPlanner.Request {
         var seen = Set<UUID>()
         let picked = postIDs.filter { seen.insert($0).inserted }.compactMap { post(id: $0) }.compactMap(PlanCandidate.init(post:))
+            .map { candidate -> PlanCandidate in
+                var candidate = candidate
+                candidate.priority = candidate.sourcePostID.flatMap { priorities[$0] } ?? 0
+                return candidate
+            }
         switch mode {
         case .replace:
             return DayPlanner.Request(candidates: picked, start: start, budget: budget, alreadySpent: today.extras.total)
@@ -1472,7 +1785,8 @@ final class PlanditStore {
     // MARK: - Persistence
 
     var snapshot: StoreSnapshot {
-        StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited, sharedLink: sharedLink)
+        StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited, sharedLink: sharedLink,
+                      planRequest: planRequest)
     }
 
     /// The current state in the exact JSON shape the file and the cloud copy use.
