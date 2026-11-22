@@ -6,17 +6,21 @@ delete looked for the request's answers before taking that lock, an answer saved
 be missed: the delete then fails at commit (a new answer) or deadlocks with the save (a changed
 answer). These tests hold the friend's save inside the lock until the organizer's request is
 blocked, which is the order that goes wrong, so they don't depend on timing (the pattern of
-test_answer_races.py)."""
+test_answer_races.py). The last test races two of the organizer's own requests: sharing the built
+plan, and deleting the account."""
 
 import threading
 
 import pytest
 from django.db import connection
 from django.test import Client
+from rest_framework.test import APIClient
 
 from plandit.core.models import Profile
 from plandit.plans.models import GroupAnswer, GroupRequest
+from plandit.shares import views as share_views
 from plandit.shares.models import SharedPlan
+from tests.conftest import make_token
 from tests.test_answer_races import WAIT_SECONDS, another_session_is_waiting_for_a_lock, delete_account
 from tests.test_answers import empty_throttle_cache  # noqa: F401
 from tests.test_requests import friend_answer, make_request
@@ -119,3 +123,59 @@ def test_building_while_a_friend_answers_keeps_the_answer_and_then_builds(auth_c
     group = GroupRequest.objects.get(slug=slug)
     assert (group.status, group.shared_plan) == ("built", SharedPlan.objects.get())
     assert sorted(group.answers.values_list("name", flat=True)) == ["Maya", "Sam"]
+
+
+@pytest.mark.parametrize("with_supabase", [False, True], ids=["local-only", "with-supabase"])
+@pytest.mark.parametrize("plan_is", ["new", "shared before"])
+def test_building_while_deleting_the_account_deletes_the_plan_and_the_request(
+    auth_client, user_id, profile, monkeypatch, settings, plan_is, with_supabase
+):
+    """The organizer shares the built plan from one device while deleting the account from another.
+    A new plan's row checks its owner at commit, which needs the profile the deletion locks first;
+    so the share takes that lock before the request's, and the deletion waits for the share
+    instead of deadlocking with it."""
+    slug = make_request(profile).slug
+    sharer = APIClient(raise_request_exception=False)
+    sharer.credentials(HTTP_AUTHORIZATION=f"Bearer {make_token(user_id)}")
+    auth_client.raise_request_exception = False
+    payload = plan_payload(request=slug)
+    if plan_is == "shared before":
+        assert share(sharer, plan_payload(payload["planId"])).status_code == 201
+    delete = delete_account(auth_client, settings, monkeypatch, with_supabase)
+
+    holding = threading.Event()
+    results = {}
+    mark_built = share_views._mark_request_built
+
+    def mark_built_once_the_deletion_waits(*args, **kwargs):
+        mark_built(*args, **kwargs)
+        holding.set()
+        results["deletion_was_blocked"] = another_session_is_waiting_for_a_lock()
+
+    monkeypatch.setattr(share_views, "_mark_request_built", mark_built_once_the_deletion_waits)
+
+    def build():
+        try:
+            results["share"] = share(sharer, payload).status_code
+        finally:
+            connection.close()
+
+    def delete_the_account():
+        try:
+            assert holding.wait(WAIT_SECONDS), "the share never marked the request built"
+            results["delete"] = delete().status_code
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=build), threading.Thread(target=delete_the_account)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(WAIT_SECONDS * 3)
+    assert not any(thread.is_alive() for thread in threads), "a request never finished"
+
+    shared_status = 201 if plan_is == "new" else 200
+    assert results == {"deletion_was_blocked": True, "share": shared_status, "delete": 204}
+    assert not Profile.objects.filter(pk=user_id).exists()
+    assert not GroupRequest.objects.exists()
+    assert not SharedPlan.objects.exists()

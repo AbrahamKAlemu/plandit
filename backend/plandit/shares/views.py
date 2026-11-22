@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
@@ -16,6 +16,7 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from plandit.core.models import Profile
 from plandit.core.public_forms import (
     RESPONDER_COOKIE_MAX_AGE,
     clean_first_name,
@@ -68,6 +69,8 @@ class SharedPlanListView(APIView):
         plan_id = data.pop("planId")
         request_slug = data.pop("request", None)
         with transaction.atomic():
+            if request_slug is not None:
+                _hold_owner(request.user)
             # update_or_create locks the link's row, as answering does, so an answer can't be saved
             # against the old stops while this replaces them.
             shared, created = SharedPlan.objects.update_or_create(
@@ -83,10 +86,22 @@ class SharedPlanListView(APIView):
         )
 
 
+def _hold_owner(owner) -> None:
+    """Take the owner's profile's key-share lock before any other row. A new plan's link checks its
+    owner when the transaction commits, which takes this same lock; taken only then, it would wait
+    for an account deletion that holds the profile and is itself waiting for the request this share
+    has locked, and Postgres would end one of them as a deadlock."""
+    table = connection.ops.quote_name(Profile._meta.db_table)
+    column = connection.ops.quote_name(Profile._meta.pk.column)
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT 1 FROM {table} WHERE {column} = %s FOR KEY SHARE", [owner.pk])
+
+
 def _mark_request_built(owner, slug, shared) -> None:
-    """Point the owner's request at its built plan. Locked after the plan's link, the order every
-    path that takes both locks follows (stopping sharing locks the link, then clears the request's
-    plan; deleting the account locks links, then requests). Raising rolls the whole share back."""
+    """Point the owner's request at its built plan. The share holds the owner's profile, then the
+    plan's link, then this request: the order every path that takes these locks follows (deleting
+    the account locks the profile, then its links, then its requests; stopping sharing locks the
+    link, then clears the request's plan). Raising rolls the whole share back."""
     group = GroupRequest.objects.select_for_update().filter(slug=slug, owner=owner).first()
     if group is None:
         # The same answer for someone else's request as for one that doesn't exist.
