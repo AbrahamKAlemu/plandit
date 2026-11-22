@@ -201,12 +201,13 @@ paths:
         - name: answerId
           in: path
           required: true
+          description: The answer's id, in either case (Swift sends UUIDs in upper case)
           schema: { type: string, format: uuid }
       responses:
         "204":
           description: Removed
         "404":
-          description: No such answer on a link of yours
+          description: No such answer on a link of yours, or not a UUID
   /p/{slug}:
     get:
       operationId: sharedPlanPage
@@ -234,9 +235,10 @@ paths:
       summary: A friend's answer, from the page's form (no sign-in)
       description: >-
         Needs Django's CSRF token from the page. Matched to the browser by the `pa` cookie (Path
-        /p/{slug}, HttpOnly, Secure, SameSite=Lax, 30 days; only its SHA-256 is stored), so the
-        same browser changes its answer. 20 answers per address per hour across links, and 50
-        answers per link.
+        /p/{slug}, HttpOnly, Secure, SameSite=Lax; only its SHA-256 is stored), so the same browser
+        changes its answer. Every saved answer sets the cookie again to last until the answers are
+        deleted (30 days after the plan's date), and never less than 30 days. 20 answers per
+        address per hour on each link, and 50 answers per link.
       security: []
       parameters:
         - name: slug
@@ -275,11 +277,17 @@ paths:
         "404":
           description: "No such link, or it wasn't shared with `answers: true`"
         "429":
-          description: The page again, saying to try later (address limit or the link's 50 answers)
+          description: >-
+            The page again with the reason: "try again later" for the address's hourly limit, or
+            that the plan isn't taking more answers once the link has 50
   /p/{slug}/answer/delete:
     post:
       operationId: takeBackSharedPlanAnswer
       summary: The browser takes back its own answer (no sign-in)
+      description: >-
+        Works on any link that exists, even after it stops taking answers (shared again with
+        `answers: false`, or its date long past): only this browser's own answer is removed. Not
+        rate limited.
       security: []
       parameters:
         - name: slug
@@ -301,7 +309,7 @@ paths:
         "403":
           description: Missing or wrong CSRF token
         "404":
-          description: "No such link, or it wasn't shared with `answers: true`"
+          description: No such link
   /v1/place-resolutions:
     post:
       operationId: createPlaceResolution

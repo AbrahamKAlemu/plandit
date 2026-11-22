@@ -158,10 +158,10 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | POST | `/api/shares/` | share a plan as a link: camelCase, display-ready texts from the app (`planId`, `title`, `dateText`, `timeText`, `note`, `costText`, `stops[]`, `legs[]`; see `contracts/openapi.yaml`) → `{"slug","url"}`. `201` new, `200` when that plan already had a link (same slug, page updated). One link per plan per account. Optional, for friends' answers: `answers` (boolean), `date` (`YYYY-MM-DD`, needed with `answers: true`), `stops[].id` and `stops[].alternates` (≤ 2 of `{id, name, neighborhood, kind, costText}`), ids as UUIDs kept as sent. Updating keeps answers and drops swaps for stops no longer in the plan |
 | DELETE | `/api/shares/<slug>/` | stop sharing: `204`, the page 404s at once, and friends' answers are deleted. Another account's slug is `404` |
 | GET | `/api/shares/<slug>/answers/` | friends' answers on your link, oldest first: `{"answers": [{"id","name","status":"in"\|"out","swaps":{stopId: alternateId\|null},"createdAt","updatedAt"}]}` (camelCase, UTC). Another account's slug is `404` |
-| DELETE | `/api/shares/<slug>/answers/<id>/` | remove a friend's answer: `204`, gone from the page at once. Otherwise `404` |
+| DELETE | `/api/shares/<slug>/answers/<id>/` | remove a friend's answer: `204`, gone from the page at once. The id may be in either case (the app sends upper case). Otherwise `404` |
 | GET | `/p/<slug>` | the public page (HTML, no sign-in, `noindex`, Open Graph tags for link previews). Link host is `SHARE_BASE_URL` when set (`https://plandit.app` once the site forwards `/p/` here), else this API's own host. Plans shared with `answers: true` also show who's in (count and up to 3 first names; never who can't make it), "I'd swap this" on stops with ids, and the answer form; those pages are `private, no-store` |
-| POST | `/p/<slug>/answer` | the page's form (CSRF token, `name`, `status` = `in`\|`out`, `swap` = stop ids, `swap_to_<stopId>` = alternate id). Upserts this browser's answer by its `pa` cookie (path `/p/<slug>`; only the hash is stored) and answers `303` to the page; `400` or `429` show the page again with the reason. 20 answers per address per hour, 50 per link. `404` unless shared with `answers: true` |
-| POST | `/p/<slug>/answer/delete` | takes back this browser's own answer, `303` to the page |
+| POST | `/p/<slug>/answer` | the page's form (CSRF token, `name`, `status` = `in`\|`out`, `swap` = stop ids, `swap_to_<stopId>` = alternate id). Upserts this browser's answer by its `pa` cookie (path `/p/<slug>`; only the hash is stored; set again on every answer to last until the answers are deleted, at least 30 days) and answers `303` to the page; `400` or `429` show the page again with the reason. 20 answers per address per hour on each link, 50 per link. `404` unless shared with `answers: true` |
+| POST | `/p/<slug>/answer/delete` | takes back this browser's own answer, `303` to the page. Works on any link that exists, even after it stops taking answers; `404` only for a missing link. Not rate limited |
 
 Every plan mutation returns the full plan, with legs rebuilt between consecutive stops.
 
@@ -177,6 +177,12 @@ Friends who open a shared plan's link can answer without an account, on plans th
 deleted with the link, when the organizer removes them, and 30 days after the plan's `date`
 (`plandit/core/retention.py`). The deletion runs on every answer post, page view with the form and
 owner list, and by hand with `python manage.py purge_expired`.
+
+Limits: 20 answers an hour from one address on each link (per link, so students behind one campus
+address don't share a limit across every link), and 50 answers per link. A friend can always take
+back their own answer while the link exists. Answers are saved with the link's row locked, and
+stopping sharing or deleting the account takes that lock before deleting, so an answer saved at
+the same moment is deleted with the rest.
 
 ## Decisions and what is still stubbed
 
