@@ -37,5 +37,9 @@ APPLE_CLIENT_ID = "com.plandit.app"
 APPLE_SIGNIN_KEY_ID = ""
 APPLE_SIGNIN_PRIVATE_KEY = ""
 METRICS_API_KEY = ""  # same: /api/metrics/ is off unless a test turns it on
-CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    # Production's throttle cache is a database table (shares/0002); tests that need it override this.
+    "throttle": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "plandit-test-throttle"},
+}
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

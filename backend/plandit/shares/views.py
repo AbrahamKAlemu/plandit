@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -6,8 +7,12 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from plandit.core.public_forms import describe_forwarding, public_page_csp
+
 from .models import SharedPlan
 from .serializers import SharedPlanSerializer
+
+logger = logging.getLogger(__name__)
 
 
 def share_url(request, slug: str) -> str:
@@ -42,8 +47,11 @@ class SharedPlanDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT if deleted else status.HTTP_404_NOT_FOUND)
 
 
+@public_page_csp
 def shared_plan_page(request, slug):
     """GET /p/<slug>: the public page friends open. No sign-in."""
+    # Temporary: the proxy chain's shape, no addresses, to measure TRUSTED_PROXY_HOPS (slice G1a).
+    logger.info("proxy chain: %s", describe_forwarding(request))
     shared = SharedPlan.objects.filter(slug=slug).first()
     if shared is None:
         response = render(request, "shares/not_found.html", status=404)

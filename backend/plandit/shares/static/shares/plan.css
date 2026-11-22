@@ -1,0 +1,39 @@
+/* The shared plan page (shares/plan.html). */
+.cover {
+  position: relative; overflow: hidden; border-radius: 28px; padding: 26px 22px 24px; margin-top: 18px;
+  color: var(--ink); background: linear-gradient(150deg, var(--lime) 0%, #8ff0a0 45%, var(--green) 100%);
+  box-shadow: 0 24px 60px rgba(25,200,121,.25);
+}
+.cover::after {
+  content: ""; position: absolute; right: -40px; bottom: -60px; width: 220px; height: 220px; border-radius: 50%;
+  border: 2px dashed rgba(11,13,12,.25);
+}
+.kicker { font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+h1 { margin: 8px 0 14px; font-size: clamp(32px, 9vw, 44px); line-height: 1.02; font-weight: 800; letter-spacing: -.04em; }
+.facts { display: grid; gap: 6px; position: relative; z-index: 1; }
+.fact { font-weight: 700; font-size: 17px; }
+.fact small { display: block; font-weight: 600; font-size: 14px; opacity: .72; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; position: relative; z-index: 1; }
+.chip { background: rgba(11,13,12,.88); color: var(--on-dark); border-radius: 999px; padding: 7px 12px; font-size: 14px; font-weight: 700; }
+.note {
+  margin: 16px 0 0; padding: 14px 16px; border-radius: 18px; background: rgba(244,241,233,.08);
+  border: 1px solid rgba(244,241,233,.14); font-size: 17px; font-weight: 600;
+}
+h2 { margin: 30px 0 12px; font-size: 20px; letter-spacing: -.02em; }
+ol { list-style: none; margin: 0; padding: 0; }
+.stop {
+  display: grid; grid-template-columns: 36px 1fr; gap: 12px; padding: 16px; border-radius: 20px;
+  background: var(--paper); color: var(--ink);
+}
+.num {
+  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 800;
+  background: var(--green); color: var(--ink); font-size: 15px;
+}
+.time { font-size: 14px; font-weight: 800; color: var(--green-dark); }
+.name { margin: 2px 0 2px; font-size: 19px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; }
+.meta { color: var(--muted); font-size: 14px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px; font-size: 14px; font-weight: 700; }
+.row a { color: var(--green-dark); text-underline-offset: 3px; }
+.leg { display: flex; align-items: center; gap: 10px; padding: 8px 0 8px 28px; color: var(--on-dark-muted); font-size: 14px; font-weight: 600; }
+.leg::before { content: ""; width: 2px; height: 22px; background: repeating-linear-gradient(var(--on-dark-muted) 0 4px, transparent 4px 8px); }
+.cost { margin-top: 18px; color: var(--on-dark-muted); font-size: 15px; }

@@ -1,0 +1,3 @@
+/* The page for a link that isn't shared anymore (shares/not_found.html). */
+h1 { margin: 40px 0 8px; font-size: 32px; letter-spacing: -.03em; }
+p { color: var(--on-dark-muted); }
