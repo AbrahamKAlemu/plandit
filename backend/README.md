@@ -167,9 +167,9 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | GET, DELETE | `/api/plan-requests/<slug>/` | GET: `{"slug","url","status":"open"\|"closed"\|"built","places","day","windowStart","windowEnd","timeZone","answersBy","planSlug","createdAt","answers":[{"id","name","budget","freeFrom","freeUntil","stars","createdAt","updatedAt"}]}`, answers oldest first. DELETE: `204`, the link and every answer gone. Another account's slug is `404` |
 | POST | `/api/plan-requests/<slug>/close/` | stop taking answers before the deadline: `204` (also when already closed; a built request stays built). With or without the last slash |
 | DELETE | `/api/plan-requests/<slug>/answers/<id>/` | remove a friend's answer: `204`. The id may be in either case. Otherwise `404` |
-| POST, GET | `/api/group-plans/` | POST: a group plan from one of your plans (camelCase `date` = `YYYY-MM-DD`, today to 366 days ahead in New York time, and `plan` = the app's `DayPlan` JSON, at most 64 KB compact and 20 stops with unique UUID ids) → `201` with the group (below), or `200` with the existing group when you already made one from that plan id. Anonymous sessions `403`. GET: `{"groups":[{"id","date","version","membersVersion","etag","organizerName","memberCount","memberId","isOrganizer","inviteUrl"}]}`, soonest first |
-| GET, PUT, DELETE | `/api/group-plans/<id>/` | GET: `{"id","date","version","membersVersion","plan","members":[{"id","name","isOrganizer"}],"memberId","isOrganizer","inviteUrl"}` (`inviteUrl` for the organizer only), `ETag: "<version>.<membersVersion>"`, `Cache-Control: private, no-cache`; a matching `If-None-Match` (weak) is `304`. PUT `{"baseVersion","editId","edit":{"kind","stopIds"},"plan"}`: `200` `{"version","membersVersion","members"}`, or `409` `{"version","membersVersion","plan","members","edits"}` from an old version, or `200` with the original version for an `editId` already stored; `400` after the plan's day. DELETE (organizer): `204`, the group is gone. Anyone not in the group gets an empty `404` |
-| POST | `/api/group-plans/<id>/invite` | the organizer replaces the invite link: `200` `{"inviteUrl"}`; the old link stops working. With or without the last slash |
+| POST, GET | `/api/group-plans/` | POST: a group plan from one of your plans (camelCase `date` = `YYYY-MM-DD`, from the earliest day that isn't over (below) to 366 days ahead in New York time, and `plan` = the app's `DayPlan` JSON: at most 64 KB compact, 32 levels deep and 20 stops, each stop and leg with the keys the app can't decode without, and ids in the 36-character UUID form) → `201` with the group (below), or `200` with the existing group when you already made one from that plan id. Anonymous sessions `403`. GET: `{"groups":[{"id","date","version","membersVersion","etag","organizerName","memberCount","memberId","isOrganizer","inviteUrl"}]}`, soonest first |
+| GET, PUT, DELETE | `/api/group-plans/<id>/` | GET: `{"id","date","version","membersVersion","plan","members":[{"id","name","isOrganizer"}],"memberId","isOrganizer","inviteUrl"}` (`inviteUrl` for the organizer only), `ETag: "<version>.<membersVersion>"`, `Cache-Control: private, no-cache`; a matching `If-None-Match` (weak) is `304`. PUT `{"baseVersion","editId","edit":{"kind","stopIds"},"plan"}`: `200` `{"version","membersVersion","members"}`, or `409` `{"version","membersVersion","plan","members","edits","editsFrom"}` from an old version, or `200` with the original version when you resend an `editId` you already stored (another member's is `400`); `400` once the plan's day has passed. DELETE (organizer): `204`, the group is gone. Anyone not in the group gets an empty `404` |
+| POST | `/api/group-plans/<id>/invite` | the organizer replaces the invite link: `200` `{"inviteUrl"}`; the old link stops working and `membersVersion` goes up, so the ETag changes. With or without the last slash |
 | DELETE | `/api/group-plans/<id>/members/<member id>/` | leave (your own member id) or, as the organizer, remove someone, who then can't rejoin with the link: `204`. The organizer leaving is `400` (end the group instead) |
 | GET | `/api/group-plans/invites/<token>/` | before joining: `{"organizerName","date","memberCount"}`, nothing else. `404` when the link was replaced, the group ended or is full, the day is over, or you were removed |
 | POST | `/api/group-plans/invites/<token>/join` | join: `200` with the group, as GET answers it; joining again changes nothing. Same `404`s as above; anonymous sessions `403`. With or without the last slash |
@@ -178,7 +178,7 @@ needs `Authorization: Bearer <Supabase access token>` except `/api/health/`, `/a
 | POST | `/p/<slug>/answer/delete` | takes back this browser's own answer, `303` to the page. Works on any link that exists, even after it stops taking answers; `404` only for a missing link. Not rate limited |
 | GET | `/g/<slug>` | friends' input page (HTML, no sign-in, `noindex`, `private, no-store`). Link host is `REQUEST_BASE_URL` when set, else this API's own host. While open and before `answersBy`: the day, range and deadline, how many answered (never anyone's answer), the places with costs and a checkbox each, and the form (no JavaScript). Once built and its plan still shared: `302` to `/p/<plan slug>`, except for a browser whose answer is still on the request, which gets a page with the plan's link and "Take back my answer". Otherwise "This plan isn't taking answers any more" |
 | POST | `/g/<slug>/answer` | the page's form (CSRF token, `name`, `budget` = 0 to 150 in steps of 5, from a select rather than the architecture's slider, which can't show its value without JavaScript; `free_from`/`free_until` = `HH:MM` inside the range, `star` = up to 3 place ids). Upserts this browser's answer by its `pa` cookie (path `/g/<slug>`) and answers `303` to the page; `400` or `429` show the page again with the reason; `410` the closed page. Same limits as `/p/`: 20 per address per hour on each link, 50 per link |
-| GET | `/j/<token>` | group plan invite page (HTML, no sign-in, `noindex`, `no-referrer`, `public, max-age=60`): the same static page for every token, from no database query. It says to open Plandit and paste the link, with the App Store link. A malformed token gets a 404 page |
+| GET | `/j/<token>` | group plan invite page (HTML, no sign-in, `noindex`, `no-referrer`, `public, max-age=60`): the same static page for every token, from no database query. It gives three steps: get Plandit (with the App Store link) and sign in, copy the link, and paste it in Saved. A malformed token gets a 404 page |
 | POST | `/g/<slug>/answer/delete` | takes back this browser's own answer, `303` to the page. Works on any request that exists, even once closed; `404` only for a missing link. Not rate limited |
 
 Every plan mutation returns the full plan, with legs rebuilt between consecutive stops.
@@ -233,19 +233,24 @@ people, the organizer included. Everyone edits the same plan, stored on the serv
 - Edits are compare-and-swap: a PUT names the `baseVersion` it started from and is stored only
   from the current version; otherwise `409` returns the stored plan and the logged edits since that
   version, with their authors' names as of now, so the app can apply its edit again or say who
-  changed that stop. Each PUT carries an `editId`; a retry of a stored edit answers with its
-  version and changes nothing. The latest 200 edits per group are kept.
-- The ETag has both the plan's `version` and `membersVersion`, so a poll sees joins and removals.
-  Polls never run the retention purge.
+  changed that stop. Each PUT carries an `editId`; the same member's retry of a stored edit
+  answers with its version and changes nothing. The latest 200 edits per group are kept, and a
+  `409`'s `editsFrom` says which version its list starts at.
+- The ETag has both the plan's `version` and `membersVersion`, so a poll sees joins, removals and
+  a new invite link. Polls never run the retention purge.
 - Members are addressed by member id; no response carries a profile id or an email. Anyone not
   in the group gets the same empty `404` as for a group that doesn't exist.
-- Edits end with the plan's day (New York time); members can still read it until it's deleted,
-  30 days after its date (`plandit/core/retention.py`), with the organizer's account, or when the
-  organizer ends it. A member who deletes their account leaves every group.
-- Locking: every group write locks the group's row by its key and checks membership again under
-  that lock; create and join take the caller's profile's key-share lock first; deleting an account
-  locks its shared plans, requests, then group plans before the cascade. Each write sets a 3 s
-  `lock_timeout` and answers `503` "Try again in a moment." when it runs out.
+- A plan's day ends at 4 AM New York time the morning after its date, so a night out stays
+  editable while people are out. Then edits are refused and the link no longer previews or joins;
+  members can still read it until it's deleted, 30 days after its date
+  (`plandit/core/retention.py`), with the organizer's account, or when the organizer ends it. A
+  member who deletes their account leaves every group.
+- Locking: a write by someone who may not make it is `404` before any lock; every group write
+  locks the group's row by its key and checks membership again under that lock; create and join
+  take the caller's profile's key-share lock first; deleting an account locks its shared plans,
+  requests, then group plans before the cascade, and the purge locks expired groups before
+  deleting them. Each write sets a 3 s `lock_timeout` and answers `503` "Try again in a moment."
+  when it runs out.
 
 Before `/j/` links go out on plandit.app, the site has to forward `/j/` (and the page's stylesheets
 under `/static/shares/`) here; only then set `INVITE_BASE_URL`.
