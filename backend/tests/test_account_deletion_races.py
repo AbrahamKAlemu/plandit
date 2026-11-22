@@ -1,6 +1,7 @@
-"""Account deletion at the same moment as another write of the same account's data: a snapshot sync
-from another device, and a share from another device. (Group plan writes against deletion are in
-test_group_plan_races.py, friends' answers in test_answer_races.py and test_request_races.py.)
+"""Account deletion at the same moment as another write of the same account's data: a snapshot sync,
+a share, and each other write that adds a row for the account, all from another device. (Group plan
+writes against deletion are in test_group_plan_races.py, friends' answers in test_answer_races.py and
+test_request_races.py.)
 
 Deletion locks the profile first, then the account's shared plans, friends' input links and group
 plans by primary key, then deletes the profile, which cascades to everything else (core.views).
