@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -93,9 +94,11 @@ def _maps_url(stop: dict) -> str:
 
 
 def _jsonable(value):
-    """validated_data holds OrderedDicts and floats; store plain JSON."""
+    """validated_data holds OrderedDicts, floats and the plan's date; store plain JSON."""
     if isinstance(value, dict):
         return {k: _jsonable(v) for k, v in value.items()}
     if isinstance(value, list):
         return [_jsonable(v) for v in value]
+    if isinstance(value, date):
+        return value.isoformat()
     return value
