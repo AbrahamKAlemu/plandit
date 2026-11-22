@@ -5,7 +5,9 @@ Documents: [brief](01-brief.md) · [brief reviews](01-brief_reviews.md) ·
 
 ## Summary
 
-Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mode 3.
+Approved November 21, 2026. All three modes are built and merged (November 22): friends answer a shared
+plan (mode 1), friends' input links (mode 2), and editing one plan together (mode 3). Plans for a later
+day were dropped.
 
 ## Attention needed
 
@@ -14,10 +16,16 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
   `/p/measure-hops-*`: two plain, one with one forged X-Forwarded-For entry, one with two.
   `true_client_ip_from_right=N` on the plain lines is the hop count. If it isn't 3, set
   `TRUSTED_PROXY_HOPS` to N in Render; then the log line can be removed.
-- Abraham: send the course staff the metrics key (Claude can't handle secret values).
-- GS-6: the live privacy page (Jaden's repo) must describe group plans, including that `/g/` pages
-  show the organizer's first name, before an app version with group plans is submitted.
-- Don't upload a TestFlight build with modes 1 and 2 until the iOS 18 run in AGENTS.md is done.
+- Abraham: merge #57 (the metrics become public, counts only, so the course staff's tools need no key) or
+  close it and send the key yourself. Claude's merge of it was blocked.
+- GS-6: #58 put the group plans text in this repo's `website/privacy.html`. Port it to Jaden's repo
+  (the live plandit.app) before an app version with group plans is submitted, and set the effective
+  date then.
+- Don't upload a TestFlight build with group plans until the iOS 18 run in AGENTS.md is done.
+- Before group plans reach testers (Abraham): the two-phone check on real links, a create, join and
+  delete smoke test against production, and a second demo account for App Review to show mode 3.
+- Follow-up: the 30-day deletions run only when a link or group route is used, not on a schedule (the
+  privacy text says so). A timed purge would let the policy give a firm date.
 
 ## Phases
 
@@ -27,8 +35,8 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 to G3a and the daylight-saving fix are merged and deployed (November 22). G3b is split in two (store, then screens); G3b-1 in progress. Backend fixes (deletion races, group plan values, organizer's name on `/g/`) in progress. |
-| Verify, ship, learn | Completion reviews for modes 1 and 2 done November 22: no must-fix (mode 1: 19 pass, 2 unverified; mode 2: 16 pass, 1 unverified). Unverified: GV-11 timing on a phone, GS-6 live privacy page. |
+| Build (G0 to G3b) | Done November 22. G0 to G3a, the backend fixes (#55) and the privacy text (#58) are merged and deployed; the app's store (#56) and screens (#59) are merged. |
+| Verify, ship, learn | Completion reviews done November 22, no must-fix in any mode. Mode 1: 19 pass, 2 unverified. Mode 2: 16 pass, 1 unverified. Mode 3: 24 pass (GE-1 to GE-10 and the 14-item minimum set), checked against the final logs. Unverified: GV-11 timing on a phone, GS-6 live privacy page. Lessons are in AGENTS.md (#60). |
 
 ## Tasks and evidence
 
@@ -95,9 +103,43 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
     re-reviewed.
   - Copy: 3 personas approve (7), 2 approve with conditions (6). Both must-fixes were about the
     `/j/` page's steps and are fixed.
+- Backend fixes, `fix/backend-deletion-races`, #55 (merged November 22):
+  - Locks so a sync, share or new row can't deadlock or 500 against account deletion (now 401), group
+    plan value checks, the organizer's first name on `/g/`, `/g/` on narrow screens, two metrics.
+  - Tests: 1,373 passed on a local Postgres. Each race fix has a test that failed first; reverting
+    each fix makes its tests fail.
+  - Review (xhigh, one pass): no must-fix. Both nice-to-haves applied (a friends' input link created
+    during deletion gave 500, as did 5 other routes; organizers weren't told their name shows). Not
+    re-reviewed. Left: the activity write at sign-in, saved-post extraction during deletion, the
+    `ShareAnswer` purge without a lock.
+- G3b-1, `feat/group-edit-store`, #56 (merged November 22):
+  - Tests: full lane on c668690, 757 unit and 85 UI, 0 failures. Contract run against #53's backend.
+  - Review (xhigh, one pass): 1 must-fix (a new invite link made on another phone never arrived) and
+    5 smaller findings (a stored edit reported as not made, messages lost before a screen listened,
+    group responses in the shared URL cache, the cache left on a revoked session, a stored edit
+    vanishing). All fixed, each red first. Not re-reviewed.
+- G3b-2, `feat/group-screens`, #59 (merged November 22; the join work was built on `feat/group-join`
+  and merged into it):
+  - Tests: full lane on 99211f6, 850 unit tests, 0 failures; 99 UI tests with 1 failure
+    (`AskFriendsFlowTests`, two taps reversed while the Mac's load average was about 215), which passed
+    4 of 4 on a rerun.
+  - Review (xhigh, one pass): 1 must-fix (an invite pasted in Today's Paste a link was dropped) and 4
+    smaller (an open sheet's edit could land on your own plan, map focus in a joined group, fixtures
+    sharing stop ids, controls on after 4 AM). All fixed, each red first. Not re-reviewed.
+  - Copy (one persona pass with #55's and #58's text): Marcus, Sofia, Grace and Andre approve (7 to 8);
+    Amara's must_fix (the invite message promised a plan the web page doesn't show) is fixed. Applied:
+    a line under Edit with friends saying who can change it and that the budget shows.
+- Privacy text, `docs/privacy-group-plans`, #58 (merged November 22): every sentence traced to code;
+  open points are in the PR.
 
 ## Decisions and events
 
+- November 22: Abraham dropped the "plans for a later day" slice. A group plan for a later day stays a
+  preview with the answers so far, built on the day itself (D1).
+- November 22: invite links accept tokens of 16 to 64 URL-safe characters, not exactly 22, so a
+  truncated real link says "This invite doesn't work any more" instead of asking for a TikTok link.
+- November 22: one review pass and one persona pass covered #55, #56 and #59; fixes weren't
+  re-reviewed, as Abraham asked.
 - November 22: Abraham asked to keep reviews to a minimum with no rounds, and for Claude to do the
   remaining human steps and follow its own recommendations. Claude merged #38 to #54 (merge commits,
   so stacked branches stay clean; #46, #47 and #53 needed main merged in for one README line). #46
