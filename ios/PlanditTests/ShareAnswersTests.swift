@@ -296,6 +296,68 @@ import XCTest
         XCTAssertEqual(sharing.mostAtOnce, 1)
     }
 
+    func testSharingAgainDropsTheUpdateThatWasWaiting() async throws {
+        let (store, sharing) = try await holdingStore()
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        // The page update is waiting; Share plan sends new options, slowly.
+        sharing.holdNext()
+        let share = Task { try await store.shareToday(showPrices: true, note: "New note") }
+        try await waitUntilHolding(sharing)
+        try await Task.sleep(for: .milliseconds(200))
+        sharing.release()
+        try await share.value
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(sharing.published.dropFirst().map(\.note), ["New note"], "nothing with the old options goes out")
+        XCTAssertTrue(sharing.published.last?.stops.contains { $0.name == "Little Island" } ?? false)
+        XCTAssertEqual(sharing.mostAtOnce, 1)
+    }
+
+    func testSharingAgainWaitsForTheUpdateBeingSent() async throws {
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        try await waitUntilHolding(sharing)
+        let share = Task { try await store.shareToday(showPrices: true, note: "New note") }
+        try await Task.sleep(for: .milliseconds(100))
+        sharing.release()
+        try await share.value
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(sharing.published.last?.note, "New note", "the new options land last")
+        XCTAssertEqual(sharing.mostAtOnce, 1)
+    }
+
+    func testStoppingSharingDropsTheUpdateThatWasWaiting() async throws {
+        let (store, sharing) = try await holdingStore()
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        sharing.holdNext()
+        let stopping = Task { try await store.stopSharing() }
+        try await waitUntilHolding(sharing)
+        try await Task.sleep(for: .milliseconds(200))
+        sharing.release()
+        try await stopping.value
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(sharing.applied, ["publish", "unpublish"], "shared, then taken down: nothing in between or after")
+        XCTAssertNil(store.todayLink)
+    }
+
+    func testStoppingSharingWaitsForTheUpdateBeingSent() async throws {
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        try await waitUntilHolding(sharing)
+        let stopping = Task { try await store.stopSharing() }
+        try await Task.sleep(for: .milliseconds(100))
+        sharing.release()
+        try await stopping.value
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(sharing.applied, ["publish", "publish", "unpublish"], "the page is taken down last")
+        XCTAssertEqual(sharing.mostAtOnce, 1)
+    }
+
     func testTheSwapUndoBarOnlyMentionsTheLinkWhenItUpdates() async throws {
         let unshared = makeStore()
         XCTAssertTrue(unshared.swap(stopID: stop(named: "The High Line", in: unshared).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))

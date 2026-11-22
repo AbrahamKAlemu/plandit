@@ -30,6 +30,8 @@ final class PlanditStore {
     /// A request to the page is out; the next one waits its turn (`inTurn`).
     @ObservationIgnored private var isSendingToPage = false
     @ObservationIgnored private var pageTurnWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Share plan or Stop sharing is talking to the server: changes made meanwhile wait for it.
+    @ObservationIgnored private var isChangingLink = false
     @ObservationIgnored private var lastPublished: SharedPlanPayload?
     /// Friends' answers on the link; nil when signed out of the server (the local test account).
     @ObservationIgnored var answerClient: (any ShareAnswersFetching)?
@@ -963,9 +965,22 @@ final class PlanditStore {
     @discardableResult
     func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true) async throws -> SharedLink {
         guard let sharing else { throw APIError.network }
-        let payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
-        let created = try await sharing.publish(payload)
-        var link = SharedLink(slug: created.slug, url: created.url, planID: payload.planId, showPrices: showPrices,
+        // Nothing older may land after this (`holdPageUpdates`).
+        holdPageUpdates()
+        let sent: (slug: String, url: URL, payload: SharedPlanPayload)
+        do {
+            sent = try await inTurn {
+                let payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
+                let created = try await sharing.publish(payload)
+                return (created.slug, created.url, payload)
+            }
+        } catch {
+            resumePageUpdates()
+            throw error
+        }
+        isChangingLink = false
+        let payload = sent.payload
+        var link = SharedLink(slug: sent.slug, url: sent.url, planID: payload.planId, showPrices: showPrices,
                               note: note, suggestsSwaps: suggestsSwaps)
         if let previous = sharedLink, previous.slug == link.slug { link.keptSwaps = previous.keptSwaps }
         lastPublished = payload
@@ -977,8 +992,15 @@ final class PlanditStore {
     /// Takes the page down; the link stops working and friends' answers go with it.
     func stopSharing() async throws {
         guard let link = sharedLink else { return }
-        if let sharing { try await sharing.unpublish(slug: link.slug) }
-        pendingShareUpdate?.cancel()
+        // Nothing may land after the page is taken down (`holdPageUpdates`).
+        holdPageUpdates()
+        do {
+            if let sharing { try await inTurn { try await sharing.unpublish(slug: link.slug) } }
+        } catch {
+            resumePageUpdates()
+            throw error
+        }
+        isChangingLink = false
         sharedLink = nil
         lastPublished = nil
         forgetAnswers()
@@ -1001,7 +1023,7 @@ final class PlanditStore {
     /// applied it), so while one is out the plan as it is now goes out after it, even if that's
     /// what was last published: the latest always lands last.
     private func scheduleShareUpdate() {
-        guard let link = todayLink, let sharing else { return }
+        guard !isChangingLink, let link = todayLink, let sharing else { return }
         let payload = sharedPayload(showPrices: link.showPrices, note: link.note, suggestsSwaps: link.suggestsSwaps)
         pendingShareUpdate?.cancel()
         pendingShareUpdate = nil
@@ -1017,6 +1039,22 @@ final class PlanditStore {
                 if (try? await sharing.publish(payload)) != nil { self.lastPublished = payload }
             }
         }
+    }
+
+    /// Before Share plan or Stop sharing talks to the server: the update waiting is dropped (what
+    /// they send replaces it), and changes made meanwhile wait until they're done. Their request
+    /// then waits its turn behind an update being sent (`inTurn`), so it lands last.
+    private func holdPageUpdates() {
+        pendingShareUpdate?.cancel()
+        pendingShareUpdate = nil
+        isChangingLink = true
+    }
+
+    /// When Share plan or Stop sharing failed: the link stays as it was, and changes made meanwhile
+    /// go out with it.
+    private func resumePageUpdates() {
+        isChangingLink = false
+        scheduleShareUpdate()
     }
 
     /// Requests to the page go out one at a time, in the order they ask, so the last one sent is
