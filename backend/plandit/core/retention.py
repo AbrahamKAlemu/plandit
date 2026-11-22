@@ -9,12 +9,17 @@ in its AppConfig.ready():
 `purge_expired()` then deletes every row at or past its limit. Later slices call it at the start of
 each public answer POST and owner GET, and `manage.py purge_expired` runs it by hand or on a
 schedule. Until a slice registers a table, it deletes nothing.
+
+A table whose writes lock its rows before changing what hangs off them (group plans) registers
+with `lock_first=True`: the purge then locks the expired rows in primary-key order, as those
+writes and account deletion do, before the cascade, in one transaction. Deleting the children
+first and the row last would wait on a write that holds the row and waits for those children.
 """
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -25,6 +30,7 @@ class ExpiryRule:
     model: type[models.Model]
     date_field: str
     days: int
+    lock_first: bool = False
 
     @property
     def label(self) -> str:
@@ -33,19 +39,31 @@ class ExpiryRule:
     def purge(self, now: datetime) -> int:
         field = self.model._meta.get_field(self.date_field)
         limit = cutoff(field, now, self.days)
-        deleted, _ = self.model._default_manager.filter(**{f"{self.date_field}__lte": limit}).delete()
+        expired = self.model._default_manager.filter(**{f"{self.date_field}__lte": limit})
+        if not self.lock_first:
+            deleted, _ = expired.delete()
+            return deleted
+        with transaction.atomic():
+            keys = lock_rows(expired)
+            deleted, _ = self.model._default_manager.filter(pk__in=keys).delete()
         return deleted
+
+
+def lock_rows(queryset) -> list:
+    """Row-lock the queryset's rows in primary-key order; returns their keys. Call inside a
+    transaction. Its own function so the race tests can hold the purge right after it."""
+    return list(queryset.select_for_update().order_by("pk").values_list("pk", flat=True))
 
 
 RULES: list[ExpiryRule] = []
 
 
-def register(model: type[models.Model], date_field: str, days: int) -> ExpiryRule:
+def register(model: type[models.Model], date_field: str, days: int, *, lock_first: bool = False) -> ExpiryRule:
     """Add an expiry rule. Fails at once if the field doesn't exist or `days` isn't positive."""
     model._meta.get_field(date_field)
     if days <= 0:
         raise ValueError("days must be positive")
-    rule = ExpiryRule(model, date_field, days)
+    rule = ExpiryRule(model, date_field, days, lock_first)
     RULES.append(rule)
     return rule
 

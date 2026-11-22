@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "plandit.plans",
     "plandit.waitlist",
     "plandit.shares",
+    "plandit.groups",
     "resolution",
 ]
 
@@ -175,6 +176,9 @@ SHARE_BASE_URL = env("SHARE_BASE_URL", "")
 # Friends' input links (plandit.app/g/<slug>) have their own setting, also blank = this host, so /p/
 # can move to the site before it forwards /g/ and /static/plans/ here.
 REQUEST_BASE_URL = env("REQUEST_BASE_URL", "")
+# Group plan invites (plandit.app/j/<token>) too, blank = this host, so they can move on their own once
+# the site forwards /j/ and /static/shares/ here.
+INVITE_BASE_URL = env("INVITE_BASE_URL", "")
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "https://plandit.app,https://www.plandit.app")
 CORS_ALLOW_ALL_ORIGINS = DEBUG

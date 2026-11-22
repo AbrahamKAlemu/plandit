@@ -8,6 +8,7 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from plandit.core.models import ActivityDay, ActivityEvent, Profile
 from plandit.core.views import MetricsView
+from plandit.groups.models import GroupMember, GroupPlan
 from plandit.plans.models import GroupAnswer, GroupRequest
 from plandit.shares.models import ShareAnswer, SharedPlan
 from plandit.waitlist.models import WaitlistSignup
@@ -126,6 +127,10 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
         "answers_per_link": 0.0,
         "plan_requests": 0,
         "plan_requests_built": 0,
+        "group_plans": 0,
+        "group_plans_with_friends": 0,
+        "group_plan_edits": 0,
+        "edits_per_group_plan": 0.0,
     }
 
 
@@ -182,6 +187,10 @@ def test_totals_and_daily_counts(api_client, metrics_key):
         "answers_per_link": 0.0,
         "plan_requests": 0,
         "plan_requests_built": 0,
+        "group_plans": 0,
+        "group_plans_with_friends": 0,
+        "group_plan_edits": 0,
+        "edits_per_group_plan": 0.0,
     }
 
     by_date = {row["date"]: row for row in body["daily"]}
@@ -333,3 +342,34 @@ def test_friends_input_link_counts_without_names(api_client, metrics_key):
     assert (body["totals"]["plan_requests"], body["totals"]["plan_requests_built"]) == (4, 2)
     text = json.dumps(body)
     assert "Quentinia" not in text and "137" not in text
+
+
+def make_group_plan(owner, *members, version=1) -> GroupPlan:
+    group = GroupPlan.objects.create(
+        owner=owner, plan_id=uuid.uuid4(), date=timezone.localdate() + timedelta(days=1), data={}, version=version
+    )
+    for profile in (owner, *members):
+        GroupMember.objects.create(group=group, profile=profile, display_name="Bartholomew")
+    return group
+
+
+def test_met_1_group_plan_counts_without_names(api_client, metrics_key):
+    """Group plans, mode 3: how many there are, how many have friends in them, and how many edits
+    were made (each edit adds one to `version`). Counts only (brief "Analytics", GS-7)."""
+    owner = make_profile(email="o@columbia.edu", signed_up_at=timezone.now())
+    friend = make_profile(email="f@columbia.edu", signed_up_at=timezone.now())
+    other = make_profile(email="x@columbia.edu", signed_up_at=timezone.now())
+    make_group_plan(owner, friend, version=5)  # 4 edits
+    make_group_plan(owner, friend, other, version=2)  # 1 edit
+    make_group_plan(other)  # nobody joined yet, no edits
+    make_group_plan(make_profile(is_anonymous=True), friend, version=9)  # not counted
+
+    totals = get(api_client).json()["totals"]
+    assert (
+        totals["group_plans"],
+        totals["group_plans_with_friends"],
+        totals["group_plan_edits"],
+        totals["edits_per_group_plan"],
+    ) == (3, 2, 5, 1.7)
+    text = json.dumps(get(api_client).json())
+    assert "Bartholomew" not in text and "columbia.edu" not in text
