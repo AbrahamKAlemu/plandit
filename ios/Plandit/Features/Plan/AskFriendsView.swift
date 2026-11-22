@@ -178,10 +178,10 @@ private struct AskFriendsForm: View {
         return nil
     }
 
-    /// The day's time as a `Date` for the pickers, which only change its time.
+    /// The time on the chosen day as a `Date` for the pickers, which only change its time.
     private func clockBinding(_ clock: Binding<ClockTime>) -> Binding<Date> {
         Binding(
-            get: { clock.wrappedValue.date(on: AppClock.now) ?? AppClock.now },
+            get: { clock.wrappedValue.date(on: day) ?? day },
             set: { clock.wrappedValue = ClockTime(of: $0) }
         )
     }

@@ -26,9 +26,10 @@ nonisolated struct ClockTime: Comparable, Hashable, Sendable {
     /// "13:30", as the server takes it.
     var text: String { String(format: "%02d:%02d", minutes / 60, minutes % 60) }
 
-    /// This time on `day` in `calendar`'s time zone.
+    /// This time on `day` in `calendar`'s time zone. Set from the day's own clock, not counted from
+    /// midnight, so 1 PM stays 1 PM on the days the clocks change.
     func date(on day: Date, calendar: Calendar = .current) -> Date? {
-        calendar.date(byAdding: .minute, value: minutes, to: calendar.startOfDay(for: day))
+        calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: day)
     }
 
     static func < (lhs: ClockTime, rhs: ClockTime) -> Bool { lhs.minutes < rhs.minutes }
