@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from plandit.plans.models import GroupRequest
 from plandit.shares.models import SharedPlan
 
 from . import apple_signin, supabase_admin
@@ -110,10 +111,13 @@ class MeView(APIView):
 
     @staticmethod
     def _delete(locked: Profile) -> None:
-        """Delete the locked profile, which cascades to all of its data. Its shared plans are locked
-        first: a friend's answer is saved with the plan's row locked (plandit.shares.views), so the
-        cascade waits for it and deletes it too, instead of missing it and failing at commit."""
+        """Delete the locked profile, which cascades to all of its data. Its shared plans, then its
+        friends' input links, are locked first: a friend's answer is saved with the plan's or the
+        request's row locked (plandit.shares.views, plandit.plans.request_views), so the cascade
+        waits for it and deletes it too, instead of missing it and failing at commit. Plans before
+        requests, the order sharing a built plan takes them in."""
         list(SharedPlan.objects.select_for_update().filter(owner=locked).order_by("pk").values_list("pk", flat=True))
+        list(GroupRequest.objects.select_for_update().filter(owner=locked).order_by("pk").values_list("pk", flat=True))
         locked.delete()
 
     @staticmethod
