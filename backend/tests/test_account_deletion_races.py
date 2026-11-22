@@ -24,9 +24,11 @@ from plandit.core import views as core_views
 from plandit.core.models import ActivityEvent, AppSnapshot, Profile
 from plandit.plans.models import REQUEST_RETENTION_DAYS, GroupAnswer, GroupRequest
 from plandit.shares.models import SharedPlan
+from resolution.models import SocialEvidenceThrottleState
 from tests.test_group_plan_races import delete_account_later, first_holds_until_second_waits, second_device, warm
 from tests.test_group_plans import person, plan_json, with_and_without_supabase
 from tests.test_requests import add_answer, create, local_today, make_request, request_payload
+from tests.test_saved import TIKTOK_URL
 from tests.test_shares import plan_payload, share
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -144,7 +146,13 @@ def test_a_share_with_request_that_waited_for_the_accounts_deletion_is_401(maya,
 ADDS_A_ROW = {
     "plan-request": (lambda who: create(who.client, request_payload()), GroupRequest),
     "event": (lambda who: who.client.post("/api/me/events/", {"name": "plan_built"}, format="json"), ActivityEvent),
+    # The per-account limit's row, written before anything else and only while page reading is on.
+    "social-evidence": (
+        lambda who: who.client.post("/v1/social-evidence", {"sourceUrl": TIKTOK_URL}, format="json"),
+        SocialEvidenceThrottleState,
+    ),
 }
+SETTINGS_FOR = {"social-evidence": {"SOCIAL_PAGE_EXTRACTION_ENABLED": True}}
 
 
 @pytest.mark.parametrize("write", list(ADDS_A_ROW))
@@ -153,6 +161,8 @@ def test_a_write_that_adds_a_row_and_waited_for_the_accounts_deletion_is_401(may
     profile gone: an IntegrityError, a 500. The write now takes the profile's key-share lock first,
     as sharing a plan does, and gets the same 401 as any request from a deleted account."""
     send, model = ADDS_A_ROW[write]
+    for name, value in SETTINGS_FOR.get(write, {}).items():
+        setattr(settings, name, value)
     warm(maya)
     phone = second_device(maya)
     delete = delete_account_later(maya, settings, monkeypatch, with_supabase=False)
