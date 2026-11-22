@@ -22,7 +22,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 in review as #45. G1a waits for the proxy-chain measurement after G0 deploys. |
+| Build (G0 to G3b) | G0 #45 and G1a #46 open. G1a merges after the proxy-chain measurement. G1b (iOS) next. |
 | Verify, ship, learn | Not started. |
 
 ## Tasks and evidence
@@ -35,9 +35,24 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
   - Review (reviewer, xhigh): one must-fix. The default proxy hop count was likely wrong for
     Render. Fixed by defaulting to 3 and measuring before G1a. Two nice-to-haves were applied: a
     slot expiry margin, and IPv6 counted by /64.
+- G1a, `feat/group-answers-backend`, #46 (base `feat/group-public-forms`):
+  - Tests: 556 passed on a local Postgres. The one failure is the date test fixed in #44.
+  - Six deterministic race tests in `test_answer_races.py`.
+  - Layout at 390×844 in headless Chrome (GV-12): the time, cost and first stop sit above the form.
+  - Review (xhigh): 2 must-fix, both fixed (upper-case answer ids; the delete-while-answering race,
+    now handled by locking the link before deleting). A second review of the fixes found nothing.
+  - Copy: all five personas approve (8/10 each), no must_fix. Applied: a separate message for a
+    full plan, a plainer blocked-name message, and a hint that "can't make it" names aren't shown.
 
 ## Decisions and events
 
+- November 21: the answer rate limit is 20 per hour per address on each link, not across all links,
+  so students behind one campus network don't share one allowance. The 50-per-link cap still holds.
+- November 21: "Take back my answer" works on any existing link, even after answers are turned off.
+- November 21: `date` is required when `answers` is true (retention needs it), at most 366 days
+  ahead. Answers close 30 days after the plan's date.
+- November 21: follow-ups noted in #46: a sync during account deletion can deadlock (older code),
+  and throttle-table culling under abuse.
 - November 21: `client_ip` takes the X-Forwarded-For entry `TRUSTED_PROXY_HOPS` from the right (the
   first entry is client-controlled on Render). The hop count is measured from G0's log before G1a.
 - November 21: the CSP's `img-src` also allows plandit.app and www.plandit.app, where the page's
