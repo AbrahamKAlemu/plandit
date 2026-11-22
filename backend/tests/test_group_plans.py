@@ -388,6 +388,12 @@ def test_inv_4_the_display_name_is_the_first_word_of_the_profile_name_or_friend(
 # --- LIM-2 to LIM-8: what a plan may be, for create and for PUT ------------------------------
 
 
+TOO_LARGE_BODY = {
+    "detail": "This plan is too big to save for the group. Remove a stop and try again.",
+    "limitBytes": 65_536,
+}
+
+
 def sized_plan(size: int, plan_id=None) -> dict:
     """A plan whose compact UTF-8 JSON is exactly `size` bytes, as the server measures it."""
     import json
@@ -404,6 +410,7 @@ def test_lim_2_create_accepts_a_plan_of_exactly_64_kb_and_refuses_one_byte_more(
     assert create(maya, sized_plan(65_536)).status_code == 201
     response = create(maya, sized_plan(65_537))
     assert response.status_code == 413
+    assert response.json() == TOO_LARGE_BODY
     assert GroupPlan.objects.count() == 1
 
 
@@ -992,6 +999,7 @@ def test_lim_2_a_put_accepts_a_plan_of_exactly_64_kb_and_refuses_one_byte_more(g
     before = row(group)
     response = put(jordan, group, sized_plan(65_537, plan_id))
     assert response.status_code == 413
+    assert response.json() == TOO_LARGE_BODY
     assert row(group) == before
 
 
@@ -1035,7 +1043,7 @@ def test_n_8_edits_end_with_the_plans_day_in_new_york_time(maya, jordan, noon):
     before = row(over)
     response = put(jordan, over)
     assert response.status_code == 400
-    assert response.json() == {"detail": "This plan's day is over."}
+    assert response.json() == {"detail": "This plan's day has passed, so it can't be changed."}
     assert row(over) == before
 
     on_the_day = make_group(person("Sam Rivera"), jordan, day=today())
@@ -1375,7 +1383,9 @@ def test_n_8b_the_organizer_cannot_leave_their_own_plan(group, maya):
     before = row(group)
     response = maya.client.delete(member_path(group, member_of(group, maya)))
     assert response.status_code == 400
-    assert response.json() == {"detail": "Organizers can't leave their own plan. End the plan instead."}
+    assert response.json() == {
+        "detail": "Organizers can't leave their own plan. End the plan instead, which removes it for everyone."
+    }
     assert row(group) == before
     assert group.members.count() == 2
 

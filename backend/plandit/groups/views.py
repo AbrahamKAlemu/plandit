@@ -67,11 +67,11 @@ LOCK_NOT_AVAILABLE = "55P03"
 
 SIGN_IN_TO_PLAN_TOGETHER = "Sign in with email or Apple to plan with friends."
 TRY_AGAIN = "Try again in a moment."
-TOO_LARGE = "This plan is too big to save for the group."
-DAY_OVER = "This plan's day is over."
+TOO_LARGE = "This plan is too big to save for the group. Remove a stop and try again."
+DAY_OVER = "This plan's day has passed, so it can't be changed."
 NOT_THIS_PLAN = "This isn't the group's plan."
 EDIT_ID_TAKEN = "Already used by another member's edit. Send a new one."
-ORGANIZER_CANNOT_LEAVE = "Organizers can't leave their own plan. End the plan instead."
+ORGANIZER_CANNOT_LEAVE = "Organizers can't leave their own plan. End the plan instead, which removes it for everyone."
 FALLBACK_NAME = "Friend"
 INVITE_TOKEN = re.compile(rf"\A[A-Za-z0-9_-]{{{INVITE_TOKEN_LENGTH}}}\Z")
 
