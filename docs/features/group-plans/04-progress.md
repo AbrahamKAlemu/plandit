@@ -9,16 +9,15 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 
 ## Attention needed
 
-- Abraham merges each slice's PR (merging is blocked for Claude).
-- #41 (row level security) must be merged before any group slice.
-- #45 (G0): a human reads the name blocklist before merging. After it deploys, open a shared plan link
-  from a phone on cellular and from a laptop, so the `proxy chain:` log lines can set the hop count.
-- #47 (G2a): decide whether `/g/` pages show the organizer's first name.
-- #50 (G1b, iOS) is stacked on #49. Don't upload a build with it to TestFlight until #46 is deployed.
-- #53 (G3a) is stacked on #47 and needs the proxy-chain measurement like the other backend slices.
-- #51 (G2b, iOS) is stacked on #50. Don't upload a build with it to TestFlight until #47 is deployed.
-- Decide whether "plans for a later day" becomes its own slice: today a group plan can only be built
-  on its own day (D1), because the app keeps only today's plan.
+- Abraham: read the `proxy chain:` lines in Render's logs (the dashboard is blocked for Claude).
+  Four requests were sent from a laptop on November 22 at 11:14:45 to 11:14:49 EST to
+  `/p/measure-hops-*`: two plain, one with one forged X-Forwarded-For entry, one with two.
+  `true_client_ip_from_right=N` on the plain lines is the hop count. If it isn't 3, set
+  `TRUSTED_PROXY_HOPS` to N in Render; then the log line can be removed.
+- Abraham: send the course staff the metrics key (Claude can't handle secret values).
+- GS-6: the live privacy page (Jaden's repo) must describe group plans, including that `/g/` pages
+  show the organizer's first name, before an app version with group plans is submitted.
+- Don't upload a TestFlight build with modes 1 and 2 until the iOS 18 run in AGENTS.md is done.
 
 ## Phases
 
@@ -28,8 +27,8 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47, G1b #50 and G2b #51 open. G1a and G2a merge after the proxy-chain measurement. G3a #53 open. The daylight-saving fix for older planner code is #52 (on #51). G3b is split in two (store, then screens); G3b-1 in progress. |
-| Verify, ship, learn | Not started. |
+| Build (G0 to G3b) | G0 to G3a and the daylight-saving fix are merged and deployed (November 22). G3b is split in two (store, then screens); G3b-1 in progress. Backend fixes (deletion races, group plan values, organizer's name on `/g/`) in progress. |
+| Verify, ship, learn | Completion reviews for modes 1 and 2 done November 22: no must-fix (mode 1: 19 pass, 2 unverified; mode 2: 16 pass, 1 unverified). Unverified: GV-11 timing on a phone, GS-6 live privacy page. |
 
 ## Tasks and evidence
 
@@ -98,6 +97,18 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
     `/j/` page's steps and are fixed.
 
 ## Decisions and events
+
+- November 22: Abraham asked to keep reviews to a minimum with no rounds, and for Claude to do the
+  remaining human steps and follow its own recommendations. Claude merged #38 to #54 (merge commits,
+  so stacked branches stay clean; #46, #47 and #53 needed main merged in for one README line). #46
+  onward merged before the hop count was read: a wrong count only weakens the per-address answer
+  limit, the per-link cap holds, and the fix is an environment variable.
+- November 22: `/g/` pages show the organizer's first name (the first word of the profile name; no
+  name when it's empty). Friends know whose link it is, and mode 3's join sheet already shows it.
+- November 22: the name blocklist was read for #45: 52 whole-word entries, none matching any of
+  1,308 common first names. Look-alike letters get past it (mode 1 review); it stays best effort.
+- November 22: GI-1's default deadline for a plan today is the earlier of 2 hours from now and the
+  range's start, but at least 30 minutes away (G2b). Recorded here; the brief said 2 hours.
 
 - November 22: G3b is split into G3b-1 (the edit model, client and store, unused until the screens
   land) and G3b-2 (the screens), so each PR stays reviewable. Each gets one review round.
