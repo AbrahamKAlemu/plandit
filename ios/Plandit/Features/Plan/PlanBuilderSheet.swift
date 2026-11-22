@@ -202,6 +202,14 @@ struct PlanBuilderSheet: View {
         didSetUp = true
         budget = store.today.budget
         mode = hasPlan ? .add : .replace
+        // "Change it" on a suggested plan: its places in its order, at its start time and budget.
+        if let draft = router.takePendingDraft() {
+            let plannable = Set(store.plannablePosts.map(\.id))
+            picked = draft.picks.filter(plannable.contains)
+            if let draftStart = draft.start { start = draftStart }
+            if let draftBudget = draft.budget { budget = draftBudget }
+            mode = .replace
+        }
     }
 
     private func toggle(_ id: UUID) {

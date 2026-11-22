@@ -158,8 +158,14 @@ struct TodaySheet: View {
                     }
                 }
                 ForEach(Array(store.suggestions.enumerated()), id: \.element.id) { index, suggestion in
-                    SuggestionCard(suggestion: suggestion, index: index) { use(suggestion) }
-                        .transition(.opacity)
+                    SuggestionCard(suggestion: suggestion, index: index) {
+                        use(suggestion)
+                    } change: {
+                        // The planner opens on the card's places, start time and budget (SP-12).
+                        router.startPlanning(picks: suggestion.postIDs, start: store.suggestionStart(),
+                                             budget: store.profile.defaultBudget)
+                    }
+                    .transition(.opacity)
                 }
                 planADayButton
             }

@@ -46,7 +46,7 @@ final class SuggestedPlansFlowTests: XCTestCase {
         let planADay = app.buttons["today-plan-a-day"]
         XCTAssertTrue(planADay.exists)
         XCTAssertGreaterThan(planADay.frame.minY, second.frame.maxY)
-        XCTAssertFalse(app.buttons["suggestion-change-0"].exists, "Change it comes with the planner hand-off")
+        XCTAssertTrue(app.buttons["suggestion-change-0"].exists)
 
         // It opens the planner with nothing picked, as before; cancelling leaves the cards.
         planADay.tap()
@@ -74,5 +74,46 @@ final class SuggestedPlansFlowTests: XCTestCase {
         app.buttons["undo-button"].tap()
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         XCTAssertEqual(stopNames(inCardLabel: card.label), names)
+    }
+
+    @MainActor func testChangeIt() {
+        let app = launch()
+        let card = app.descendants(matching: .any)["suggestion-card-0"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let names = stopNames(inCardLabel: card.label)
+        XCTAssertEqual(names.count, 3, card.label)
+
+        app.buttons["suggestion-change-0"].tap()
+        XCTAssertTrue(app.navigationBars["Plan a day"].waitForExistence(timeout: 3))
+
+        // The card's places are picked, and the planner lays them out in the card's order, from the
+        // card's start time, on the same budget.
+        for name in names {
+            XCTAssertTrue(app.buttons["pick-\(name)"].isSelected, "\(name) should be picked")
+        }
+        XCTAssertTrue(app.staticTexts["3 picked"].exists)
+        for (index, name) in names.enumerated() {
+            let row = app.descendants(matching: .any)["preview-stop-\(index + 1)"]
+            XCTAssertTrue(row.waitForExistence(timeout: 3), "no preview stop \(index + 1)")
+            XCTAssertTrue(row.label.contains(name), "preview stop \(index + 1) should be \(name): \(row.label)")
+        }
+        // "2:00 PM to 5:25 PM", with whatever space the locale puts before PM.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '2:00' AND label CONTAINS ' to '")).firstMatch.exists,
+                      "the plan starts at the card's time")
+        XCTAssertEqual(app.staticTexts["budget-value"].label, "$60")
+        XCTAssertTrue(app.buttons["build-plan"].isEnabled)
+
+        // Nothing changes in Today until "Build my plan".
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Plan a day"].waitForNonExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["edit-plan"].exists, "Today is still empty")
+        XCTAssertTrue(card.waitForExistence(timeout: 3))
+        XCTAssertEqual(stopNames(inCardLabel: card.label), names)
+
+        // The + still opens an empty planner afterwards.
+        app.buttons["plan-button"].tap()
+        XCTAssertTrue(app.navigationBars["Plan a day"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["0 picked"].exists)
+        XCTAssertFalse(app.buttons["build-plan"].isEnabled)
     }
 }

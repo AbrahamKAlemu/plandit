@@ -72,8 +72,28 @@ final class SheetRouter {
         }
     }
 
-    func startPlanning() {
+    /// What the planner opens with instead of its defaults. Set by "Change it" on a suggested plan.
+    struct PlanDraft: Equatable {
+        /// Saved post ids, in the order the planner should show them picked.
+        var picks: [UUID]
+        var start: Date?
+        var budget: Double?
+    }
+
+    /// Read once, and cleared, when the planner sets itself up.
+    @ObservationIgnored private var pendingDraft: PlanDraft?
+
+    /// Opens the planner: empty, as from the + and "Plan a day", or with places already picked and a
+    /// start time and budget, as from "Change it" (SP-12).
+    func startPlanning(picks: [UUID] = [], start: Date? = nil, budget: Double? = nil) {
+        pendingDraft = picks.isEmpty && start == nil && budget == nil ? nil : PlanDraft(picks: picks, start: start, budget: budget)
         isPlanning = true
+    }
+
+    /// The draft the planner was opened with, if any. Gone after the first call.
+    func takePendingDraft() -> PlanDraft? {
+        defer { pendingDraft = nil }
+        return pendingDraft
     }
 
     /// After a plan is built: land on Today so the new route shows on the map.

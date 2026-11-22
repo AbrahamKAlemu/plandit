@@ -187,7 +187,7 @@ private struct SheetContainer: View {
                 if !isKeyboardUp {
                     VStack(spacing: Space.xs) {
                         UndoBar()
-                        PlanditTabBar(selection: $router.tab, onPlan: router.startPlanning)
+                        PlanditTabBar(selection: $router.tab, onPlan: { router.startPlanning() })
                     }
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barsHeight = $0 }
                 }
