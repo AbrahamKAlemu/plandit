@@ -10,6 +10,9 @@ struct TodaySheet: View {
     @State private var isEditingPlan = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var isSendingPlan = false
+    @State private var isShowingAnswers = false
+    /// Goes up each time "Use this plan" makes a plan: the same success haptic as building one.
+    @State private var suggestionsUsed = 0
 
     var body: some View {
         let plan = store.today
@@ -19,27 +22,42 @@ struct TodaySheet: View {
                     Button { isSendingPlan = true } label: {
                         CircleIconLabel(icon: .share)
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("Send the plan")
                     .transition(.scale.combined(with: .opacity))
                 }
             }
 
             if plan.stops.isEmpty {
-                // Sized to the space above the tab bar rather than scrolled, so the next step is
-                // never cut off at half height: the icon goes first when the sheet is short. The
-                // screen reserves the floating bars' height (clearsFloatingBars), so this space ends
-                // where they begin.
-                ViewThatFits(in: .vertical) {
-                    emptyToday(showsIcon: true)
-                    emptyToday(showsIcon: false)
-                    ScrollView { emptyToday(showsIcon: false) }
-                        .scrollIndicators(.hidden)
+                Group {
+                    if store.suggestions.isEmpty {
+                        // Sized to the space above the tab bar rather than scrolled, so the next step is
+                        // never cut off at half height: the icon goes first when the sheet is short. The
+                        // screen reserves the floating bars' height (clearsFloatingBars), so this space ends
+                        // where they begin.
+                        ViewThatFits(in: .vertical) {
+                            emptyToday(showsIcon: true)
+                            emptyToday(showsIcon: false)
+                            ScrollView { emptyToday(showsIcon: false) }
+                                .scrollIndicators(.hidden)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("empty-today")
+                    } else {
+                        suggestedPlans
+                    }
                 }
-                .frame(maxHeight: .infinity, alignment: .top)
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("empty-today")
                 .hiddenWhenSheetCollapsed()
                 .transition(.opacity)
+                // Suggestions follow the clock: the start time moves and places close (SP-8). Between
+                // 15-minute slots this does nothing, so the cards don't reshuffle while being read.
+                .task {
+                    while !Task.isCancelled {
+                        store.refreshSuggestions()
+                        try? await Task.sleep(for: .seconds(30))
+                    }
+                }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Space.lg) {
@@ -84,11 +102,9 @@ struct TodaySheet: View {
                                         Icon(.arrowUpDown, size: 16)
                                         Text("Edit")
                                     }
-                                    .font(.label)
-                                    .foregroundStyle(.ink)
-                                    .frame(minHeight: 44)
-                                    .contentShape(Rectangle())
+                                    .outlinedControl()
                                 }
+                                .buttonStyle(.plain)
                                 .accessibilityHint("Reorder or remove stops")
                                 .accessibilityIdentifier("edit-plan")
                             }
@@ -103,6 +119,11 @@ struct TodaySheet: View {
                         }
                         .buttonStyle(.secondary)
                         .accessibilityIdentifier("send-plan")
+
+                        if let summary = store.answerSummary {
+                            AnswerSummaryButton(summary: summary) { isShowingAnswers = true }
+                                .transition(.opacity)
+                        }
                     }
                     .padding(.horizontal, Space.lg)
                     .padding(.top, Space.xs)
@@ -113,14 +134,19 @@ struct TodaySheet: View {
                 .scrollIndicators(.hidden)
                 .hiddenWhenSheetCollapsed()
                 .transition(.opacity)
+                // Friends' answers on the shared plan: on appearing, and when the link changes (GV-5).
+                .task(id: store.todayLink?.slug) { await store.refreshShareAnswers() }
             }
         }
         .animation(.snappy(duration: 0.35), value: plan.stops.isEmpty)
+        .animation(.snappy(duration: 0.35), value: store.suggestions.map(\.id))
+        .sensoryFeedback(.success, trigger: suggestionsUsed)
         .background(Color.surface)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingBudget) { BudgetSheet() }
         .sheet(isPresented: $isEditingPlan) { EditPlanSheet() }
         .sheet(isPresented: $isSendingPlan) { SendPlanSheet() }
+        .sheet(isPresented: $isShowingAnswers) { ShareAnswersSheet() }
         .sheet(isPresented: $isAddingLink) {
             AddLinkSheet { id in
                 // Same landing as from Saved: watch the new post get mapped.
@@ -129,9 +155,86 @@ struct TodaySheet: View {
         }
     }
 
+    /// Nothing planned, with plans made from the saves: the cards, then "Plan a day" for picking
+    /// places yourself (SP-13).
+    private var suggestedPlans: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.md) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    SectionTitle(SuggestionText.heading)
+                    if let notice = store.suggestionNotice {
+                        suggestionNotice(notice)
+                    }
+                }
+                ForEach(Array(store.suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                    SuggestionCard(suggestion: suggestion, index: index) {
+                        use(suggestion)
+                    } change: {
+                        // The planner opens on the card's places, start time and budget (SP-12).
+                        router.startPlanning(changing: suggestion, budget: store.profile.defaultBudget)
+                    }
+                    .transition(.opacity)
+                }
+                planADayButton
+            }
+            .padding(.horizontal, Space.lg)
+            .padding(.top, Space.xs)
+            .padding(.bottom, Space.lg)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityIdentifier("today-suggestions")
+    }
+
+    /// "It's later now, so these plans changed."
+    private func suggestionNotice(_ text: String) -> some View {
+        Text(text)
+            .font(.metadata)
+            .foregroundStyle(.inkMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("suggestions-changed")
+    }
+
+    private func use(_ suggestion: PlanSuggestion) {
+        var result = PlanditStore.UseResult.stale
+        withAnimation(.snappy(duration: 0.35)) {
+            result = store.useSuggestion(suggestion)
+        }
+        switch result {
+        case .applied:
+            suggestionsUsed += 1
+        case .stale:
+            AccessibilityNotification.Announcement(PlanditStore.suggestionsChangedMessage).post()
+        }
+    }
+
+    private var planADayButton: some View {
+        Button {
+            router.startPlanning()
+        } label: {
+            HStack(spacing: Space.xs) {
+                Icon(.plus, size: 18)
+                Text("Plan a day")
+            }
+        }
+        .buttonStyle(.secondary)
+        .accessibilityIdentifier("today-plan-a-day")
+    }
+
     /// Nothing planned: paste a link when nothing is saved yet (the first step is a place, not a
     /// plan), otherwise plan a day from what's saved.
     @ViewBuilder private func emptyToday(showsIcon: Bool) -> some View {
+        VStack(spacing: 0) {
+            // A tapped card had gone stale and nothing replaced it.
+            if let notice = store.suggestionNotice {
+                suggestionNotice(notice)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, Space.xs)
+            }
+            emptyTodayContent(showsIcon: showsIcon)
+        }
+    }
+
+    @ViewBuilder private func emptyTodayContent(showsIcon: Bool) -> some View {
         Group {
             if store.saved.isEmpty {
                 EmptyState(
@@ -160,22 +263,43 @@ struct TodaySheet: View {
                     isCompact: true,
                     showsIcon: showsIcon
                 ) {
-                    Button {
-                        router.startPlanning()
-                    } label: {
-                        HStack(spacing: Space.xs) {
-                            Icon(.plus, size: 18)
-                            Text("Plan a day")
-                        }
-                    }
-                    .buttonStyle(.secondary)
-                    .accessibilityIdentifier("today-plan-a-day")
+                    planADayButton
                 }
             }
         }
         .padding(.horizontal, Space.lg)
         .padding(.top, Space.xs)
         .padding(.bottom, Space.sm)
+    }
+}
+
+/// "3 in · 1 can't make it" under the share button; opens who answered.
+private struct AnswerSummaryButton: View {
+    let summary: ShareAnswerSummary
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.xs) {
+                Icon(.users, size: 18).foregroundStyle(.ink)
+                Text(summary.text)
+                    .font(.label)
+                    .foregroundStyle(.ink)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Icon(.chevronRight, size: 16).foregroundStyle(.inkMuted)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .planditCard(padding: Space.sm)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(summary.accessibilityText)
+        .accessibilityHint("Shows who answered")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("answers-summary")
     }
 }
 

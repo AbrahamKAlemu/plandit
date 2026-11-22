@@ -13,6 +13,8 @@ struct SendPlanSheet: View {
     @State private var didCopyLink = false
     @State private var didCopyText = false
     @State private var showsText = false
+    /// "Let friends suggest swaps": on by default (GV-9).
+    @State private var suggestsSwaps = true
 
     var body: some View {
         let plan = store.today
@@ -54,12 +56,14 @@ struct SendPlanSheet: View {
             didCopyText = false
             errorText = nil
         }
+        .onChange(of: suggestsSwaps) { errorText = nil }
         .onAppear {
             guard !didLoad else { return }
             didLoad = true
             if let link = store.todayLink {
                 options.showPrices = link.showPrices
                 options.note = link.note
+                suggestsSwaps = link.suggestsSwaps
             }
             // Halfway through the day, a text only needs what's left.
             options.onlyWhatsLeft = store.today.stops.contains { $0.status == .done } && !store.today.isComplete
@@ -87,8 +91,10 @@ struct SendPlanSheet: View {
                 Text("Anyone with the link can see this plan, no app needed. It updates when you change the plan.")
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
+                answersNote
+                swapsControl
 
-                if link.showPrices != options.showPrices || link.note != options.note {
+                if link.showPrices != options.showPrices || link.note != options.note || link.suggestsSwaps != suggestsSwaps {
                     Button {
                         Task { await createOrUpdate() }
                     } label: {
@@ -133,6 +139,8 @@ struct SendPlanSheet: View {
                 Text("Friends open it in their browser, no app needed. It updates when you change the plan.")
                     .font(.metadata)
                     .foregroundStyle(.inkMuted)
+                answersNote
+                swapsControl
                 Button {
                     Task { await createOrUpdate() }
                 } label: {
@@ -160,6 +168,38 @@ struct SendPlanSheet: View {
         .planditCard()
     }
 
+    /// Friends can answer on the page; the organizer sees it in Today.
+    private var answersNote: some View {
+        Text("On the page, friends can tap I'm in or Can't make it. You'll see their answers in Today.")
+            .font(.metadata)
+            .foregroundStyle(.inkMuted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The swaps toggle, and before anything is sent, the saved places it would offer (GV-9).
+    @ViewBuilder private var swapsControl: some View {
+        toggle("Let friends suggest swaps", "They can pick one of your saved places instead of a stop", $suggestsSwaps, id: "share-swaps")
+        if suggestsSwaps {
+            let options = store.swapOptions
+            let rows = store.today.stops.compactMap { stop in options[stop.id].map { (stop: stop, posts: $0) } }
+            VStack(alignment: .leading, spacing: Space.xs) {
+                if rows.isEmpty {
+                    Text("None of your saved places nearby fit as swaps for this plan.")
+                } else {
+                    ForEach(rows, id: \.stop.id) { row in
+                        Text("Instead of \(row.stop.place.name): \(row.posts.compactMap(\.place?.name).formatted(.list(type: .or)))")
+                    }
+                }
+            }
+            .font(.metadata)
+            .foregroundStyle(.inkMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("share-swap-preview")
+        }
+    }
+
     private func workingLabel(_ title: String) -> some View {
         HStack(spacing: Space.xs) {
             if isWorking { ProgressView().controlSize(.small) }
@@ -172,7 +212,7 @@ struct SendPlanSheet: View {
         errorText = nil
         defer { isWorking = false }
         do {
-            try await store.shareToday(showPrices: options.showPrices, note: options.note)
+            try await store.shareToday(showPrices: options.showPrices, note: options.note, suggestsSwaps: suggestsSwaps)
         } catch {
             errorText = "Couldn't make the link. Check your connection and try again."
         }

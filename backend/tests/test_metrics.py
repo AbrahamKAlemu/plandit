@@ -104,6 +104,7 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
             "plans_built": 0,
             "places_saved": 0,
             "links_saved": 0,
+            "suggestions_used": 0,
         }
     assert body["product"] == "Plandit"
     assert body["timezone"] == "America/New_York"
@@ -119,6 +120,7 @@ def test_default_is_30_days_and_zero_filled(api_client, metrics_key):
         "plans_built": 0,
         "places_saved": 0,
         "links_saved": 0,
+        "suggestions_used": 0,
         "waitlist_signups": 0,
         "anonymous_sessions": 0,
         "links_with_answers": 0,
@@ -161,6 +163,8 @@ def test_totals_and_daily_counts(api_client, metrics_key):
     ActivityEvent.objects.create(profile=b, name="link_saved", occurred_at=now - timedelta(days=40))
     ActivityEvent.objects.create(profile=anon, name="plan_built", occurred_at=now)
     ActivityEvent.objects.create(profile=anon, name="link_saved", occurred_at=now)
+    ActivityEvent.objects.create(profile=a, name="suggestion_used", occurred_at=yesterday_ts)
+    ActivityEvent.objects.create(profile=anon, name="suggestion_used", occurred_at=now)
 
     WaitlistSignup.objects.create(email="w1@example.com")
     WaitlistSignup.objects.create(email="w2@example.com")
@@ -176,6 +180,7 @@ def test_totals_and_daily_counts(api_client, metrics_key):
         "plans_built": 2,
         "places_saved": 1,
         "links_saved": 2,
+        "suggestions_used": 1,
         "waitlist_signups": 2,
         "anonymous_sessions": 2,
         "links_with_answers": 0,
@@ -202,6 +207,8 @@ def test_totals_and_daily_counts(api_client, metrics_key):
     assert by_date[day(yesterday_ts)]["plans_built"] == 1
     assert by_date[day(now)]["places_saved"] == 1
     assert by_date[day(ten_days_ago_ts)]["links_saved"] == 1
+    assert by_date[day(yesterday_ts)]["suggestions_used"] == 1
+    assert sum(row["suggestions_used"] for row in body["daily"]) == 1  # the anonymous one is excluded
     assert sum(row["signups"] for row in body["daily"]) == 3
     assert sum(row["links_saved"] for row in body["daily"]) == 1  # the 40-day-old one is outside the window
     assert sum(row["plans_built"] for row in body["daily"]) == 2  # the anonymous plan is excluded
@@ -268,6 +275,7 @@ def test_late_evening_local_time_lands_in_yesterdays_bucket(api_client, metrics_
         "plans_built": 1,
         "places_saved": 0,
         "links_saved": 1,
+        "suggestions_used": 0,
     }
     assert by_date[today.isoformat()]["signups"] == 0
     assert by_date[today.isoformat()]["plans_built"] == 0

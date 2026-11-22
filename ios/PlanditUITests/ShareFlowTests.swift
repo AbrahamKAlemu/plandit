@@ -170,6 +170,8 @@ final class ShareFlowTests: XCTestCase {
     @MainActor func testAddLinkKeepsSaveAboveTheKeyboardAndCancelOnTop() {
         let app = launch(["-startTab", "saved", "-startDetent", "large"])
 
+        XCTAssertTrue(app.buttons["Add a link"].waitForExistence(timeout: 5))
+
         app.buttons["Add a link"].tap()
         let field = app.textFields["social-link-field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))

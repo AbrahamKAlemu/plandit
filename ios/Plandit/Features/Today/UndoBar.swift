@@ -15,19 +15,27 @@ struct UndoBar: View {
                         .lineLimit(2)
                         .accessibilityIdentifier("undo-message")
                     Spacer(minLength: Space.xs)
-                    Button {
-                        withAnimation(.snappy) { store.undoLastChange() }
-                    } label: {
-                        HStack(spacing: Space.xxs) {
-                            Icon(.undo, size: 16)
-                            Text("Undo")
+                    if !store.canUndo {
+                        // "Build our plan" is still going on friends' link: Undo comes back if that fails.
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(minHeight: 44)
+                            .accessibilityLabel("Putting the plan on the link")
+                    } else {
+                        Button {
+                            withAnimation(.snappy) { store.undoLastChange() }
+                        } label: {
+                            HStack(spacing: Space.xxs) {
+                                Icon(.undo, size: 16)
+                                Text("Undo")
+                            }
+                            .font(.label)
+                            .foregroundStyle(.emeraldDeep)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                         }
-                        .font(.label)
-                        .foregroundStyle(.emeraldDeep)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("undo-button")
                     }
-                    .accessibilityIdentifier("undo-button")
                 }
                 .padding(.horizontal, Space.md)
                 .planditCard(padding: Space.xs)
@@ -38,9 +46,11 @@ struct UndoBar: View {
                 }
                 .padding(.horizontal, Space.md)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task(id: undo.id) {
+                .task(id: "\(undo.id)-\(store.canUndo)") {
                     // Cancelled when the bar steps aside for the keyboard: keep the undo, and give
-                    // it its full time again when the bar comes back.
+                    // it its full time again when the bar comes back. Held back while the plan goes
+                    // on friends' link, and timed again from when Undo is offered.
+                    guard store.canUndo else { return }
                     do { try await Task.sleep(for: .seconds(Self.seconds)) } catch { return }
                     withAnimation(.snappy) { store.dismissUndo(undo.id) }
                 }

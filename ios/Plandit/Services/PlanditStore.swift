@@ -25,10 +25,49 @@ final class PlanditStore {
     private(set) var sharedLink: SharedLink?
     /// Publishes links; nil when signed out of the server (the local test account).
     @ObservationIgnored var sharing: (any PlanSharing)?
+    /// A page update waiting to go out (`scheduleShareUpdate`); one being sent isn't kept here.
     @ObservationIgnored private var pendingShareUpdate: Task<Void, Never>?
+    /// A request to the page is out; the next one waits its turn (`inTurn`).
+    @ObservationIgnored private var isSendingToPage = false
+    @ObservationIgnored private var pageTurnWaiters: [CheckedContinuation<Void, Never>] = []
+    /// How many Share plan and Stop sharing calls are talking to the server. Changes made meanwhile
+    /// wait until the last one ends: it decides whether there's still a page to update.
+    @ObservationIgnored private var linkOperations = 0
     @ObservationIgnored private var lastPublished: SharedPlanPayload?
+    /// Friends' answers on the link; nil when signed out of the server (the local test account).
+    @ObservationIgnored var answerClient: (any ShareAnswersFetching)?
+    /// Friends' answers on `answersSlug`'s page, as last fetched. Memory only (GS-7).
+    private(set) var fetchedAnswers: [ShareAnswer] = []
+    private var answersSlug: String?
+    /// The link and time the last refresh that counts went out, set as it starts: Today appearing
+    /// again within 10 s doesn't ask again, and neither does Today while the app's launch refresh is
+    /// still out. A refresh that fails puts back what was there, so the next one tries again.
+    @ObservationIgnored private var answersAsked: (slug: String, at: Date)?
+    /// Goes up with each change to the answers made here (removing one, stopping sharing), so a
+    /// refresh that was out meanwhile can't bring back what it changed (GV-7).
+    @ObservationIgnored private var answersChanges = 0
     /// The last change to today's plan, so it can be undone: "The Met is done · Undo".
     private(set) var undo: PlanUndo?
+    /// How many "Build our plan" shares are putting the plan on friends' link (`shareGroupPlan`).
+    /// A count, so one ending can't let Undo back while another is still out (round 4 review, N2).
+    private(set) var groupSharesOut = 0
+    /// Until the last share ends, the build's Undo is held back: the server may already have the
+    /// built plan (round 3 review, R1).
+    var isSharingGroupPlan: Bool { groupSharesOut > 0 }
+    /// The "Ask friends what works" link (plandit.app/g/<slug>), kept in the snapshot.
+    private(set) var planRequest: PlanRequestLink?
+    /// Makes and reads those links; nil when signed out of the server (the local test account).
+    @ObservationIgnored var requestClient: (any PlanRequesting)?
+    /// `planRequest` with friends' answers, as last fetched. Memory only: answers are never saved on the phone.
+    private(set) var fetchedRequest: PlanRequest?
+    /// The answers couldn't be read and none were read before (after a relaunch, say): there's
+    /// nothing to plan from until they are.
+    private(set) var requestFetchFailed = false
+    /// The link and time the last refresh that counts went out, as for shared plans' answers.
+    @ObservationIgnored private var requestAsked: (slug: String, at: Date)?
+    /// Goes up with each change made here (a new link, a removed answer, closing, building), so a
+    /// refresh that was out meanwhile can't bring back what it changed.
+    @ObservationIgnored private var requestChanges = 0
 
     /// Computed from real past plans and visited places; never sample numbers.
     var stats: UserStats { UserStats.compute(pastPlans: pastPlans, visited: visited, placesSaved: saved.count) }
@@ -86,6 +125,7 @@ final class PlanditStore {
         self.mediaStore = mediaStore
         self.extractionRetryDelay = extractionRetryDelay
         self.events = events
+        doneToday = storage?.loadDoneToday()
         resumeInterruptedLookups()
     }
 
@@ -107,6 +147,7 @@ final class PlanditStore {
             events: events
         )
         sharedLink = snapshot.sharedLink
+        planRequest = snapshot.planRequest
     }
 
     /// Swaps in another copy of this account's data (the server's, after sync) and writes it locally.
@@ -120,6 +161,7 @@ final class PlanditStore {
         pastPlans = snapshot.pastPlans
         visited = snapshot.visited
         sharedLink = snapshot.sharedLink
+        planRequest = snapshot.planRequest
         legPaths = [:]
         persistNow()
         rollOverIfNeeded()
@@ -161,6 +203,15 @@ final class PlanditStore {
     /// or when launched with `-resetData`.
     static func load(storage: SnapshotStore = .default, extractor: any PlaceExtracting = launchExtractor()) -> PlanditStore {
         if CommandLine.arguments.contains("-resetData") { storage.reset() }
+#if DEBUG
+        if CommandLine.arguments.contains("-seedSuggestions") {
+            storage.reset()
+            return PlanditStore(
+                today: .empty(for: .now, budget: SampleData.profile.defaultBudget), saved: SuggestionSeed.savedPosts,
+                profile: SampleData.profile, pastPlans: [], visited: [], extractor: extractor, storage: storage
+            )
+        }
+#endif
         let resetsSavedData = CommandLine.arguments.contains("-resetSavedData")
         guard let snapshot = storage.load() else {
             let store = sample(
@@ -181,6 +232,7 @@ final class PlanditStore {
             storage: storage
         )
         store.sharedLink = snapshot.sharedLink
+        store.planRequest = snapshot.planRequest
         store.rollOverIfNeeded()
         if resetsSavedData { store.persistNow() }
         return store
@@ -828,7 +880,8 @@ final class PlanditStore {
             profile: profile,
             pastPlans: pastPlans,
             visited: visited,
-            sharedLink: sharedLink
+            sharedLink: sharedLink,
+            planRequest: planRequest
         )
         try storage.save(snapshot)
         onChange?(snapshot)
@@ -932,44 +985,497 @@ final class PlanditStore {
 
     var canShareLinks: Bool { sharing != nil }
 
-    /// Creates today's link (or updates its page with new options) and remembers it.
+    /// Creates today's link (or updates its page with new options) and remembers it. With
+    /// `suggestsSwaps`, the page offers friends up to two saved places per stop (`swapOptions`).
+    /// With `request`, the plan was built from that "Ask friends what works" link, which then opens
+    /// this plan (GI-7).
     @discardableResult
-    func shareToday(showPrices: Bool, note: String) async throws -> SharedLink {
+    /// `stillWanted` is asked again right before the plan goes out, once it's this request's turn:
+    /// false drops it (`CancellationError`), and the link stays as it was.
+    func shareToday(showPrices: Bool, note: String, suggestsSwaps: Bool = true, request: String? = nil,
+                    stillWanted: (() -> Bool)? = nil) async throws -> SharedLink {
         guard let sharing else { throw APIError.network }
-        let payload = today.sharedPayload(showPrices: showPrices, note: note)
-        let created = try await sharing.publish(payload)
-        let link = SharedLink(slug: created.slug, url: created.url, planID: payload.planId, showPrices: showPrices, note: note)
+        // Nothing older may land after this (`holdPageUpdates`).
+        holdPageUpdates()
+        let sent: (slug: String, url: URL, payload: SharedPlanPayload)
+        do {
+            sent = try await inTurn {
+                if let stillWanted, !stillWanted() { throw CancellationError() }
+                var payload = sharedPayload(showPrices: showPrices, note: note, suggestsSwaps: suggestsSwaps)
+                payload.request = request
+                let created = try await sharing.publish(payload)
+                // Page updates never carry the request: compare them with the page itself.
+                payload.request = nil
+                return (created.slug, created.url, payload)
+            }
+        } catch {
+            resumePageUpdates()
+            throw error
+        }
+        linkOperations -= 1
+        let payload = sent.payload
+        var link = SharedLink(slug: sent.slug, url: sent.url, planID: payload.planId, showPrices: showPrices,
+                              note: note, suggestsSwaps: suggestsSwaps)
+        if let previous = sharedLink, previous.slug == link.slug { link.keptSwaps = previous.keptSwaps }
         lastPublished = payload
         sharedLink = link
         persist()
         return link
     }
 
-    /// Takes the page down; the link stops working.
+    /// Takes the page down; the link stops working and friends' answers go with it.
     func stopSharing() async throws {
         guard let link = sharedLink else { return }
-        if let sharing { try await sharing.unpublish(slug: link.slug) }
-        pendingShareUpdate?.cancel()
+        // Nothing may land after the page is taken down (`holdPageUpdates`).
+        holdPageUpdates()
+        do {
+            if let sharing { try await inTurn { try await sharing.unpublish(slug: link.slug) } }
+        } catch {
+            resumePageUpdates()
+            throw error
+        }
+        linkOperations -= 1
         sharedLink = nil
         lastPublished = nil
+        forgetAnswers()
         persist()
+        // The page is down: nothing may bring it back.
+        pendingShareUpdate?.cancel()
+        pendingShareUpdate = nil
+    }
+
+    /// The saved places friends could pick instead of each stop still ahead: what the share preview
+    /// lists and the page offers with "Let friends suggest swaps" on.
+    var swapOptions: [UUID: [SavedPost]] {
+        SwapOptions.all(for: today, saves: saved)
+    }
+
+    private func sharedPayload(showPrices: Bool, note: String, suggestsSwaps: Bool) -> SharedPlanPayload {
+        today.sharedPayload(showPrices: showPrices, note: note, alternates: suggestsSwaps ? swapOptions : [:])
     }
 
     /// After a change to a shared plan, the page catches up a moment later. Failures are quiet:
-    /// the next change tries again.
+    /// the next change tries again. An update still waiting is replaced, so a change undone before
+    /// it goes out sends nothing. One already being sent is never stopped (the server may have
+    /// applied it), so while one is out the plan as it is now goes out after it, even if that's
+    /// what was last published: the latest always lands last.
     private func scheduleShareUpdate() {
-        guard let link = todayLink, let sharing else { return }
-        let payload = today.sharedPayload(showPrices: link.showPrices, note: link.note)
-        guard payload != lastPublished else { return }
+        guard linkOperations == 0, let link = todayLink, let sharing else { return }
+        let payload = sharedPayload(showPrices: link.showPrices, note: link.note, suggestsSwaps: link.suggestsSwaps)
         pendingShareUpdate?.cancel()
+        pendingShareUpdate = nil
+        guard payload != lastPublished || isSendingToPage else { return }
         pendingShareUpdate = Task { [weak self] in
             try? await Task.sleep(for: Self.shareUpdateDelay)
-            guard !Task.isCancelled else { return }
-            if (try? await sharing.publish(payload)) != nil { self?.lastPublished = payload }
+            guard !Task.isCancelled, let self else { return }
+            await self.inTurn {
+                // Replaced while it waited for the one before.
+                guard !Task.isCancelled else { return }
+                // Being sent now: a later change no longer cancels it.
+                self.pendingShareUpdate = nil
+                // Only while this plan is still shared and no Share plan or Stop sharing is out:
+                // publishing a page that was taken down would bring it back.
+                guard self.linkOperations == 0, let link = self.todayLink, link.planID == payload.planId else {
+                    return
+                }
+                if (try? await sharing.publish(payload)) != nil { self.lastPublished = payload }
+            }
         }
     }
 
+    /// Before Share plan or Stop sharing talks to the server: the update waiting is dropped (what
+    /// they send replaces it), and changes made meanwhile wait until the last of them is done. Their
+    /// request then waits its turn behind an update being sent (`inTurn`), so it lands last.
+    private func holdPageUpdates() {
+        pendingShareUpdate?.cancel()
+        pendingShareUpdate = nil
+        linkOperations += 1
+    }
+
+    /// When Share plan or Stop sharing failed: the link stays as it was, and changes made meanwhile
+    /// go out with it, unless another of them is still out (the last one to end decides).
+    private func resumePageUpdates() {
+        linkOperations -= 1
+        scheduleShareUpdate()
+    }
+
+    /// Requests to the page go out one at a time, in the order they ask, so the last one sent is
+    /// the last one the server applies.
+    private func inTurn<T>(_ request: () async throws -> T) async rethrows -> T {
+        if isSendingToPage {
+            await withCheckedContinuation { pageTurnWaiters.append($0) }
+        } else {
+            isSendingToPage = true
+        }
+        defer {
+            // Hand the turn to the next in line, if any.
+            if pageTurnWaiters.isEmpty { isSendingToPage = false } else { pageTurnWaiters.removeFirst().resume() }
+        }
+        return try await request()
+    }
+
     static var shareUpdateDelay: Duration = .seconds(2)
+
+    // MARK: - Friends' answers (group plans, mode 1)
+
+    /// Today's link's answers; none without a link.
+    var shareAnswers: [ShareAnswer] {
+        guard let link = todayLink, link.slug == answersSlug else { return [] }
+        return fetchedAnswers
+    }
+
+    /// "3 in · 1 can't make it" under the share button; nil with no answers.
+    var answerSummary: ShareAnswerSummary? { ShareAnswers.summary(shareAnswers) }
+
+    /// Friends' "I'd swap this" per stop still ahead, minus picks the organizer kept the stop over.
+    var swapMarks: [UUID: [SwapPick]] {
+        ShareAnswers.swapMarks(shareAnswers, plan: today, kept: Set(todayLink?.keptSwaps ?? []))
+    }
+
+    /// How often Today appearing or the app opening may ask for answers.
+    static var answersRefreshInterval: TimeInterval = 10
+
+    /// Fetches the answers on today's link, at most every `answersRefreshInterval` unless forced.
+    /// Failures are quiet: what was shown stays, and the next appearance tries again.
+    func refreshShareAnswers(now: Date = Date(), force: Bool = false) async {
+        guard let link = todayLink, let answerClient else { return }
+        if !force, let asked = answersAsked, asked.slug == link.slug,
+           now.timeIntervalSince(asked.at) < Self.answersRefreshInterval { return }
+        let previous = answersAsked
+        answersAsked = (link.slug, now)
+        let changes = answersChanges
+        guard let answers = try? await answerClient.answers(slug: link.slug) else {
+            if answersAsked?.slug == link.slug, answersAsked?.at == now { answersAsked = previous }
+            return
+        }
+        // Shared again, or stopped, or an answer removed while the request was out: what it read
+        // may be from before that.
+        guard todayLink?.slug == link.slug, answersChanges == changes else { return }
+        answersSlug = link.slug
+        if answers != fetchedAnswers { fetchedAnswers = answers }
+    }
+
+    /// Removes a friend's answer from the link: it's gone from the page and Today (GV-7).
+    func removeShareAnswer(_ id: UUID) async throws {
+        guard let link = todayLink, let answerClient else { return }
+        try await answerClient.remove(slug: link.slug, answerID: id)
+        answersChanges += 1
+        fetchedAnswers.removeAll { $0.id == id }
+    }
+
+    private func forgetAnswers() {
+        answersChanges += 1
+        fetchedAnswers = []
+        answersSlug = nil
+        answersAsked = nil
+    }
+
+    enum SwapAvailability: Equatable {
+        case available
+        case alreadyInPlan
+        /// The organizer removed it from Saved, or it has no place any more.
+        case notSaved
+    }
+
+    /// Whether "Swap it" can put a friend's pick (a saved post's id) into today's plan.
+    func swapAvailability(of postID: UUID) -> SwapAvailability {
+        guard let post = post(id: postID), post.isMappable, let place = post.place else { return .notSaved }
+        let inPlan = isInToday(post) || today.stops.contains {
+            $0.place.name.lowercased() == place.name.lowercased() && $0.place.address.lowercased() == place.address.lowercased()
+        }
+        return inPlan ? .alreadyInPlan : .available
+    }
+
+    /// "Swap it": the stop becomes the friend's pick, in the same place in the day, and the times
+    /// from there on are planned again (GV-6). Undo puts the stop back; the page updates as with
+    /// any other change (`scheduleShareUpdate`), and the undo bar says so when it will. False when
+    /// the stop isn't still ahead or the pick can't go in.
+    @discardableResult
+    func swap(stopID: UUID, toPost postID: UUID, now: Date = AppClock.now) -> Bool {
+        guard let old = stop(id: stopID), swapAvailability(of: postID) == .available,
+              let post = post(id: postID), let candidate = PlanCandidate(post: post),
+              let plan = today.swapping(stopID, for: candidate, travel: travelPreference, now: now) else { return false }
+        let updatesLink = todayLink != nil && sharing != nil
+        remember("Swapped \(old.place.name) for \(candidate.place.name)" + (updatesLink ? ". Your link updates too." : ""))
+        today = plan
+        persist()
+        Task { await loadRoutes() }
+        return true
+    }
+
+    /// "Keep it": the stop stays, and these picks stop showing until a friend picks another place.
+    func keepStop(_ stopID: UUID) {
+        guard var link = todayLink, let picks = swapMarks[stopID] else { return }
+        // Picks about stops no longer in the plan can't show again; no need to keep them.
+        var kept = link.keptSwaps.filter { key in today.stops.contains { key.hasPrefix($0.id.uuidString) } }
+        for pick in picks {
+            // One kept pick per friend and stop: the latest.
+            let prefix = ShareAnswers.keepPrefix(stopID: stopID, answerID: pick.answerID)
+            kept.removeAll { $0.hasPrefix(prefix) }
+            kept.append(ShareAnswers.keepKey(stopID: stopID, pick: pick))
+        }
+        link.keptSwaps = kept
+        sharedLink = link
+        persist()
+    }
+
+    // MARK: - Ask friends what works (group plans, mode 2)
+
+    /// Making a link needs the server: the answers are read from it and the plan goes on a link.
+    var canAskFriends: Bool { requestClient != nil && sharing != nil }
+
+    /// The link still in play: its day hasn't gone by. One for an earlier day is left to the
+    /// server's clean-up (GS-5), and the planner offers a new one.
+    func activeRequest(now: Date = AppClock.now) -> PlanRequestLink? {
+        guard let planRequest, !planRequest.isOver(now: now) else { return nil }
+        return planRequest
+    }
+
+    /// The link's request with friends' answers, as last fetched; nil before the first fetch.
+    var requestDetails: PlanRequest? {
+        guard let fetchedRequest, fetchedRequest.slug == planRequest?.slug else { return nil }
+        return fetchedRequest
+    }
+
+    /// How often the answers screen appearing or the app opening may ask again.
+    static var requestRefreshInterval: TimeInterval = 10
+
+    /// Makes the link for `draft` (GI-1) and keeps it. `answersBy` is the draft's deadline.
+    func createPlanRequest(_ draft: PlanRequestDraft, answersBy: Date) async throws {
+        guard let requestClient else { throw APIError.network }
+        let created = try await requestClient.create(draft)
+        requestChanges += 1
+        planRequest = PlanRequestLink(request: created, draft: draft, answersBy: answersBy)
+        fetchedRequest = created
+        requestFetchFailed = false
+        requestAsked = (created.slug, Date())
+        persist()
+    }
+
+    /// Reads the link's answers, at most every `requestRefreshInterval` unless forced. A failure
+    /// keeps what was shown, and the next appearance tries again; with nothing read yet it sets
+    /// `requestFetchFailed`. A link the server no longer has (deleted on another phone, or cleaned
+    /// up) is forgotten.
+    func refreshPlanRequest(now: Date = Date(), force: Bool = false) async {
+        guard let link = planRequest, let requestClient else { return }
+        if !force, let asked = requestAsked, asked.slug == link.slug,
+           now.timeIntervalSince(asked.at) < Self.requestRefreshInterval { return }
+        let previous = requestAsked
+        requestAsked = (link.slug, now)
+        let changes = requestChanges
+        let fetched: PlanRequest?
+        do {
+            fetched = try await requestClient.fetch(slug: link.slug)
+        } catch {
+            if requestAsked?.slug == link.slug, requestAsked?.at == now { requestAsked = previous }
+            if planRequest?.slug == link.slug, requestDetails == nil { requestFetchFailed = true }
+            return
+        }
+        // A new link, a removed answer, closing or building while the request was out: what it
+        // read may be from before that.
+        guard planRequest?.slug == link.slug, requestChanges == changes else { return }
+        requestFetchFailed = false
+        guard let fetched else {
+            fetchedRequest = nil
+            planRequest = nil
+            persist()
+            return
+        }
+        if fetched != fetchedRequest { fetchedRequest = fetched }
+    }
+
+    /// Takes a friend's answer off the link: it no longer counts (GS-4).
+    func removeRequestAnswer(_ id: UUID) async throws {
+        guard let link = planRequest, let requestClient else { return }
+        try await requestClient.removeAnswer(slug: link.slug, answerID: id)
+        requestChanges += 1
+        if fetchedRequest?.slug == link.slug { fetchedRequest?.answers.removeAll { $0.id == id } }
+    }
+
+    /// The link stops taking answers before its deadline (GI-3). The plan can still be built.
+    func closePlanRequest() async throws {
+        guard let link = planRequest, let requestClient else { return }
+        try await requestClient.close(slug: link.slug)
+        requestChanges += 1
+        if fetchedRequest?.slug == link.slug, fetchedRequest?.status == .open { fetchedRequest?.status = .closed }
+    }
+
+    /// What "Ask about another day" does with the link.
+    enum RequestDiscard: Equatable {
+        /// It never opened a plan: it goes, with friends' answers.
+        case delete
+        /// It opens a plan (or the server no longer has it): the app lets go of it, and friends'
+        /// link keeps working until it's cleaned up 30 days after its day (GS-5).
+        case forget
+    }
+
+    /// Reads the link first and decides by what the server says now, not what this phone last
+    /// read: built (maybe on another phone) is forgotten, open or closed is deleted. Throws when it
+    /// can't be read, and the link stays.
+    func discardKind() async throws -> RequestDiscard {
+        guard let link = planRequest, let requestClient else { return .forget }
+        let changes = requestChanges
+        guard let fetched = try await requestClient.fetch(slug: link.slug) else { return .forget }
+        // As for a refresh: a change made here while this was out (a removed answer, say) isn't
+        // undone by what it read. The decision still goes by the server's status.
+        if planRequest?.slug == link.slug, requestChanges == changes, fetched != fetchedRequest {
+            fetchedRequest = fetched
+            requestFetchFailed = false
+        }
+        return fetched.status == .built ? .forget : .delete
+    }
+
+    /// "Ask about another day", once `discardKind` decided: deletes or forgets the link so a new
+    /// one can be made.
+    func discardPlanRequest(_ kind: RequestDiscard) async throws {
+        guard let link = planRequest else { return }
+        if kind == .delete, let requestClient {
+            // Read once more right before deleting: another phone may have built the plan while
+            // the organizer confirmed, and friends' link then opens it, so it's only forgotten. The
+            // server's delete doesn't check, so a build landing between these two calls still goes.
+            if let current = try await requestClient.fetch(slug: link.slug), current.status != .built {
+                try await requestClient.delete(slug: link.slug)
+            }
+        }
+        requestChanges += 1
+        planRequest = nil
+        fetchedRequest = nil
+        requestAsked = nil
+        requestFetchFailed = false
+        persist()
+    }
+
+    /// The organizer's own inputs until they change them: their default budget and the whole
+    /// range (GI-5).
+    func organizerInputs(for link: PlanRequestLink) -> GroupInputs.Person {
+        GroupInputs.Person(member: .organizer, budget: profile.defaultBudget,
+                           from: link.start ?? ClockTime(12), until: link.end ?? ClockTime(20), stars: [])
+    }
+
+    /// Everyone's inputs together (`GroupInputs.combine`), over the link's places still saved. Nil
+    /// until the answers have been read: a plan from the organizer's inputs alone would leave
+    /// friends out.
+    func groupInputs(organizer: GroupInputs.Person, leftOut: Set<GroupMember>) -> GroupInputs.Result? {
+        guard let link = planRequest, let details = requestDetails else { return nil }
+        let places = link.placeIDs.filter { post(id: $0)?.isMappable == true }
+        return GroupInputs.combine(answers: details.answers, organizer: organizer, places: places, leftOut: leftOut)
+    }
+
+    /// The link's day is today, both where it was made and on the phone: Today only holds today's
+    /// plan, so a plan for a later day is built on that day (D1).
+    func canBuildGroupPlan(now: Date = AppClock.now) -> Bool {
+        guard let link = planRequest else { return false }
+        return link.isToday(now: now) && link.day == DayPlan.isoDay(now, calendar: .current)
+    }
+
+    /// The plan from the answers so far, planned on the link's day, without changing anything:
+    /// what "Build our plan" would put in Today, or for a later day how it looks so far. Nil once
+    /// the day is over.
+    func previewGroupPlan(_ plan: GroupInputs.Plan, now: Date = AppClock.now) -> DayPlanner.Outcome? {
+        groupPlanRequest(plan, now: now).map { DayPlanner(travel: travelPreference).plan($0) }
+    }
+
+    /// "Build our plan": the answers' plan replaces today's and the link remembers it. Then
+    /// `shareGroupPlan` puts it on the link. Until that works, Undo puts the old plan back (and
+    /// Build is offered again); once friends' link opens it, there's no Undo: the organizer changes
+    /// it in Today, as with any shared plan. Nil unless `canBuildGroupPlan`.
+    @discardableResult
+    func buildGroupPlan(_ plan: GroupInputs.Plan, now: Date = AppClock.now) -> DayPlanner.Outcome? {
+        guard canBuildGroupPlan(now: now), var link = planRequest, let request = groupPlanRequest(plan, now: now) else { return nil }
+        let outcome = DayPlanner(travel: travelPreference).plan(request)
+        guard !outcome.stops.isEmpty else { return outcome }
+        remember(Self.groupBuildUndoMessage, isGroupBuild: true)
+        today.stops = outcome.stops
+        today.legs = outcome.legs
+        legPaths = [:]
+        today.budget = plan.budget
+        today.title = Self.title(for: today.stops)
+        link.builtPlanID = today.id
+        link.builtStopIDs = today.stops.map(\.id)
+        planRequest = link
+        requestChanges += 1
+        persist()
+        events?(.planBuilt)
+        Task { await loadRoutes() }
+        return outcome
+    }
+
+    /// Puts the plan built from the answers on today's link, with the request's slug, so friends'
+    /// /g/ link now opens it (GI-7). It goes out like Share plan, one at a time with page updates.
+    /// An existing link keeps its settings; a new one shows prices, and no swaps, since the
+    /// organizer hasn't seen swap options for this plan (GV-9).
+    /// While it's out, Undo is held back (`canUndo`), and once it's this request's turn to go out
+    /// the built plan must still be Today's, or nothing is sent: a plan waiting behind a page
+    /// update could otherwise have been changed meanwhile.
+    /// When Today no longer holds the built plan, before or while it goes out, it throws
+    /// `GroupShareError.planChanged` and lets go of the build, so Build is offered again (N1).
+    func shareGroupPlan() async throws {
+        guard groupPlanAwaitsLink, let link = planRequest else {
+            if forgetReplacedGroupBuild() { throw GroupShareError.planChanged }
+            throw APIError.invalidResponse
+        }
+        groupSharesOut += 1
+        defer { groupSharesOut -= 1 }
+        let current = todayLink
+        do {
+            try await shareToday(showPrices: current?.showPrices ?? true, note: current?.note ?? "",
+                                 suggestsSwaps: current?.suggestsSwaps ?? false, request: link.slug,
+                                 stillWanted: { [unowned self] in self.groupPlanAwaitsLink && self.planRequest?.slug == link.slug })
+        } catch is CancellationError {
+            if forgetReplacedGroupBuild() { throw GroupShareError.planChanged }
+            throw CancellationError()
+        }
+        // Friends' link opens this plan now: undoing the build would put the old one there.
+        if undo?.isGroupBuild == true { undo = nil }
+        requestChanges += 1
+        if fetchedRequest?.slug == link.slug { fetchedRequest?.status = .built }
+        await refreshPlanRequest(force: true)
+    }
+
+    /// The plan "Build our plan" put in Today is still there, with the same stops, and isn't on
+    /// friends' link yet: "Try again" puts it there. False once it's undone or another plan
+    /// replaced it, so the link never gets a plan that wasn't built from the answers.
+    var groupPlanAwaitsLink: Bool {
+        guard let link = planRequest, let builtID = link.builtPlanID, builtID == today.id,
+              let stopIDs = link.builtStopIDs, let details = requestDetails, details.status != .built else { return false }
+        return Set(stopIDs) == Set(today.stops.map(\.id))
+    }
+
+    static let groupBuildUndoMessage = "Built our plan. It isn't on the link yet."
+
+    enum GroupShareError: Error {
+        /// Today has another plan than the one "Build our plan" made: nothing went on the link.
+        case planChanged
+    }
+
+    /// The plan "Build our plan" made isn't Today's any more (another plan replaced it) and friends'
+    /// link doesn't open it: lets go of it, so Build is offered again. True when it did.
+    private func forgetReplacedGroupBuild() -> Bool {
+        guard var link = planRequest, let builtID = link.builtPlanID, requestDetails?.status != .built else { return false }
+        let stillToday = builtID == today.id && link.builtStopIDs.map { Set($0) == Set(today.stops.map(\.id)) } == true
+        guard !stillToday else { return false }
+        link.builtPlanID = nil
+        link.builtStopIDs = nil
+        planRequest = link
+        persist()
+        return true
+    }
+
+    /// The planner's inputs for the answers' plan, on the link's day, so places' hours are that
+    /// day's: from the start of everyone's time (or the next quarter hour, if that's later) to its
+    /// end, on the lowest budget, most-starred places first. Today's extra costs only count today.
+    private func groupPlanRequest(_ plan: GroupInputs.Plan, now: Date) -> DayPlanner.Request? {
+        guard let link = planRequest, !link.isOver(now: now), let day = link.dayDate,
+              let windowStart = plan.start.date(on: day, calendar: link.calendar),
+              let windowEnd = plan.end.date(on: day, calendar: link.calendar) else { return nil }
+        let start = max(windowStart, PlanDefaults.nextQuarterHour(after: now))
+        let priorities = Dictionary(plan.candidates.map { ($0.placeID, $0.stars) }, uniquingKeysWith: max)
+        var request = basePlanRequest(postIDs: plan.candidates.map(\.placeID), start: start, budget: plan.budget,
+                                      mode: .replace, priorities: priorities)
+        if !canBuildGroupPlan(now: now) { request.alreadySpent = 0 }
+        request.dayEnd = windowEnd
+        return request
+    }
 
     // MARK: - Undo
 
@@ -977,18 +1483,34 @@ final class PlanditStore {
         let id = UUID()
         let message: String
         let plan: DayPlan
+        /// "Build our plan", before the plan went on friends' link.
+        var isGroupBuild = false
+    }
+
+    /// The undo bar offers Undo. Not for "Build our plan" while it's going on friends' link: the
+    /// server may already have it, and the old plan would then go out after it (R1). If that
+    /// fails, Undo is offered again.
+    var canUndo: Bool {
+        guard let undo else { return false }
+        return !(undo.isGroupBuild && isSharingGroupPlan)
     }
 
     /// Call before changing `today`.
-    private func remember(_ message: String) {
-        undo = PlanUndo(message: message, plan: today)
+    private func remember(_ message: String, isGroupBuild: Bool = false) {
+        undo = PlanUndo(message: message, plan: today, isGroupBuild: isGroupBuild)
     }
 
     /// Puts today's plan back the way it was before the last change.
     func undoLastChange() {
-        guard let undo else { return }
+        guard canUndo, let undo else { return }
         today = undo.plan
         self.undo = nil
+        if undo.isGroupBuild, var link = planRequest {
+            // The built plan is gone: no "Try again" for it, and Build is offered again.
+            link.builtPlanID = nil
+            link.builtStopIDs = nil
+            planRequest = link
+        }
         persist()
         Task { await loadRoutes() }
     }
@@ -1097,9 +1619,15 @@ final class PlanditStore {
         return bounded
     }
 
-    private func basePlanRequest(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode) -> DayPlanner.Request {
+    /// `priorities` (saved post id → priority) are for "Build our plan": how many people starred each place.
+    private func basePlanRequest(postIDs: [UUID], start: Date, budget: Double, mode: PlanMode, priorities: [UUID: Int] = [:]) -> DayPlanner.Request {
         var seen = Set<UUID>()
         let picked = postIDs.filter { seen.insert($0).inserted }.compactMap { post(id: $0) }.compactMap(PlanCandidate.init(post:))
+            .map { candidate -> PlanCandidate in
+                var candidate = candidate
+                candidate.priority = candidate.sourcePostID.flatMap { priorities[$0] } ?? 0
+                return candidate
+            }
         switch mode {
         case .replace:
             return DayPlanner.Request(candidates: picked, start: start, budget: budget, alreadySpent: today.extras.total)
@@ -1128,6 +1656,124 @@ final class PlanditStore {
         return first == last ? "A day in \(first)" : "\(first) to \(last)"
     }
 
+    // MARK: - Suggested plans (the empty Today)
+
+    /// Up to three plans built from saved places, for an empty Today; none once it has a plan.
+    /// Worked out on the phone and never stored or synced.
+    private(set) var suggestions: [PlanSuggestion] = []
+    /// Set when a tapped card had gone stale and the cards were refreshed (SP-11).
+    private(set) var suggestionNotice: String?
+    /// Where suggestions start: the planner's default start, so "Change it" lands on the same time.
+    @ObservationIgnored var suggestionStart: () -> Date = { PlanDefaults.start() }
+    /// What the current suggestions were worked out from. Between changes to it, the cards stay put.
+    @ObservationIgnored private var suggestionKey: SuggestionKey?
+    /// Saved posts checked off on some date; only today's count (see `postsDoneToday`).
+    @ObservationIgnored private var doneToday: DoneToday?
+
+    static let suggestionsChangedMessage = "It's later now, so these plans changed."
+
+    enum UseResult: Equatable {
+        case applied
+        /// The card no longer matches what the planner would build; the cards were refreshed instead.
+        case stale
+    }
+
+    private struct SuggestionKey: Equatable {
+        /// The 15-minute time slot of the start.
+        var slot: Int
+        var saves: Int
+        var budget: Double
+        var travel: TravelPreference
+        var extras: Double
+        var done: Set<UUID>
+    }
+
+    /// Saved posts checked off today, even if they've since left the plan. Not suggested again
+    /// today (SP-9); a new day starts with none.
+    var postsDoneToday: Set<UUID> {
+        guard let doneToday, doneToday.day == DoneToday.key(for: today.date) else { return [] }
+        return doneToday.postIDs
+    }
+
+    /// Keeps `postsDoneToday` in step with the plan: a stop marked done adds its post, a stop in
+    /// the plan that isn't done (Undo, "Not here yet") takes it out, and a stop removed from the
+    /// plan leaves it as it was. Written to this phone only, beside the snapshot.
+    ///
+    /// Only a plan for the real current day is recorded. Another phone's copy from another day
+    /// (after sync, written before `replace(with:)` rolls it over) leaves today's set alone.
+    private func noteDoneStops() {
+        guard Calendar.current.isDate(today.date, inSameDayAs: .now) else { return }
+        let day = DoneToday.key(for: today.date)
+        var done = postsDoneToday
+        for stop in today.stops {
+            guard let postID = stop.sourcePostID else { continue }
+            if stop.status == .done { done.insert(postID) } else { done.remove(postID) }
+        }
+        let next = DoneToday(day: day, postIDs: done)
+        guard next != doneToday else { return }
+        doneToday = next
+        guard let storage, !isClosed else { return }
+        try? storage.saveDoneToday(next)
+    }
+
+    /// Works the suggestions out again if anything they depend on changed: the saves, the default
+    /// budget, the travel setting, Today, or the 15-minute slot the start time is in (SP-8).
+    func refreshSuggestions() {
+        guard today.stops.isEmpty else {
+            suggestionKey = nil
+            if !suggestions.isEmpty { suggestions = [] }
+            if suggestionNotice != nil { suggestionNotice = nil }
+            return
+        }
+        let start = suggestionStart()
+        var saves = Hasher()
+        for post in saved where post.isMappable { saves.combine(post) }
+        let done = postsDoneToday
+        let key = SuggestionKey(
+            slot: Int((start.timeIntervalSinceReferenceDate / (15 * 60)).rounded(.down)),
+            saves: saves.finalize(),
+            budget: profile.defaultBudget,
+            travel: travelPreference,
+            extras: today.extras.total,
+            done: done
+        )
+        guard key != suggestionKey else { return }
+        // "It's later now…" explains the cards it came with; once the time slot moves on, it goes.
+        if let previous = suggestionKey, previous.slot != key.slot, suggestionNotice != nil { suggestionNotice = nil }
+        suggestionKey = key
+        let next = PlanSuggester(planner: DayPlanner(travel: travelPreference)).suggestions(
+            posts: saved,
+            excluding: done,
+            start: start,
+            budget: profile.defaultBudget,
+            end: start.addingTimeInterval(PlanDefaults.suggestionLength),
+            alreadySpent: today.extras.total
+        )
+        if next != suggestions { suggestions = next }
+    }
+
+    /// "Use this plan": makes exactly the card's plan today's plan, with the same undo step as
+    /// building one by hand (SP-10). If the planner would now build something else (a stop has
+    /// closed, the time slot moved), nothing changes: the cards are refreshed instead (SP-11).
+    @discardableResult
+    func useSuggestion(_ suggestion: PlanSuggestion) -> UseResult {
+        guard today.stops.isEmpty else { return .stale }
+        let start = suggestionStart()
+        let end = start.addingTimeInterval(PlanDefaults.suggestionLength)
+        let budget = profile.defaultBudget
+        let preview = previewPlan(postIDs: suggestion.postIDs, start: start, budget: budget, mode: .replace, end: end)
+        guard preview.isSamePlan(as: suggestion.outcome) else {
+            suggestionKey = nil
+            refreshSuggestions()
+            suggestionNotice = Self.suggestionsChangedMessage
+            return .stale
+        }
+        suggestionNotice = nil
+        buildPlan(postIDs: suggestion.postIDs, start: start, budget: budget, mode: .replace, end: end)
+        events?(.suggestionUsed)
+        return .applied
+    }
+
     // MARK: - Profile
 
     func updateProfile(_ change: (inout UserProfile) -> Void) {
@@ -1139,7 +1785,8 @@ final class PlanditStore {
     // MARK: - Persistence
 
     var snapshot: StoreSnapshot {
-        StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited, sharedLink: sharedLink)
+        StoreSnapshot(saved: saved, today: today, profile: profile, pastPlans: pastPlans, visited: visited, sharedLink: sharedLink,
+                      planRequest: planRequest)
     }
 
     /// The current state in the exact JSON shape the file and the cloud copy use.
@@ -1148,6 +1795,8 @@ final class PlanditStore {
     /// Coalesces bursts of changes into one write a moment later.
     private func persist() {
         scheduleShareUpdate()
+        noteDoneStops()
+        refreshSuggestions()
         guard let storage, !isClosed else { return }
         let snapshot = snapshot
         pendingSave?.cancel()
@@ -1181,6 +1830,8 @@ final class PlanditStore {
     func persistNow() {
         pendingSave?.cancel()
         pendingSave = nil
+        noteDoneStops()
+        refreshSuggestions()
         guard let storage, !isClosed else { return }
         let snapshot = snapshot
         guard (try? storage.save(snapshot)) != nil else { return }
