@@ -259,6 +259,43 @@ import XCTest
         XCTAssertTrue(published.last?.stops.contains { $0.name == "Little Island" } ?? false)
     }
 
+    func testUndoWhileTheSwapIsBeingSentPublishesTheRestoredPlanLast() async throws {
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        try await waitUntilHolding(sharing)
+        store.undoLastChange()
+        sharing.release()
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(sharing.published.count, 3, "shared, the swap, then the plan put back")
+        XCTAssertTrue(sharing.published[1].stops.contains { $0.name == "Little Island" }, "the swap went out whole")
+        XCTAssertEqual(sharing.published.last?.stops.map(\.name), store.today.stops.map(\.place.name), "the page ends on the plan as it is")
+        XCTAssertEqual(sharing.mostAtOnce, 1, "one at a time")
+
+        store.updateProfile { $0.name = "Abe" }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(sharing.published.count, 3, "and then the page is up to date: nothing more to send")
+    }
+
+    func testChangesWhileAnUpdateIsBeingSentGoOutAfterItEndingWithTheLatest() async throws {
+        let (store, sharing) = try await holdingStore()
+        sharing.holdNext()
+        XCTAssertTrue(store.swap(stopID: stop(named: "The High Line", in: store).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
+        try await waitUntilHolding(sharing)
+        store.removeStop(stop(named: "Los Tacos No. 1", in: store).id)
+        try await Task.sleep(for: .milliseconds(100))
+        store.removeStop(stop(named: "Joe's Pizza", in: store).id)
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(sharing.published.count, 1, "nothing else goes out while one is")
+        sharing.release()
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(sharing.published.count, 3, "the swap, then the latest plan")
+        XCTAssertEqual(sharing.published.last?.stops.map(\.name), store.today.stops.map(\.place.name))
+        XCTAssertEqual(sharing.mostAtOnce, 1)
+    }
+
     func testTheSwapUndoBarOnlyMentionsTheLinkWhenItUpdates() async throws {
         let unshared = makeStore()
         XCTAssertTrue(unshared.swap(stopID: stop(named: "The High Line", in: unshared).id, toPost: SampleData.littleIslandPost.id, now: SampleData.at(11)))
@@ -426,6 +463,24 @@ import XCTest
         ShareAnswer(id: UUID(), name: name, status: status, swaps: swaps, createdAt: Date(), updatedAt: Date())
     }
 
+    /// A shared plan on a server that can be slow.
+    private func holdingStore() async throws -> (PlanditStore, HoldingSharing) {
+        let sharing = HoldingSharing()
+        let store = PlanditStore(today: SampleData.dayPlan, saved: SampleData.savedPosts, profile: SampleData.profile,
+                                 pastPlans: [], visited: [], storage: nil)
+        store.sharing = sharing
+        try await store.shareToday(showPrices: true, note: "")
+        return (store, sharing)
+    }
+
+    private func waitUntilHolding(_ sharing: HoldingSharing) async throws {
+        for _ in 0..<200 {
+            if sharing.isHolding { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("the request never went out")
+    }
+
     /// Until the held request has gone out.
     private func waitUntilHeld(_ answers: RecordingAnswers) async throws {
         for _ in 0..<200 {
@@ -437,6 +492,50 @@ import XCTest
 
     private func api(_ transport: FakeTransport) -> PlanditAPIClient {
         PlanditAPIClient(baseURL: URL(string: "https://api.example")!, userID: "user-1", tokenProvider: FakeTokenProvider(), transport: transport)
+    }
+}
+
+/// A server whose next request can be held part-way, as on a slow connection. Like the server, a
+/// held request is applied even if the app gives up on it, and the app then sees it cancelled, as
+/// URLSession reports it.
+@MainActor private final class HoldingSharing: PlanSharing {
+    private(set) var published: [SharedPlanPayload] = []
+    /// What the server applied, in order: "publish" or "unpublish".
+    private(set) var applied: [String] = []
+    /// The most requests out at the same time.
+    private(set) var mostAtOnce = 0
+    private var atOnce = 0
+    private var holdsNext = false
+    private var held: CheckedContinuation<Void, Never>?
+    var isHolding: Bool { held != nil }
+    func holdNext() { holdsNext = true }
+    func release() {
+        held?.resume()
+        held = nil
+    }
+
+    private func arrive() async {
+        atOnce += 1
+        mostAtOnce = max(mostAtOnce, atOnce)
+        if holdsNext {
+            holdsNext = false
+            await withCheckedContinuation { held = $0 }
+        }
+        atOnce -= 1
+    }
+
+    func publish(_ payload: SharedPlanPayload) async throws -> (slug: String, url: URL) {
+        await arrive()
+        published.append(payload)
+        applied.append("publish")
+        try Task.checkCancellation()
+        return ("test123abc", URL(string: "https://plandit.app/p/test123abc")!)
+    }
+
+    func unpublish(slug: String) async throws {
+        await arrive()
+        applied.append("unpublish")
+        try Task.checkCancellation()
     }
 }
 

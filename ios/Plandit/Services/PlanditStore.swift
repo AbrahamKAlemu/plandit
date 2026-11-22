@@ -25,7 +25,11 @@ final class PlanditStore {
     private(set) var sharedLink: SharedLink?
     /// Publishes links; nil when signed out of the server (the local test account).
     @ObservationIgnored var sharing: (any PlanSharing)?
+    /// A page update waiting to go out (`scheduleShareUpdate`); one being sent isn't kept here.
     @ObservationIgnored private var pendingShareUpdate: Task<Void, Never>?
+    /// A request to the page is out; the next one waits its turn (`inTurn`).
+    @ObservationIgnored private var isSendingToPage = false
+    @ObservationIgnored private var pageTurnWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var lastPublished: SharedPlanPayload?
     /// Friends' answers on the link; nil when signed out of the server (the local test account).
     @ObservationIgnored var answerClient: (any ShareAnswersFetching)?
@@ -992,18 +996,42 @@ final class PlanditStore {
     }
 
     /// After a change to a shared plan, the page catches up a moment later. Failures are quiet:
-    /// the next change tries again. Whatever was waiting to go out is dropped first, so a change
-    /// undone (or shared again from Share plan) before then sends nothing.
+    /// the next change tries again. An update still waiting is replaced, so a change undone before
+    /// it goes out sends nothing. One already being sent is never stopped (the server may have
+    /// applied it), so while one is out the plan as it is now goes out after it, even if that's
+    /// what was last published: the latest always lands last.
     private func scheduleShareUpdate() {
         guard let link = todayLink, let sharing else { return }
         let payload = sharedPayload(showPrices: link.showPrices, note: link.note, suggestsSwaps: link.suggestsSwaps)
         pendingShareUpdate?.cancel()
-        guard payload != lastPublished else { return }
+        pendingShareUpdate = nil
+        guard payload != lastPublished || isSendingToPage else { return }
         pendingShareUpdate = Task { [weak self] in
             try? await Task.sleep(for: Self.shareUpdateDelay)
-            guard !Task.isCancelled else { return }
-            if (try? await sharing.publish(payload)) != nil { self?.lastPublished = payload }
+            guard !Task.isCancelled, let self else { return }
+            await self.inTurn {
+                // Replaced while it waited for the one before.
+                guard !Task.isCancelled else { return }
+                // Being sent now: a later change no longer cancels it.
+                self.pendingShareUpdate = nil
+                if (try? await sharing.publish(payload)) != nil { self.lastPublished = payload }
+            }
         }
+    }
+
+    /// Requests to the page go out one at a time, in the order they ask, so the last one sent is
+    /// the last one the server applies.
+    private func inTurn<T>(_ request: () async throws -> T) async rethrows -> T {
+        if isSendingToPage {
+            await withCheckedContinuation { pageTurnWaiters.append($0) }
+        } else {
+            isSendingToPage = true
+        }
+        defer {
+            // Hand the turn to the next in line, if any.
+            if pageTurnWaiters.isEmpty { isSendingToPage = false } else { pageTurnWaiters.removeFirst().resume() }
+        }
+        return try await request()
     }
 
     static var shareUpdateDelay: Duration = .seconds(2)
