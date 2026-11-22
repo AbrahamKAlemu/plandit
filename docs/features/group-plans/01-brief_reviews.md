@@ -77,3 +77,5 @@ Copy changes: "Ask friends what works" (was "Plan with friends") and "Your budge
 train included".
 
 All three named what would flip them: make a fast first load a requirement and settle Q-1 before mode 1 ships. GV-11 and the rollout gate do that, so their verdicts were not re-run.
+
+November 21: Q-1 resolved without a paid plan. A cron job on Supabase already keeps Render awake. GV-11 is still measured before mode 1 ships.

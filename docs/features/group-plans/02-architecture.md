@@ -40,8 +40,9 @@ Policy and rate limits.
   (`ScopedRateThrottle` for events and metrics, `AnonRateThrottle` for the waitlist). The cache is
   `LocMemCache`, which is per gunicorn worker (2 workers) and empties when Render sleeps or
   deploys.
-- **Hosting** (`render.yaml`): free plan, sleeps after 15 minutes, 30 to 60 s cold start. The
-  Dockerfile runs `migrate` and then gunicorn.
+- **Hosting** (`render.yaml`): free plan, which sleeps after 15 idle minutes (30 to 60 s cold
+  start). A cron job on Supabase keeps it awake (Abraham, November 21). The Dockerfile runs
+  `migrate` and then gunicorn.
 - **Planner** (`Services/DayPlanner.swift`): it includes every candidate, then drops stops by
   rule: closed, then the day runs too late (drop the stop that frees the most time), then over
   budget (drop the stop that saves the most money). It has no notion of priority. It tries every
@@ -281,7 +282,7 @@ profile name at join) and joined_at. Unique on (group, profile). The organizer i
 
 | Case | Behavior |
 |---|---|
-| Render is asleep when a friend opens a link | Not allowed by GV-11: mode 1 ships only once the service no longer sleeps (brief Q-1). |
+| The Supabase keep-awake job stops and Render sleeps | Links take 30 to 60 s again. GV-11 is measured before mode 1 ships; the job's health is Abraham's to watch. |
 | A friend clears cookies or uses another browser | They can answer again as a new person. The organizer can remove the old answer. Accepted. |
 | Someone floods a link | Per-IP limit, then the 50-answer cap per link. The organizer can stop sharing, which deletes everything. |
 | The organizer edits the plan while friends answer | Answers stay. Swaps for removed stops are dropped. A friend's form posts against stop ids; unknown ids are ignored. |

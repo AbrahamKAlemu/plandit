@@ -148,8 +148,8 @@ goes into each member's Past plans as usual.
   before sending, and can be turned off.
 - **GV-10** Stop sharing deletes the answers with the link.
 - **GV-11** A friend's first tap on a link (`/p/` or `/g/`) shows the page within 3 seconds on a
-  phone, even after the server has been idle for hours. Mode 1 doesn't ship until this holds (see
-  Q-1 for how).
+  phone, even after the server has been idle for hours. Mode 1 doesn't ship until this is measured
+  (Q-1, resolved).
 - **GV-12** The time, the first stop and the per-person cost stay at the top of the page, above the
   form.
 
@@ -253,14 +253,6 @@ answers, groups, the limits and the report link, and the demo setup gets a seede
 
 Open (for Abraham):
 
-- **Q-1 How to meet GV-11.** Render's free plan sleeps after 15 idle minutes, and then the first
-  request takes 30 to 60 seconds. Three personas made a fast first load a must-fix, so GV-11 is a
-  requirement; the open part is how to meet it.
-  - **Render Starter, $7 a month.** It doesn't sleep. This is the recommendation.
-  - **A keep-awake ping from an outside scheduler.** Free, but it needs a new service, and it works
-    against the free plan's intent.
-
-  Either way it's a paid or new service, so it's Abraham's call. Mode 1 waits for it.
 - **Q-2 Names on the page.** The page shows up to 3 first names of people who are in (GV-3). The
   safer option is counts only ("3 are in"). Recommendation: names, because seeing who's coming is
   what makes people say yes, and the link only lives in the group chat. Sofia, Andre and Amara all
@@ -279,3 +271,7 @@ Open (for Abraham):
 Resolved:
 
 - All three modes are in scope (Abraham, November 21).
+- **Q-1 How to meet GV-11.** A cron job on Supabase already keeps Render awake (Abraham,
+  November 21), so no paid plan is needed. GV-11 is still measured before mode 1 ships, so the job
+  is confirmed working, not assumed. If it stops, Render goes back to sleeping and links take 30 to
+  60 s again.

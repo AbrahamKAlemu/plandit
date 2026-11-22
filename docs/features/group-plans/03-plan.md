@@ -88,7 +88,7 @@ G2b's `GroupInputs` and the planner priority change are written test-first. Ever
 | GV-8 | Re-sharing without a stop drops swaps for it; other answers stay. | `test_answers.py` | G1a builder | not run |
 | GV-9 | Alternates are only the organizer's saves, same category, within 1.2 mi, open and in budget; the preview lists them; with the toggle off, the payload has none. | `SwapOptionsTests`; preview snapshot | G1b builder | not run |
 | GV-10 | Stop sharing deletes the answers (CASCADE). | `test_answers.py` | G1a builder | not run |
-| GV-11 | After the service has been idle for at least 1 hour, the first tap on a `/p/` and a `/g/` link from a phone on cellular shows the page within 3 s. | Timed by hand three times on a phone, after an idle hour; Render plan checked | Orchestrator; Abraham decides Q-1 | not run |
+| GV-11 | After the service has been idle for at least 1 hour, the first tap on a `/p/` and a `/g/` link from a phone on cellular shows the page within 3 s. | Timed by hand three times on a phone, after an idle hour, with the Supabase keep-awake job running | Orchestrator | not run |
 | GV-12 | On a 390-pt-wide phone, the time, the first stop and the per-person cost are visible without scrolling, above the form. | Screenshot on the iPhone simulator's Safari | G1a builder | not run |
 | GI-1 | A request with 2 to 10 places, a day 0 to 14 days out, a range ≥ 1 h and a deadline is created; other values give 400. | `pytest plandit/plans/tests/test_requests.py` | G2a builder | not run |
 | GI-2 | A friend's answer is stored and editable by the same cookie until the deadline; > 3 stars, a budget out of range or a window outside the range give 400. | same | G2a builder | not run |
@@ -136,14 +136,14 @@ because a wrong rebase silently loses someone's edit. Modes 1 and 2 are covered 
 
 ## Human approval
 
-Waiting for Abraham. Silence isn't approval. Open questions Q-1 to Q-5 are in the brief. Q-1
-(Render Starter, $7 a month) is a paid service change and needs an explicit yes.
+Waiting for Abraham. Silence isn't approval. Open questions Q-2 to Q-5 are in the brief; Q-1 is
+resolved (the Supabase keep-awake job).
 
 ## Rollout and final checks
 
 For each mode:
 
-1. Mode 1 only: Q-1 decided and GV-11 measured before the app version is submitted.
+1. Mode 1 only: GV-11 measured before the app version is submitted.
 2. Merge the backend slice; Render deploys and runs the migration. Then, from a test account,
    create, answer and delete once in production and confirm it works. Check the RLS query from
    #41's PR returns no rows.
