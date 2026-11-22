@@ -60,9 +60,11 @@
       <p class="hint" id="answer-name-hint">Only the person who sent this link sees your answer.</p>
 
       <label class="field-label" for="answer-budget">Your budget for the day, train included</label>
-      <input id="answer-budget" type="range" name="budget" min="0" max="{{ budget_max }}" step="{{ budget_step }}" value="{{ form.budget }}"{% if invalid == "budget" %} aria-invalid="true"{% endif %}>
-      {# No script shows the slider's number as it moves; the marks show where the dollars are. #}
-      <div class="scale" aria-hidden="true"><span>$0</span><span>$50</span><span>$100</span><span>${{ budget_max }}</span></div>
+      {# A choice, not a slider: it shows the dollars without a script, and nothing is chosen for a friend who hasn't picked. #}
+      <select id="answer-budget" name="budget" required{% if invalid == "budget" %} aria-invalid="true"{% endif %}>
+        <option value="">Choose your budget</option>
+        {% for amount in budget_choices %}<option value="{{ amount }}"{% if amount == form.budget %} selected{% endif %}>${{ amount }}</option>{% endfor %}
+      </select>
 
       <fieldset class="window">
         <legend class="field-label">When you're free</legend>

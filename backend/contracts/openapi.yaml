@@ -452,7 +452,12 @@ paths:
                 name:
                   type: string
                   description: First name, 1 to 30 letters, spaces, hyphens and apostrophes
-                budget: { type: string, description: "Whole dollars, 0 to 150 (the slider)" }
+                budget:
+                  type: string
+                  description: >-
+                    Whole dollars, 0 to 150 in steps of 5, from a select with no choice made until
+                    the friend picks one. A deliberate change from the architecture's range slider,
+                    which can't show its value without JavaScript
                 free_from:
                   type: string
                   description: HH:MM (seconds, if sent, are dropped), from the request's start

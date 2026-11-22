@@ -523,7 +523,7 @@ def clock(monkeypatch):
 def friend_answer(
     client, slug, name="Maya", budget="40", free_from="13:00", free_until="18:00", stars=(TACOS,), **extra
 ):
-    """Submit the page's form the way a browser does: the slider's value, the two times, and each
+    """Submit the page's form the way a browser does: the chosen budget, the two times, and each
     ticked place as `star`. A field given as None isn't sent."""
     data = {"name": name, "budget": budget, "free_from": free_from, "free_until": free_until}
     data = {key: value for key, value in data.items() if value is not None}
@@ -592,10 +592,33 @@ def test_the_form_starts_at_the_whole_range_with_no_stars(browser, group):
     body = html(request_page(browser, group.slug))
     assert re.search(r'<input[^>]*type="time"[^>]*name="free_from"[^>]*min="12:00" max="20:00" value="12:00"', body)
     assert re.search(r'<input[^>]*type="time"[^>]*name="free_until"[^>]*min="12:00" max="20:00" value="20:00"', body)
-    assert re.search(r'<input[^>]*type="range"[^>]*name="budget"[^>]*min="0" max="150"', body)
     assert "Your budget for the day, train included" in body
     assert "Star up to 3 places you want most." in body
     assert not re.search(r'name="star"[^>]* checked', body)
+
+
+def budget_select(body) -> str:
+    match = re.search(r'<select id="answer-budget" name="budget"[^>]*>(.*?)</select>', body, re.S)
+    assert match, "no budget select"
+    return match.group(0)
+
+
+def selected_budget(body):
+    """The value of the budget's selected option, or None when none is."""
+    match = re.search(r'<option value="([^"]*)" selected>', budget_select(body))
+    return match.group(1) if match else None
+
+
+def test_the_budget_is_a_choice_of_0_to_150_dollars_in_5_dollar_steps_with_none_chosen(browser, group):
+    """Brief GI-2, changed from the architecture's slider: a slider can't show its value without
+    JavaScript, and its starting point would answer for a friend who didn't move it."""
+    select = budget_select(html(request_page(browser, group.slug)))
+    assert re.search(r'<select id="answer-budget" name="budget" required[ >]', select)
+    options = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', select)
+    assert options[0] == ("", "Choose your budget")
+    assert options[1:] == [(str(n), f"${n}") for n in range(0, 151, 5)]
+    assert selected_budget(html(request_page(browser, group.slug))) is None
+    assert 'class="scale"' not in html(request_page(browser, group.slug))
 
 
 def test_the_name_field_says_who_sees_the_answer(browser, group):
@@ -640,6 +663,8 @@ BAD_ANSWERS = {
     "cents": ({"budget": "40.5"}, BUDGET_MESSAGE),
     "a budget that isn't a number": ({"budget": "forty"}, BUDGET_MESSAGE),
     "a budget with an exponent": ({"budget": "1e2"}, BUDGET_MESSAGE),
+    "a budget that isn't a multiple of $5": ({"budget": "42"}, BUDGET_MESSAGE),
+    "a budget of $149": ({"budget": "149"}, BUDGET_MESSAGE),
     "free from before the range": ({"free_from": "11:59"}, TIMES_MESSAGE),
     "free until after the range": ({"free_until": "20:01"}, TIMES_MESSAGE),
     "until before from": ({"free_from": "18:00", "free_until": "13:00"}, TIMES_MESSAGE),
@@ -680,7 +705,7 @@ def test_a_blocked_name_is_refused(browser, group, monkeypatch):
 def test_the_form_keeps_what_was_typed_when_it_comes_back(browser, group):
     body = html(friend_answer(browser, group.slug, name="Maya!", budget="35", free_from="14:30", stars=(MET, PIZZA)))
     assert 'value="Maya!"' in body
-    assert re.search(r'name="budget"[^>]* value="35"', body)
+    assert selected_budget(body) == "35"
     assert re.search(r'name="free_from"[^>]* value="14:30"', body)
     assert re.search(r'name="free_until"[^>]* value="18:00"', body)
     assert re.search(rf'name="star" value="{MET}"[^>]* checked', body)
@@ -688,9 +713,10 @@ def test_the_form_keeps_what_was_typed_when_it_comes_back(browser, group):
     assert not re.search(rf'name="star" value="{TACOS}"[^>]* checked', body)
 
 
-def test_values_the_form_cannot_show_come_back_as_its_starting_values(browser, group):
-    body = html(friend_answer(browser, group.slug, budget="999", free_from="nope", free_until="23:00"))
-    assert re.search(r'name="budget"[^>]* value="75"', body)
+@pytest.mark.parametrize("budget", ["999", "42", "", "forty"])
+def test_values_the_form_cannot_show_come_back_as_its_starting_values(browser, group, budget):
+    body = html(friend_answer(browser, group.slug, budget=budget, free_from="nope", free_until="23:00"))
+    assert selected_budget(body) is None  # back to "Choose your budget"
     assert re.search(r'name="free_from"[^>]* value="12:00"', body)
     assert re.search(r'name="free_until"[^>]* value="23:00"', body)  # a time: kept, for the friend to fix
 
@@ -743,11 +769,16 @@ def test_the_same_browser_sees_its_own_answer(browser, group):
     body = html(request_page(browser, group.slug))
     assert "You've answered: <strong>$25</strong>, free <strong>2 PM to 7:30 PM</strong>." in body
     assert 'value="Jordan"' in body
-    assert re.search(r'name="budget"[^>]* value="25"', body)
+    assert selected_budget(body) == "25"
     assert re.search(r'name="free_from"[^>]* value="14:00"', body)
     assert re.search(r'name="free_until"[^>]* value="19:30"', body)
     assert re.search(rf'name="star" value="{MET}"[^>]* checked', body)
     assert "Take back my answer" in body
+
+
+def test_a_saved_budget_of_0_dollars_is_chosen_again(browser, group):
+    friend_answer(browser, group.slug, budget="0")
+    assert selected_budget(html(request_page(browser, group.slug))) == "0"
 
 
 def test_another_browser_gets_its_own_answer_and_cannot_touch_the_first(browser, group):
@@ -1060,12 +1091,13 @@ def test_the_page_fits_its_policy_and_needs_no_javascript(browser, group, profil
         assert finders.find(href.removeprefix("/static/")), href
     for src in re.findall(r'<img[^>]* src="([^"]+)"', body):
         assert src.startswith("https://plandit.app/"), src
-    # Brief GI-2 and the architecture: a slider, two times and checkboxes, nothing that needs a script.
+    # Brief GI-2: a budget select, two times and checkboxes, nothing that needs a script.
     types = set(re.findall(r'<input[^>]*type="([^"]+)"', body))
-    assert types <= {"hidden", "text", "range", "time", "checkbox"}, types
+    assert types <= {"hidden", "text", "time", "checkbox"}, types
     forms = re.findall(r'<form[^>]*action="([^"]+)"', body)
     if state == "open":
-        assert types == {"hidden", "text", "range", "time", "checkbox"}
+        assert types == {"hidden", "text", "time", "checkbox"}
+        assert re.findall(r'<select[^>]* name="([^"]+)"', body) == ["budget"]
         assert forms == [f"/g/{group.slug}/answer", f"/g/{group.slug}/answer/delete"]
     else:
         assert forms == [f"/g/{group.slug}/answer/delete"]

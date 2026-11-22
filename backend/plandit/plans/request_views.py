@@ -50,10 +50,12 @@ from plandit.shares.views import (
 from .models import BUDGET_MAX, MAX_STARS, REQUEST_RETENTION_DAYS, GroupAnswer, GroupRequest
 from .request_serializers import GroupRequestSerializer
 
-# Where the slider starts for a friend who hasn't answered yet: the middle, where browsers put a
-# slider without a value. The organizer's own budget is never shown to friends (brief GI-5).
-STARTING_BUDGET = 75
+# The budget is a choice of $0 to $150 in $5 steps, with nothing chosen until the friend picks one
+# (a slider, as the architecture had it, can't show its value without JavaScript, and wherever it
+# started would answer for a friend who didn't move it). The organizer's own budget is never shown
+# to friends (brief GI-5).
 BUDGET_STEP = 5
+BUDGET_CHOICES = range(0, BUDGET_MAX + 1, BUDGET_STEP)
 
 CHOOSE_A_BUDGET = f"Choose a budget from $0 to ${BUDGET_MAX}."
 STAR_UP_TO = f"Star up to {MAX_STARS} places."
@@ -295,7 +297,7 @@ def _open_page(request, group, *, form=None, error="", invalid="", status=200):
     elif form is None:
         form = {
             "name": "",
-            "budget": STARTING_BUDGET,
+            "budget": None,
             "free_from": group.window_start,
             "free_until": group.window_end,
             "stars": set(),
@@ -324,8 +326,7 @@ def _open_page(request, group, *, form=None, error="", invalid="", status=200):
             "form": form | {key: _hour_minute(form[key]) for key in ("free_from", "free_until")},
             "window_start": _hour_minute(group.window_start),
             "window_end": _hour_minute(group.window_end),
-            "budget_max": BUDGET_MAX,
-            "budget_step": BUDGET_STEP,
+            "budget_choices": BUDGET_CHOICES,
             "error": error,
             "invalid": invalid,
         },
@@ -391,11 +392,11 @@ def _form_time(value) -> time | None:
 
 
 def _budget(value) -> int | None:
-    """Whole dollars from 0 to 150, as the slider sends them."""
+    """Whole dollars from 0 to 150 in $5 steps: one of the select's choices."""
     if not _FORM_BUDGET.match(value or ""):
         return None
     budget = int(value)
-    return budget if budget <= BUDGET_MAX else None
+    return budget if budget in BUDGET_CHOICES else None
 
 
 def _free_window(request, group) -> tuple[time, time] | None:
@@ -418,11 +419,11 @@ def _stars(request, group) -> list[str]:
 
 def _typed(request, group) -> dict:
     """What the browser sent, to show the form again as it was. A value the form can't show (a
-    budget off the slider, a time that isn't one) comes back as the form's starting value."""
-    budget = _budget(request.POST.get("budget"))
+    budget that isn't one of its choices, a time that isn't one) comes back as the form's starting
+    value: no budget chosen, or the request's range."""
     return {
         "name": (request.POST.get("name") or "")[:200],
-        "budget": STARTING_BUDGET if budget is None else budget,
+        "budget": _budget(request.POST.get("budget")),
         "free_from": _form_time(request.POST.get("free_from")) or group.window_start,
         "free_until": _form_time(request.POST.get("free_until")) or group.window_end,
         "stars": set(_stars(request, group)),
