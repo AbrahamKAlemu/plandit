@@ -4,6 +4,7 @@
 - `responder_token` recognizes the same browser again through a cookie, storing only a hash.
 - `client_ip` is the address to rate limit by.
 - `clean_first_name` is the only free text a friend can type (brief GS-4).
+- `public_page_csp` is the Content Security Policy for the pages themselves (brief GS-3).
 """
 
 import hashlib
@@ -20,6 +21,8 @@ from django.conf import settings
 from django.core.cache import caches
 from django.core.exceptions import ValidationError
 from django.utils.crypto import salted_hmac
+from django.utils.csp import CSP
+from django.views.decorators.csp import csp_override
 
 # --- Rate limits ----------------------------------------------------------------
 
@@ -174,3 +177,23 @@ def _letters_spaces_hyphens_apostrophes(name: str) -> bool:
         else:
             return False
     return has_letter
+
+
+# --- Content Security Policy for the public pages ---------------------------------------------
+
+# No scripts at all. Styles only from the app's static files and Google Fonts' stylesheet; fonts
+# from Google Fonts. Images from the app, data: URIs and plandit.app, where the logo and favicons
+# live. Forms post back to the same site, nobody can frame the page, and there's no <base>.
+PUBLIC_PAGE_CSP = {
+    "default-src": [CSP.NONE],
+    "style-src": [CSP.SELF, "https://fonts.googleapis.com"],
+    "font-src": ["https://fonts.gstatic.com"],
+    "img-src": [CSP.SELF, "data:", "https://plandit.app"],
+    "form-action": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+    "base-uri": [CSP.NONE],
+}
+
+# Decorate each public page view (/p/ now, /g/ and /j/ later). Needs Django's
+# ContentSecurityPolicyMiddleware, which adds nothing to other responses (SECURE_CSP is empty).
+public_page_csp = csp_override(PUBLIC_PAGE_CSP)

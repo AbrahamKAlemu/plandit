@@ -1,8 +1,8 @@
 {% extends "shares/base.html" %}
+{% load static %}
 {% block title %}Plan not found · Plandit{% endblock %}
-{% block style %}
-    h1 { margin: 40px 0 8px; font-size: 32px; letter-spacing: -.03em; }
-    p { color: var(--on-dark-muted); }
+{% block stylesheets %}
+  <link rel="stylesheet" href="{% static 'shares/not_found.css' %}">
 {% endblock %}
 {% block content %}
   <a class="brand" href="https://plandit.app"><img src="https://plandit.app/images/logo-mark-app-icon.png" width="28" height="28" alt=""><span>Pland<span>it</span></span></a>

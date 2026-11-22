@@ -6,6 +6,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from plandit.core.public_forms import public_page_csp
+
 from .models import SharedPlan
 from .serializers import SharedPlanSerializer
 
@@ -42,6 +44,7 @@ class SharedPlanDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT if deleted else status.HTTP_404_NOT_FOUND)
 
 
+@public_page_csp
 def shared_plan_page(request, slug):
     """GET /p/<slug>: the public page friends open. No sign-in."""
     shared = SharedPlan.objects.filter(slug=slug).first()
