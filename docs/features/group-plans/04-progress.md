@@ -14,6 +14,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 - #45 (G0): a human reads the name blocklist before merging. After it deploys, open a shared plan link
   from a phone on cellular and from a laptop, so the `proxy chain:` log lines can set the hop count.
 - #47 (G2a): decide whether `/g/` pages show the organizer's first name.
+- #50 (G1b, iOS) is stacked on #49. Don't upload a build with it to TestFlight until #46 is deployed.
 
 ## Phases
 
@@ -23,7 +24,7 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 2 approve, 3 approve with one shared must_fix, now GV-11. [01-brief_reviews.md](01-brief_reviews.md) |
 | Human approval | Approved November 21 with the recommended answers. |
-| Build (G0 to G3b) | G0 #45, G1a #46 and G2a #47 open. G1a and G2a merge after the proxy-chain measurement. G1b (iOS) next. |
+| Build (G0 to G3b) | G0 #45, G1a #46, G2a #47 and G1b #50 open. G1a and G2a merge after the proxy-chain measurement. G2b (iOS) next. |
 | Verify, ship, learn | Not started. |
 
 ## Tasks and evidence
@@ -53,9 +54,29 @@ Approved November 21, 2026. Building mode 1 (G0, G1a, G1b), then mode 2, then mo
     select. A second review of the fixes found no must-fix.
   - Copy: two persona rounds, all five approve, no must_fix. The second round (7 to 8) added the
     plan's day to the ready page and "Taking your answer back won't change the plan."
+- G1b, `feat/group-answers-app`, #50 (base `feat/suggested-plans-change-it`, #49):
+  - Tests: the full lane on 6ed9816 passed (531 unit, 81 UI). The last fix, 2a82d4e, passed 535 unit
+    tests plus `ShareAnswersFlowTests`.
+  - Contract with G1a, checked against a local backend: the share JSON is accepted (201), answers
+    decode, and removing an answer returns 204.
+  - Review (high), three rounds:
+    - Round 1: 5 must-fix. Four were fixed: the Gregorian date, the first stop's time on Swap it, a
+      removed answer coming back, and Keep after the server drops a pick. The fifth, Undo not
+      restoring picks, is accepted under GV-8.
+    - Round 2: 1 must-fix (the first stop still ahead after a done stop) and three issues where the
+      page fell out of step. Page updates now go out one at a time and in order.
+    - Round 3: the overlap between Share plan and Stop sharing that could bring a stopped page back
+      (GV-10) is fixed. The last check found no must-fix.
+    - Each fix has a test that failed first.
+  - Copy: all five personas approve (7 to 8), no must_fix. Applied: the undo bar says the link
+    updates, "Keep {stop}", and "You'll see their answers in Today."
 
 ## Decisions and events
 
+- November 22: G1b's Undo after Swap it restores the plan and its page but not friends' swap picks
+  for the replaced stop, as GV-8 says. Links shared by the previous app version load with swaps off,
+  so nothing is offered without a preview (GV-9). If the organizer swaps and then builds a new plan
+  within 2 s, the old page misses the swap; accepted as low impact.
 - November 21: G2a follow-ups noted in #47. The organizer's first name on `/g/` pages is a privacy
   call for Abraham (three personas asked for it). A share without `request` during account deletion
   returns 500, and the purge could deadlock with account deletion at the exact expiry moment.
