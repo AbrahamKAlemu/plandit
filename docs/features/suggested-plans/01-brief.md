@@ -1,7 +1,6 @@
 # Suggested plans: brief
 
-Status: draft for approval, November 21, 2026. Owner: Abraham. Design only; nothing is built until
-Abraham approves this dossier.
+Status: approved by Abraham, November 21, 2026. Owner: Abraham.
 
 ## Context
 
@@ -153,19 +152,14 @@ Nothing is logged about which places were suggested.
 
 ## Questions
 
-Open (for Abraham):
-
-- **Q-1 Close to the student, not just to each other?** Plandit doesn't read the phone's location,
-  and Home base in Profile is free text. v1 keeps stops close to each other only. Reading location
-  "while using the app" would let suggestions start near the student, but needs a permission
-  prompt, a privacy policy change and new App Privacy answers. Recommendation: ship v1 without it
-  and decide after seeing usage.
-- **Q-2 Style.** The style guide is still pending. v1 uses existing components only. Should
-  Catherine or Jaden look at the card before build?
-- **Q-3 "Not this one".** Should a card have a way to hide it for the day? Left out of v1 to keep
-  the cards simple; easy to add.
+Open: none.
 
 Resolved:
 
 - Source of suggestions: the student's own saves (Abraham, November 21).
 - Placement: the empty Today (Abraham, November 21).
+- Q-1 Close to the student: v1 keeps stops close to each other only and doesn't read location
+  (Abraham approved the recommendation, November 21).
+- Q-2 Style: v1 uses existing components only (SP-14); no new visual style before the style guide
+  lands. Catherine and Jaden can review the card on TestFlight.
+- Q-3 "Not this one": left out of v1.

@@ -1,6 +1,6 @@
 # Suggested plans: architecture
 
-Status: draft for approval, November 21, 2026. Brief: [01-brief.md](01-brief.md). Verification:
+Status: approved by Abraham, November 21, 2026. Brief: [01-brief.md](01-brief.md). Verification:
 [03-plan.md](03-plan.md#verification).
 
 ## Summary

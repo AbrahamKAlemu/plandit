@@ -1,6 +1,6 @@
 # Suggested plans: plan
 
-Status: draft for approval, November 21, 2026. Brief: [01-brief.md](01-brief.md). Architecture:
+Status: approved by Abraham, November 21, 2026. Brief: [01-brief.md](01-brief.md). Architecture:
 [02-architecture.md](02-architecture.md).
 
 ## Slices
@@ -90,7 +90,8 @@ cases above, and the UI change is one screen. The completion reviewer (below) ch
 
 ## Human approval
 
-Waiting for Abraham. Silence isn't approval. Open questions Q-1 to Q-3 are in the brief.
+Approved by Abraham on November 21, 2026 ("Please do everything and do what you recommend"), with
+the brief's recommended answers to Q-1 to Q-3. Merging stays with Abraham.
 
 ## Rollout and final checks
 

@@ -5,12 +5,11 @@ Documents: [brief](01-brief.md) · [brief reviews](01-brief_reviews.md) ·
 
 ## Summary
 
-Design written November 21, 2026. Waiting for Abraham's approval; nothing is built.
+Approved November 21, 2026. Building slice A, then B and C.
 
 ## Attention needed
 
-- Abraham: approve the dossier, or change it. Questions Q-1 (location), Q-2 (style review) and
-  Q-3 ("Not this one") in the brief.
+- Abraham merges each slice's PR (merging is blocked for Claude).
 
 ## Phases
 
@@ -19,7 +18,7 @@ Design written November 21, 2026. Waiting for Abraham's approval; nothing is bui
 | Clarify | Done: source = own saves, placement = empty Today (Abraham, November 21). |
 | Brief, architecture, plan | Drafted November 21. |
 | Persona review | Done November 21: 4 approve, Andre's 2 must_fix fixed (SP-19, SP-20). [01-brief_reviews.md](01-brief_reviews.md) |
-| Human approval | Waiting. |
+| Human approval | Approved November 21 with the recommended answers. |
 | Build (A, B, C) | Not started. |
 | Verify, ship, learn | Not started. |
 
@@ -29,6 +28,7 @@ None yet.
 
 ## Decisions and events
 
+- November 21: Abraham approved the dossier and the recommended answers to Q-1 to Q-3.
 - November 21: Abraham picked "their own saves" and "the empty Today".
 - November 21: v1 doesn't read location; "close" means stops close to each other (brief Q-1).
 - November 21: suggestions are computed on the phone and never stored or synced.
