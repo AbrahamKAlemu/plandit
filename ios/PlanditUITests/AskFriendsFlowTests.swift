@@ -9,10 +9,10 @@ final class AskFriendsFlowTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    @MainActor private func launch(clash: Bool = false) -> XCUIApplication {
+    @MainActor private func launch(clash: Bool = false, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-skipAuth", "-resetData", "-startDetent", "large", "-planStart", "11:00", "-clock", "11:00",
-                               "-fakeSharing", "-fakeRequests"] + (clash ? ["clash"] : [])
+                               "-fakeSharing", "-fakeRequests"] + (clash ? ["clash"] : []) + extra
         app.launch()
         return app
     }
@@ -168,5 +168,27 @@ final class AskFriendsFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Los Tacos No. 1'")).firstMatch.waitForExistence(timeout: 5),
                       "Today shows the plan")
         XCTAssertFalse(app.staticTexts["undo-message"].exists)
+    }
+
+    /// At the largest text sizes only the button stays pinned: the line about the clash scrolls with
+    /// the answers, after them, so it never sits over the switches (round 3 persona review).
+    @MainActor func testAtTheLargestTextTheClashLineScrollsWithTheAnswers() {
+        let app = launch(clash: true, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
+        openAskFriends(app)
+        makeLink(app)
+        let first = app.switches["leave-out-Maya"]
+        XCTAssertTrue(first.waitForExistence(timeout: 3))
+        scrollTo(first, in: app)
+        let build = app.buttons["build-our-plan"]
+        let hint = app.staticTexts["build-clash-hint"]
+        XCTAssertTrue(hint.exists)
+        XCTAssertLessThanOrEqual(first.frame.maxY, build.frame.minY)
+        // From the top of the list, a pinned line would still sit over the answers.
+        scrollBackUp(app)
+        XCTAssertGreaterThan(hint.frame.minY, build.frame.minY, "the line is pinned over the answers")
+
+        scrollTo(hint, in: app)
+        XCTAssertLessThanOrEqual(hint.frame.maxY, build.frame.minY, "at the end it sits right above Build our plan")
+        XCTAssertGreaterThan(hint.frame.minY, app.buttons["request-new"].frame.maxY, "after the answers and the links' buttons")
     }
 }

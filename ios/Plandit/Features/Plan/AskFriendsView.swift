@@ -409,7 +409,10 @@ private struct FriendsAnswersView: View {
         // Built into Today, but the link didn't get it: "Try again" only puts it on the link.
         let needsLink = store.groupPlanAwaitsLink
         let isClash: Bool = { if case .clash? = result { return true } else { return false } }()
-        let buildHint = AskFriendsText.buildHint(link, clash: isClash, needsLink: needsLink, now: AppClock.now)
+        let buildHint = isBuilt ? nil : AskFriendsText.buildHint(link, clash: isClash, needsLink: needsLink, now: AppClock.now)
+        // At the largest sizes the line would take a quarter of the screen over the answers: it
+        // goes last in the list instead, right above the button once scrolled to the end.
+        let pinsHint = !typeSize.isAccessibilitySize
         return VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
@@ -427,6 +430,9 @@ private struct FriendsAnswersView: View {
                             .accessibilityIdentifier("request-error")
                     }
                     footer(link, details)
+                    if !pinsHint, let buildHint {
+                        buildHintText(buildHint, isClash: isClash)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(Space.lg)
@@ -438,15 +444,10 @@ private struct FriendsAnswersView: View {
             if !isBuilt {
                 VStack(spacing: 0) {
                     Hairline()
-                    if let buildHint {
-                        Text(buildHint)
-                            .font(.metadata)
-                            .foregroundStyle(.inkMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    if pinsHint, let buildHint {
+                        buildHintText(buildHint, isClash: isClash)
                             .padding(.horizontal, Space.lg)
                             .padding(.top, Space.sm)
-                            .accessibilityIdentifier(isClash ? "build-clash-hint" : "build-day-hint")
                     }
                     Button {
                         Task { await build(plan, onlyShare: needsLink) }
@@ -466,6 +467,16 @@ private struct FriendsAnswersView: View {
                 .background(Color.surface)
             }
         }
+    }
+
+    /// The line next to "Build our plan" while it's off (`AskFriendsText.buildHint`).
+    private func buildHintText(_ text: String, isClash: Bool) -> some View {
+        Text(text)
+            .font(.metadata)
+            .foregroundStyle(.inkMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier(isClash ? "build-clash-hint" : "build-day-hint")
     }
 
     // MARK: - Link
