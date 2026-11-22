@@ -206,7 +206,9 @@ private struct SheetContainer: View {
                 // The undo bar floats just above the tab bar.
                 if !isKeyboardUp {
                     VStack(spacing: Space.xs) {
-                        GroupMessageBar()
+                        if GroupMessageBar.canShow(under: router) {
+                            GroupMessageBar()
+                        }
                         // A group plan has no Undo (G3b-2).
                         if !isGroupOnScreen {
                             UndoBar()

@@ -39,6 +39,13 @@ struct GroupMessageBar: View {
     @Environment(GroupMessages.self) private var messages: GroupMessages?
     static let seconds = 7
 
+    /// Whether the bar would be seen: not while the planner or the join sheet is over it. Until
+    /// then its message waits, so one said at launch (an invite opening the join sheet) isn't
+    /// timed out unseen.
+    static func canShow(under router: SheetRouter) -> Bool {
+        !router.isPlanning && router.inviteToJoin == nil
+    }
+
     var body: some View {
         Group {
             if let messages, let message = messages.current {

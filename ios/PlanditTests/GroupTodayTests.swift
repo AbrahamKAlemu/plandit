@@ -276,6 +276,45 @@ import XCTest
         groups.onMessage?(GroupPlanMessage(groupID: UUID(), kind: .groupGone, text: "This group plan ended, or you're no longer in it."))
         XCTAssertEqual(messages.current?.text, "This group plan ended, or you're no longer in it.")
     }
+
+    /// What the store said before the app listened (at launch, or during the tutorial) shows,
+    /// once, even when the app listens again.
+    func testMessagesFromBeforeTheAppListensShowOnce() async throws {
+        let server = FakeGroupPlanServer(yourName: "Sofia")
+        let directory = FileManager.default.temporaryDirectory.appending(path: "held-messages-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let groups = GroupPlanStore(userID: "user-1", server: server, directory: directory)
+        defer { groups.close() }
+        var plan = SampleData.dayPlan
+        plan.date = Date()
+        guard case .success(let id) = await groups.create(from: plan) else { return XCTFail("no group plan made") }
+        let ended = try await server.end(id)
+        XCTAssertTrue(ended, "ended by its organizer, you")
+        _ = await groups.refresh(id)
+        XCTAssertNil(groups.group(id), "ended, and said before anyone listened")
+
+        let messages = GroupMessages()
+        messages.listen(to: groups)
+        messages.listen(to: groups)
+
+        XCTAssertEqual(messages.queue.map(\.text), [GroupPlanStore.text(for: .groupGone)])
+    }
+
+    /// The bar waits while the planner or the join sheet covers it, so a message isn't timed out
+    /// unseen behind them.
+    func testTheBarWaitsWhileASheetCoversIt() {
+        let router = SheetRouter()
+        router.isPlanning = false
+        XCTAssertTrue(GroupMessageBar.canShow(under: router))
+        router.isPlanning = true
+        XCTAssertFalse(GroupMessageBar.canShow(under: router), "the planner is over it")
+        router.isPlanning = false
+        router.join(invite: "fake-invite-token-for-tests")
+        XCTAssertFalse(GroupMessageBar.canShow(under: router), "the join sheet is over it")
+        router.inviteToJoin = nil
+        XCTAssertTrue(GroupMessageBar.canShow(under: router))
+    }
 }
 
 /// Opening a group plan from elsewhere (a join link), and landing on your own plan after building one.
