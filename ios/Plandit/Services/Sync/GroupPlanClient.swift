@@ -60,7 +60,7 @@ nonisolated struct GroupPlanClient: GroupPlanServing {
         }
     }
 
-    private struct Created: Encodable {
+    private struct Created: Encodable, Sendable {
         var date: String
         var plan: DayPlan
     }
@@ -80,10 +80,10 @@ nonisolated struct GroupPlanClient: GroupPlanServing {
     }
 
     func create(date: String, plan: DayPlan) async throws -> (GroupPlanDetail, etag: String?) {
-        let body = try JSONEncoder().encode(Created(date: date, plan: plan))
+        let body = try await Self.encodeCreated(date: date, plan: plan)
         let (data, http) = try await call("POST", Self.root, body: body)
         switch http.statusCode {
-        case 200, 201: return (try Self.decode(GroupPlanDetail.self, data), Self.etag(http))
+        case 200, 201: return (try await Self.decodeDetail(data), Self.etag(http))
         case 400, 403: throw GroupPlanError.rejected(Self.message(in: data))
         case 413: throw GroupPlanError.tooLarge(Self.message(in: data))
         default: throw APIError.status(http.statusCode)
@@ -95,7 +95,7 @@ nonisolated struct GroupPlanClient: GroupPlanServing {
         if let etag { headers["If-None-Match"] = etag }
         let (data, http) = try await call("GET", Self.path(id), headers: headers)
         switch http.statusCode {
-        case 200: return .plan(try Self.decode(GroupPlanDetail.self, data), etag: Self.etag(http))
+        case 200: return .plan(try await Self.decodeDetail(data), etag: Self.etag(http))
         case 304: return .notModified
         case 404: return .gone
         default: throw APIError.status(http.statusCode)
@@ -103,11 +103,11 @@ nonisolated struct GroupPlanClient: GroupPlanServing {
     }
 
     func put(_ id: UUID, _ update: GroupPlanUpdate) async throws -> GroupPlanPutResult {
-        let body = try JSONEncoder().encode(update)
+        let body = try await Self.encode(update)
         let (data, http) = try await call("PUT", Self.path(id), body: body)
         switch http.statusCode {
         case 200: return .saved(try Self.decode(GroupPlanSaved.self, data), etag: Self.etag(http))
-        case 409: return .conflict(try Self.decode(GroupPlanConflict.self, data), etag: Self.etag(http))
+        case 409: return .conflict(try await Self.decodeConflict(data), etag: Self.etag(http))
         case 404: return .gone
         case 400, 403: return .rejected(Self.message(in: data))
         case 413: return .tooLarge(Self.message(in: data))
@@ -132,7 +132,7 @@ nonisolated struct GroupPlanClient: GroupPlanServing {
     func join(token: String) async throws -> (GroupPlanDetail, etag: String?)? {
         let (data, http) = try await call("POST", "\(Self.root)invites/\(Self.escaped(token))/join")
         switch http.statusCode {
-        case 200, 201: return (try Self.decode(GroupPlanDetail.self, data), Self.etag(http))
+        case 200, 201: return (try await Self.decodeDetail(data), Self.etag(http))
         case 404: return nil
         case 400, 403: throw GroupPlanError.rejected(Self.message(in: data))
         default: throw APIError.status(http.statusCode)
@@ -180,6 +180,25 @@ nonisolated struct GroupPlanClient: GroupPlanServing {
         case 400, 403: throw GroupPlanError.rejected(message(in: data))
         default: throw APIError.status(http.statusCode)
         }
+    }
+
+    /// Group plans carry a `DayPlan`, whose Codable conformance belongs to the main actor (the app's
+    /// default isolation). Encoding and decoding them hops there: Xcode 26's compiler (Swift 6.3)
+    /// rejects using that conformance from this nonisolated client otherwise.
+    @MainActor private static func decodeDetail(_ data: Data) throws -> GroupPlanDetail {
+        try decode(GroupPlanDetail.self, data)
+    }
+
+    @MainActor private static func decodeConflict(_ data: Data) throws -> GroupPlanConflict {
+        try decode(GroupPlanConflict.self, data)
+    }
+
+    @MainActor private static func encode(_ update: GroupPlanUpdate) throws -> Data {
+        try JSONEncoder().encode(update)
+    }
+
+    @MainActor private static func encodeCreated(date: String, plan: DayPlan) throws -> Data {
+        try JSONEncoder().encode(Created(date: date, plan: plan))
     }
 
     private static func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
